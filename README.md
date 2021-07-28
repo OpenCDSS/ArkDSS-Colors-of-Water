@@ -6,13 +6,13 @@ which is part of [Colorado's Decision Support Systems (CDSS)](https://www.colora
 
 See the following sections in this page:
 
-* [StateMod Repository Folder Structure](#statemod-repository-folder-structure)
+* [Colors of Water Repository Folder Structure](#statemod-repository-folder-structure)
 * [License](#license)
 * [Contact](#contact)
 
 -----
 
-## StateMod Repository Folder Structure ##
+## Colors of Water Repository Folder Structure ##
 
 The following are folders in the repository.  
 
