@@ -1,0 +1,42 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% StateTL Run Control Options
+%
+% comment lines can start with % or #
+% for variable names, caps dont matter but end with '=' and no spaces
+% seperate multiple values with comma; put single quotes around text values
+% if semicolon (;) after value can enter comments etc after
+% if no semicolon, no spaces or comments etc after value  
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Div=2;						%Division - currently can only run one at a time but eventually run multiple (seperate by commas)
+WDlist=112,11,172,17;				%WD run list in order; from upper tribs first to lower/mainstem, seperate by commas
+%srmethod='j349';       			%dynamic j349/Livinston method - only pick one of two methods (comment other)
+srmethod='muskingum';   			%percent loss TL plus muskingum-cunge for travel time
+inputfilename='StateTL_inputdata.xlsx'; %filename used for subreach input data - currently xlsx or csv/txt/dat delimited - if changing base name (ie for calibration), first load evap and stagedischarge from StateTL_inputdata.xlsx 
+datestart=2018,4,01;				%year,month,day first day river and wc/release loops; spinup time and j349 dimensioning limits period length
+readinputfile=1;				%1 reads from excel and saves mat file; otherwise reads mat file;
+readstagedischarge=1;				%1 rereads stagedischarge data; but if rereading subreach data dont have to reread evap/SD (ie for calibration)
+readevap=1;					%1 rereads evap; if evapnew=1 repulls locations using HBrest and evap for full time periods, must do if adding/modifing locations or wdids; but if rereading subreach data dont have to reread evap; 
+pullstationdata=0;				%1 read station (gage and telemetry based) flow data; 1 reads from REST, other reads from file
+pullreleaserecs=0;				%0,1,2 - 0 load from saved mat file, 1 if want to repull all from REST(ie for new period), 2 if only pull new/modified from REST for same period
+runriverloop=1;					%1 runs gageflow loop for full river amounts (ie not looking at individual water classes)
+runwcloop=0;					%1 runs water class release loop - have to have run river loop before (saved .mat file) or during
+doexchanges=0;					%1 run upstream exchanges - this only operates within wcloop
+runcaptureloop=0;				%1 runs loop to characterize release capture amounts into headgates vs available amt.
+runcalibloop=1;					%1 runs loop to simulate river flows from gage amount at top of wd down without restarting each gage location with gage amount
+
+logfilename='StateTL_runlog.txt';  	%log filename if writing
+displaymessage=1;  				%1=display messages to matlab workspace screen
+writemessage=1; 					%1=write messages to logfile
+
+outputfilebase='StateTL_out_';  		%output filename base - will add srmethod + gage/wc/etc + hour/day + .csv
+outputgage=0;  					%output river amounts by reach
+outputwc=0;  					%output waterclass amounts by reach
+outputcal=0;  					%output calibration amounts by gage location
+outputhr=0;  					%output on hour timestep
+outputday=0;  					%output on day timestep
+
+WDcaliblist=17;				  	%WD to calibrate if running calibloop, if multiple seperate by commas
+calibstartdate=2018,4,02;			%calib startdate year,month,day
+calibenddate=2018,4,15;			%calib enddate year,month,day
+calibavggainloss='mean'; 			%currently 'mean' or 'linreg' - method to set average gain/loss/error correction for period- mean seems to do about as well as linear regression
