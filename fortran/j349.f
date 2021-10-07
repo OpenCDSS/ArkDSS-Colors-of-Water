@@ -810,14 +810,33 @@ C                                                                       00066900
       REAL *8 UR
       DIMENSION Q(3200)                                                 00067400
       DIMENSION USS(1600), DSS(1600), DELS(1600), S(1600)                   00067500
-      DIMENSION USQ(1600), DSQ(13200), DSQ1(1600), SQLOSS(3200),QI(3200)00067600
+C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
+C     fixed an array size typo
+C-------------------------------------------------------------------------------
+C      DIMENSION USQ(1600), DSQ(13200), DSQ1(1600), SQLOSS(3200),QI(3200)00067600
+      DIMENSION USQ(1600), DSQ(3200), DSQ1(1600), SQLOSS(3200),QI(3200) 00067600
+C-------------------------------------------------------------------------------
+C     jhb fixed the following - 08/05/2017 - old fortran compilers let you get away with murder...
+C     copied lines to declare new variable DSQO in common block DISCHA as shown above
+C-------------------------------------------------------------------------------
+C     NEW VARIABLE DSQO, OBSERVED DS. DISCHARGE, CREATED TO KEEP UNCHANGED
+C     FOR OUTPUT AND PRINTED NEXT TO COMPUTED DS. DISCHARGE FOR COMPARISON.  G. KUHN, 9-26-85.
+C
+      DIMENSION DSQO(1600)
+C
+C-------------------------------------------------------------------------------
       COMMON /ZLOGIC/ ZBEGIN,ZEND,ZPLOT,ZROUTE,ZFLOW,ZLOSS,ZDISK,ZCARDS,00067700
      1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT             00067800
       COMMON /PLT/ INITMO,INITDY,INITYR,LASTMO,LASTDY,LASTYR,NRECDS,STAN00067900
      1O1,STANM1,STANO2,STANM2,INFO,JYEAR                                00068000
       COMMON /RESFCT/ UR,DUSRF,QLIN,NURS,NRO,NRESP,ITT,NUR1,            00068100
      1                NSTAIL,NATAIL                                     00068200
-      COMMON /DISCHA/ USQ,DSQ,DSQ1,QI,SQLOSS,USQB,DSQB,TOLRNC           00068300
+C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
+C     added new variable DSQO to common block DISCHA as shown above
+C-------------------------------------------------------------------------------
+C      COMMON /DISCHA/ USQ,DSQ,DSQ1,QI,SQLOSS,USQB,DSQB,TOLRNC           00068300
+      COMMON /DISCHA/ USQ,DSQ,DSQ1,QI,SQLOSS,USQB,DSQB,TOLRNC,DSQO      00068300
+C-------------------------------------------------------------------------------
       COMMON /STAGES/ USS,DSS,DELS                                      00068400
       COMMON /TIMEPR/ TMAX,ITMAX,DT,NTS,KR,NDT24,NRCHS,NSR,KTSTRT,N1ST,N00068500
      12ND,NLST,IQBEG,IQEND,KCNT,IBEGR                                   00068600  KCNT and IBEGR added 2/12/85 PRJ
@@ -1147,7 +1166,15 @@ C                                                                       00099600
       REAL *8 REDUCE
       REAL *8 SUM, POWER
       REAL K                                                            00099900
-      DIMENSION CC(20), BPC(10), CBP(10), Q2T(5), BPW(10), WBP(10),     00100000
+C     jhb added the following - 08/05/2017 - old fortran compilers let you get away with murder...
+C-------------------------------------------------------------------------------
+      DIMENSION DUMMY(10)
+C-------------------------------------------------------------------------------
+C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
+C-------------------------------------------------------------------------------
+C      DIMENSION CC(20), BPC(10), CBP(10), Q2T(5), BPW(10), WBP(10),     00100000
+      DIMENSION CC(20), BPC(10), CBP(10), Q2T(10), BPW(10), WBP(10),    00100000
+C-------------------------------------------------------------------------------
      1Q1T(20)                                                           00100100
       DIMENSION USQ(1600), DSQ(3200), DSQ1(1600), SQLOSS(3200), QI(3200)00100200
       DIMENSION AC0(20), AXK(20), C0RAT(10), C0QRAT(10),                00100300
@@ -1186,9 +1213,19 @@ C     NRO=NUMBER OF ORDINATES IN RESPONSE FUNCTION.                     00102700
       GO TO 160                                                         00103000
    40 ZORDER=.FALSE.                                                    00103100
       NQ=1                                                              00103200
-      CALL TABL (QMIN,CMIN,BPC,CBP,NQ)                                  00103300
+C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
+C-------------------------------------------------------------------------------
+C      CALL TABL (QMIN,CMIN,BPC,CBP,NQ)                                  00103300
+      CALL TABL (QMIN,DUMMY,BPC,CBP,NQ)                                 00103300
+      CMIN=DUMMY(1)
+C-------------------------------------------------------------------------------
       NQ=1                                                              00103400
-      CALL TABL (QMAX,CMAX,BPC,CBP,NQ)                                  00103500
+C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
+C-------------------------------------------------------------------------------
+C      CALL TABL (QMAX,CMAX,BPC,CBP,NQ)                                  00103500
+      CALL TABL (QMAX,DUMMY,BPC,CBP,NQ)                                 00103500
+      CMAX=DUMMY(1)
+C-------------------------------------------------------------------------------
       TMIN0=((5280.*X)/CMAX)/3600.                                      00103600
       TMAX0=((5280.*X)/CMIN)/3600.                                      00103700
       NURS=(TMAX0-TMIN0)/RI+0.501                                       00103800
@@ -1240,7 +1277,12 @@ C        GENERATE FLAGGING TABLE, QLIN=LINEARIZATION DISCHARGE OF Q.    00107800
       NRF=1                                                             00108300
   150 Q3T=Q1T(NRF)                                                      00108400
 C        FIND DISPERSION COEFFICIENT.                                   00108500
-      CALL TABL (Q3T,K,BPW,WBP,NQ)                                      00108600
+C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
+C-------------------------------------------------------------------------------
+C      CALL TABL (Q3T,K,BPW,WBP,NQ)                                      00108600
+      CALL TABL (Q3T,DUMMY,BPW,WBP,NQ)                                  00108600
+      K=DUMMY(1)
+C-------------------------------------------------------------------------------
       CZERO=CC(NRF)                                                     00108700
       AC0(NRF)=CZERO                                                    00108800
       AXK(NRF)=K                                                        00108900
@@ -1545,16 +1587,28 @@ C             LINE PRINTER PLOT OF TIME ARRAY DATA.  ALSO SUPPORTS      00139600
 C             SUBPROGRAM PLOTIT.                                        00139700
 C                                                                       00139800
       IMPLICIT LOGICAL (K,W)
-      INTEGER *2 GRID (56000), CH
+C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
+C-------------------------------------------------------------------------------
+C      INTEGER *2 GRID (56000), CH
+      CHARACTER*1 GRID (56000), CH
+C-------------------------------------------------------------------------------
       DIMENSION NSCALE(5), ABNOS(26), X(1), Y(1)                        00140000
       CHARACTER*1 NOS (10)
-      INTEGER *2 WL
+C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
+C-------------------------------------------------------------------------------
+C      INTEGER *2 WL
+      CHARACTER*1 WL
+C-------------------------------------------------------------------------------
       CHARACTER *36 LABEL
       INTEGER *2 ILABEL
       CHARACTER *36 ALABEL
       DIMENSION ILABEL (36)
       LOGICAL ERR1, ERR3, ERR5
-      INTEGER *2 VC,HC,FOR1(19),FOR2(15),FOR3(19),NC,BL,HF,HF1
+C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
+C-------------------------------------------------------------------------------
+c      INTEGER *2 VC,HC,FOR1(19),FOR2(15),FOR3(19),NC,BL,HF,HF1
+      CHARACTER*1 VC,HC,FOR1(19),FOR2(15),FOR3(19),NC,BL,HF,HF1
+C-------------------------------------------------------------------------------
       CHARACTER *24 FOX1, FOX3
       CHARACTER *16 FOX2
       INTEGER *2 VCR
@@ -1645,8 +1699,13 @@ C                                                                       00141600
    80 IF (KPLOT1) RETURN                                                00148800
       KPLOT1=.TRUE.                                                     00148900
 C                                                                       00149000
-      ENTRY PLOT2 (XMAX,XMIN,YMAX,YMIN,P)
-      IFL=P
+C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
+C-------------------------------------------------------------------------------
+C      ENTRY PLOT2 (XMAX,XMIN,YMAX,YMIN,P)
+C      IFL=P
+      ENTRY PLOT2 (XMAX,XMIN,YMAX,YMIN,INTP)
+      IFL=INTP
+C-------------------------------------------------------------------------------
       KPLOT2=.TRUE.                                                     00149300
       IF (KPLOT1) GO TO 90                                              00149400
       NSCL=0                                                            00149500
@@ -1725,7 +1784,11 @@ C                                                                       00156100
       DO 280 I=1,NDHP                                                   00156600
       IF (I.EQ.NDHP.AND.KBOTGL) GO TO 280                               00156700
       WL=BL                                                             00156800
-      IF (I.LE.NL)WL=ILABEL(I)
+C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
+C-------------------------------------------------------------------------------
+C      IF (I.LE.NL)WL=ILABEL(I)
+      IF (I.LE.NL)WL=CHAR(ILABEL(I))
+C-------------------------------------------------------------------------------
       I2=I*NDVP                                                         00157000
       I1=I2-NDV                                                         00157100
       IF (MOD(I-1,NSH).EQ.0.AND..NOT.KORD) GO TO 270                    00157200
