@@ -75,16 +75,16 @@ C                                                                       00004900
 C                                                                       00005000
       IMPLICIT LOGICAL(Z)                                               00005100
       INTEGER OPFILE,C,P,PU,US,DS                                       00005200
-      CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20)   00005300
-      CHARACTER FILENAME*42
+      CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20),  00005300
+     1FILENAME *40
       DIMENSION IAV(10), LREC(10)                                       00005400
       CHARACTER *4 IWARN (1600)
       CHARACTER *4 IW0, IW1, IW2
       DIMENSION UR(20,100), DUSRF(1600), QLIN(20), NRESP(20), ITT(20)   00005600
-      DIMENSION SRAT(2,20), QRAT(2,20), SHIFT(2,800)                    00005700
+      DIMENSION SRAT(2,20), QRAT(2,20), SHIFT(2,1600)                   00005700
       DIMENSION X(25), QLOSS(25), ISTRT(25), IEND(25)                   00005800
       DIMENSION USS(1600), DSS(1600), DELS(1600), S(1600)               00005900
-      DIMENSION USQ(1600), DSQ(1600), DSQ1(1600), SQLOSS(1600),QI(1600) 00006000
+      DIMENSION USQ(1600), DSQ(3200), DSQ1(1600), SQLOSS(3200),QI(3200) 00006000
 C     NEW VARIABLE DSQO, OBSERVED DS. DISCHARGE, CREATED TO KEEP UNCHANGED
 C     FOR OUTPUT AND PRINTED NEXT TO COMPUTED DS. DISCHARGE FOR COMPARISON.  G. KUHN, 9-26-85.
 C
@@ -122,11 +122,11 @@ c3     FORMAT(5X,'TYPE IN OUTPUT FILENAME:')
 c      READ(*,2)FILENAME
 c      OPEN(10,FILE=FILENAME)
       open (22,file='filenames',status='old')
-      read (22,1) filename
+	read (22,1) filename
  1    format (a40)
       OPEN(7,FILE=FILENAME)
-      read (22,1) filename
-      OPEN(10,FILE=FILENAME)
+	read (22,1) filename
+	OPEN(10,FILE=FILENAME)
 C                                                                       00008200
 C                                                                       00008300
   999 CALL START
@@ -140,6 +140,7 @@ C             IF DISK OPTION - DEFINE FILES                             00008700
 C                                                                       00009100
 C             IF CARDS OPTION - INPUT UPSTREAM HYDROGRAPH DATA          00009200
    10 CALL READQ (USQ)
+C   10 READ (7,240) (USQ(NT),NT=N1ST,NLST) 
    20 KCNT=0                                                            00009400
 C                                                                       00009500
 C             BEGIN NEW REACH                                           00009600
@@ -263,7 +264,7 @@ C                WRITE HEADER INFORMATION                               00021200
       GO TO 190                                                         00021400
   160 CONTINUE                                                          00021500
       CALL MOVE (DSQ,DSQ,1,NSTAIL,0,ITEMS)                              00021600
-      CALL FILL (DSQ,NSTAIL+1,NSTAIL+ITEMS,0.0)                         00021700
+      CALL FILL (DSQ,NSTAIL+1,NSTAIL+ITEMS,0.0)                           00021700
       CALL MOVE (SQLOSS,SQLOSS,1,ITEMS,0,ITEMS)                         00021740
       CALL FILL (SQLOSS,ITEMS+1,MDIM,0.0)                               00021750
       CALL FILL (QI,1,ITEMS,0.0)                                        00021760
@@ -359,17 +360,17 @@ C       QOUTPT-PROGRAMMED BY J O SHEARMAN.  OUTPUTS HYDROGRAPH DATA ON  00030400
 C              DISK                                                     00030500
       IMPLICIT LOGICAL(Z)                                               00005100
       INTEGER OPFILE,C,P,PU,US,DS                                       00005200
-      DIMENSION A (1600)
+      DIMENSION A (3200)
       CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20)        00005300
       DIMENSION IAV(10), LREC(10)                                       00005400
       CHARACTER *4 IWARN (1600)
       CHARACTER*10   TEST_ZMULT
       CHARACTER *4 IW0, IW1, IW2
-      DIMENSION UR(20,100), DUSRF(1600), QLIN(20), NRESP(20), ITT(20)   00005600
-      DIMENSION SRAT(2,20), QRAT(2,20), SHIFT(2,800)                    00005700
+      DIMENSION UR(20,100), DUSRF(1600), QLIN(20), NRESP(20), ITT(20)    00005600
+      DIMENSION SRAT(2,20), QRAT(2,20), SHIFT(2,1600)                    00005700
       DIMENSION X(25), QLOSS(25), ISTRT(25), IEND(25)                   00005800
       DIMENSION USS(1600), DSS(1600), DELS(1600), S(1600)               00005900
-      DIMENSION USQ(1600), DSQ(1600), DSQ1(1600), SQLOSS(1600), QI(1600)00006000
+      DIMENSION USQ(1600), DSQ(3200), DSQ1(1600), SQLOSS(3200), QI(3200)00006000
       DIMENSION DSQO(1600)
       DIMENSION AC0(20), AXK(20), C0RAT(10), C0QRAT(10),                00006100
      1XKRAT(10), XKQRAT(10)                                             00006200
@@ -804,12 +805,12 @@ C             DISCHARGE IS COMPUTED ALONE.                              00066800
 C                                                                       00066900
       IMPLICIT LOGICAL(Z)                                               00067000
       INTEGER OPFILE,C,P,PU,US,DS                                       00067100
-      CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20)   00067200
-      DIMENSION UR(20,100), DUSRF(1600), QLIN(20), NRESP(20), ITT(20)   00067300
+      CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20)        00067200
+      DIMENSION UR(20,100), DUSRF(1600), QLIN(20), NRESP(20), ITT(20)    00067300
       REAL *8 UR
-      DIMENSION Q(1600)                                                 00067400
-      DIMENSION USS(1600), DSS(1600), DELS(1600), S(1600)               00067500
-      DIMENSION USQ(1600), DSQ(1600), DSQ1(1600), SQLOSS(1600),QI(1600) 00067600
+      DIMENSION Q(3200)                                                 00067400
+      DIMENSION USS(1600), DSS(1600), DELS(1600), S(1600)                   00067500
+      DIMENSION USQ(1600), DSQ(13200), DSQ1(1600), SQLOSS(3200),QI(3200)00067600
       COMMON /ZLOGIC/ ZBEGIN,ZEND,ZPLOT,ZROUTE,ZFLOW,ZLOSS,ZDISK,ZCARDS,00067700
      1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT             00067800
       COMMON /PLT/ INITMO,INITDY,INITYR,LASTMO,LASTDY,LASTYR,NRECDS,STAN00067900
@@ -1148,7 +1149,7 @@ C                                                                       00099600
       REAL K                                                            00099900
       DIMENSION CC(20), BPC(10), CBP(10), Q2T(5), BPW(10), WBP(10),     00100000
      1Q1T(20)                                                           00100100
-      DIMENSION USQ(1600), DSQ(1600), DSQ1(1600), SQLOSS(1600), QI(1600)00100200
+      DIMENSION USQ(1600), DSQ(3200), DSQ1(1600), SQLOSS(3200), QI(3200)00100200
       DIMENSION AC0(20), AXK(20), C0RAT(10), C0QRAT(10),                00100300
      1XKRAT(10), XKQRAT(10)                                             00100400
       COMMON /URPARM/ AC0,AXK,QMIN,QMAX,C0RAT,C0QRAT,XKRAT,XKQRAT       00100500
@@ -1341,7 +1342,7 @@ C        RESPONSE FUNCTION) AND ACCUMULATES THE RESULT IN ARRAY A       00118100
 C        (THE OUTPUT FUNCTION),WHICH MAY BE LAGGED BY LAG TIME          00118200
 C        INTERVALS.                                                     00118300
 C                                                                       00118400
-      DIMENSION A (1600), B(1600), CUTIL (1600)
+      DIMENSION A (3200), B(3200), CUTIL (3200)
       DIMENSION CCC(20,100), QLIN(20), LAG(20), NRESP(20)
       REAL *8 CCC
       ENTRY FILL(A,I1,I2,VALU)                                          00118700
@@ -1436,7 +1437,7 @@ C                                                                       00127500
 C     RATNG-  COMPUTES A STAGE HYDROGRAPH FROM A STATION'S DISCHARGE    00127600
 C             HYDROGRAPH AND RATING TABLE.                              00127700
 C                                                                       00127800
-      DIMENSION SRAT(2,20), QRAT(2,20), SHIFT(2,800)                    00127900
+      DIMENSION SRAT(2,20), QRAT(2,20), SHIFT(2,1600)                   00127900
       DIMENSION S2 (1600), Q2 (1600)
       COMMON /TIMEPR/ TMAX,ITMAX,DT,NTS,KR,NDT24,NRCHS,NSR,KTSTRT,N1ST,N00128100
      12ND,NLST,IQBEG,IQEND,KCNT,IBEGR                                   00128200  KCNT and IBEGR added 2/12/85 PRJ
@@ -1984,14 +1985,14 @@ C             BALANCE FOR REACH.                                        00180400
 C                                                                       00180500
       IMPLICIT LOGICAL(Z)                                               00180600
       INTEGER OPFILE,C,P,PU,US,DS                                       00180700
-      CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20)   00180800
+      CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20)        00180800
       INTEGER NSCALE (5)
       CHARACTER *1 GRID (56000)
       CHARACTER *4 IWARN (1600)
       CHARACTER *4 IW0, IW1, IW2
       DIMENSION USS(1600), DSS(1600), DELS(1600), S(1600)               00181200
       DIMENSION X(25), QLOSS(25), ISTRT(25), IEND(25)                   00181300
-      DIMENSION USQ(1600),DSQ(1600),DSQ1(1600),SQLOSS(1600),QI(1600)    00181400
+      DIMENSION USQ(1600),DSQ(3200),DSQ1(1600),SQLOSS(3200),QI(3200)    00181400
 C     NEW VARIABLE.  SEE MAIN.
       DIMENSION DSQO(1600)
 C
@@ -2289,18 +2290,22 @@ C
       END                                                               00203000
 C
 C
+C    [06-22-06 LEP, this ERFC function had been commented out, citing
+C                   some unnamed error. since we did not have the obj file
+C                   to link to for external method, needed to add it back.
+C				  may consider porting other erfc to replace this method
+C                   if this is inadequate.
+      FUNCTION ERFC (ZZZ)
 C
-      FUNCTION ERFC (ZZZ)      
 C
-C
-C              THE COMPLIMENTARY ERROR FUNCTION        **********************
-C              PROGRAMMED BY KENNETH J SCHRINER 7/13/81    *********************
-C              TO REPLACE A CALL TO THE IBM SYSTEM ERFC    ********************
+C              THE COMPLIMENTARY ERROR FUNCTION         
+C              PROGRAMMED BY KENNETH J SCHRINER 7/13/81     
+C              TO REPLACE A CALL TO THE IBM SYSTEM ERFC     
 C
 C
       REAL SUM, TERM, ZZZ                                   
       INTEGER FACT                                         
-      SUM = 0.0                                           
+      SUM = 0.0                                            
       N = 0                                                
    10 N = N + 1                                             
       TERM = ((-1.)**N) * (ZZZ**(2. * N + 1))               
@@ -2316,14 +2321,14 @@ C
       END                                                   
       BLOCK DATA                                                        00203100
 C                                                                       00203200
-      INTEGER C,P,PU,US,DS                                              00203300
-      CHARACTER *4 IWARN (800)
+      INTEGER OPFILE,C,P,PU,US,DS                                       00203300
+      CHARACTER *4 IWARN (1600)
       CHARACTER *4 IW0, IW1, IW2
       DIMENSION MODAYS (12)
       COMMON / DAYSMO / MODAYS
       COMMON /WARN/ IWARN,IW0,IW1,IW2                                   00203600
       COMMON /UNITS/ C,P,PU,US,DS,NDIM,MDIM                             00203700
-      DATA NDIM/800/,MDIM/800/                                          00203800
+      DATA NDIM/400/,MDIM/800/                                          00203800
       DATA C/7/,P/10/,PU/7/,US/1/,DS/2/
 C--------------- "C" changed to 7 to reflect Pr1me file system.    jbs  6/83
 C--------------- "P" changed to 10                    jbs  6/83
@@ -2333,3 +2338,4 @@ C                                                                       00204200
 C     NOTE: IF DIMENSIONS ARE CHANGED; NDIM & MDIM MUST ALSO BE CHANGED 00204300
 C                                                                       00204400
       END                                                               00204500
+ 
