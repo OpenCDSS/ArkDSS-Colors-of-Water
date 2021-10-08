@@ -22,45 +22,48 @@ j349dir=basedir;
 %watch out - if change variable names in code also need to change them here!
 %currently - if leave out one of these from control file will assign it a zero value
 controlvars={'srmethod','infofilename','readinfofile','readevap','readstagedischarge','pullstationdata','pullreleaserecs','runriverloop','runwcloop','doexchanges','runcaptureloop','runcalibloop'};
-controlvars=[controlvars,{'outputfilename','outputgage','outputwc','outputcal','outputhr','outputday','calibavggainloss'}];
+controlvars=[controlvars,{'logfilename','displaymessage','writemessage','outputfilename','outputgage','outputwc','outputcal','outputhr','outputday','calibavggainloss'}];
 controlfilename='StateTL_control.txt';
 
+% 
+% %Methods - these currently override method for all reaches, but planning default method by Reach that would run if not overrided  
+% %srmethod='j349';       %dynamic j349/Livinston method
+% srmethod='muskingum';   %percent loss TL plus muskingum-cunge for travel time
+% 
+% % Date - will be reworked - j349 currently only works for 60 days at 1hour - may alter fortran to run full calendar year at 1 hour without spinup
+% % also this needs to be integrated into SR structure
+% datestart=datenum(2018,4,01);
+% 
+% infofilename='StateTL_inputdata.xlsx';
+% readinfofile=0;  %1 reads from excel and saves mat file; other reads mat file;
+%     readevap=0;   %if reading info file, dont have to reread evap/SD (ie for calibration) 
+%     readstagedischarge=0;
+% pullstationdata=0;  %read gage and telemetry basd flow data; 1 reads from REST, other reads from file
+% pullreleaserecs=0;  %0 load from saved mat file, 1 if want to repull all from REST, 2 if only pull new/modified from REST for same period
+% runriverloop=1;  %1 runs / 0 etc not run
+% runwcloop=1;
+%    doexchanges=1;
+% runcaptureloop=1;  %loop to characterize potential capture vs available amt.
+% runcalibloop=1;
+% 
+% outputfilename='StateTL_inadv1new_';  %will add srmethod + gage/wc/etc + hour/day + .csv
+% outputgage=1;  %output river amounts by reach
+% outputwc=1;  %output waterclass amounts by reach
+% outputcal=1;  %output calibration amounts by gage location
+%     outputhr=0;  %output on hour timestep
+%     outputday=1;  %output on day timestep
+%     
+% WDcaliblist=[17];
+% calibstartdate=datenum(2018,4,02);
+% calibenddate=datenum(2018,4,15);
+% calibavggainloss='linreg'; %currently mean or linreg - method to establish gain/loss/error correction for period that might be like we will do future forecasting
+% calibavggainloss='mean';
+% logfilename='StateTL_runlog.txt';  %log filename
+% displaymessage=1;  %1=display messages to screen
+% writemessage=0; %1=write messages to logfile
 
-%Methods - these currently override method for all reaches, but planning default method by Reach that would run if not overrided  
-%srmethod='j349';       %dynamic j349/Livinston method
-srmethod='muskingum';   %percent loss TL plus muskingum-cunge for travel time
 
-% Date - will be reworked - j349 currently only works for 60 days at 1hour - may alter fortran to run full calendar year at 1 hour without spinup
-% also this needs to be integrated into SR structure
-datestart=datenum(2018,4,01);
-
-infofilename='StateTL_inputdata.xlsx';
-readinfofile=0;  %1 reads from excel and saves mat file; other reads mat file;
-    readevap=0;   %if reading info file, dont have to reread evap/SD (ie for calibration) 
-    readstagedischarge=0;
-pullstationdata=0;  %read gage and telemetry basd flow data; 1 reads from REST, other reads from file
-pullreleaserecs=0;  %0 load from saved mat file, 1 if want to repull all from REST, 2 if only pull new/modified from REST for same period
-runriverloop=1;  %1 runs / 0 etc not run
-runwcloop=1;
-   doexchanges=1;
-runcaptureloop=1;  %loop to characterize potential capture vs available amt.
-runcalibloop=1;
-
-outputfilename='StateTL_inadv1new_';  %will add srmethod + gage/wc/etc + hour/day + .csv
-outputgage=1;  %output river amounts by reach
-outputwc=1;  %output waterclass amounts by reach
-outputcal=1;  %output calibration amounts by gage location
-    outputhr=0;  %output on hour timestep
-    outputday=1;  %output on day timestep
-    
-WDcaliblist=[17];
-calibstartdate=datenum(2018,4,02);
-calibenddate=datenum(2018,4,15);
-calibavggainloss='linreg'; %currently mean or linreg - method to establish gain/loss/error correction for period that might be like we will do future forecasting
-calibavggainloss='mean';
-
-
-
+% initial 
 
 pred=0;  %if pred=0 subtracts water class from existing flows, if 1 adds to existing gage flows
 percrule=.10;  %percent rule - TLAP currently uses 10% of average release rate as trigger amount (Livingston 2011 says 10%; past Livingston 1978 detailed using 5% believe defined as 5% of max amount at headgate)
@@ -83,31 +86,7 @@ minc=1;              %minimum flow applied to celerity, dispersion, and evaporat
 minj349=1;           %minimum flow for j349 application - TLAP uses 1.0
 gainchangelimit=0.1;
 
-logfilename='StateTL_runlog.txt';  %log filename
-    displaymessage=1;  %1=display messages to screen
-    writemessage=0; %1=write messages to logfile
-    
-logm=['Running StateTL starting: ' datestr(runstarttime)];    %log message
-disp(logm);    %log message
-if writemessage==1;fidlog=fopen(logfilename,'w');fprintf(fidlog,'%s\r\n',logm);fclose(fidlog);end
-
-
 apikey='D2D7AF63-C286-40A8-9';  %this is KT1 personal - will want to get one for this tool or cdss etc
-
-
-rdays=60; rhours=1;
-spinupdays=45;
-rsteps=rdays*24/rhours;
-datestid=spinupdays*24/rhours+1;
-rdates=datestart*ones(spinupdays*24/rhours,1);
-rdates=[rdates;[datestart:rhours/24:datestart+(rdays-spinupdays)-rhours/24]'];
-[ryear,rmonth,rday,rhour] = datevec(rdates);
-rdatesday=floor(rdates);
-rjulien=rdatesday-(datenum(ryear,1,1)-1);
-dateend=datestart+(rdays-spinupdays)-1;
-datedays=[datestart:dateend];
-
-%date.datestart=datestart;
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -115,20 +94,22 @@ datedays=[datestart:dateend];
 % initially have WDlist in xlsx that defines division and WDs to run in order (upper tribs first)
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
+logmc={['Running StateTL starting: ' datestr(runstarttime)]};    %log message
+disp(logmc{1});    %log message
 
 fid=fopen(controlfilename);
 if fid==-1
-    logm=['Error: Could not find text file with run control options: ' basedir controlfilename];
-    domessage(logm,logfilename,displaymessage,writemessage)
-    error(logm);
+    logmc=[logmc;'Error: Could not find text file with run control options: ' basedir controlfilename];
+    errordlg(logmc)
+    error(logmc{2});
 else
-    logm=['Reading text file with run control options: ' basedir controlfilename];
-    domessage(logm,logfilename,displaymessage,writemessage)    
+    logmc=[logmc;'Reading text file with run control options: ' basedir controlfilename];
 end
 
 for i=1:length(controlvars)  %initially set these to zero
     eval([controlvars{i} '=0;']);
 end
+displaymessage=1; %default 1
 
 while 1
    line = fgetl(fid);
@@ -152,8 +133,7 @@ while 1
        d=str2double(line(tids(1)+1:tids(2)-1));
        ds=['D' num2str(d)];
        if length(tids)>2
-            logm=['Warning: more than one Division listed in run options / currently not set to run multiple divisions at once (but very easily can be) - just running first listed Div'];
-            domessage(logm,logfilename,displaymessage,writemessage)
+            logmc=[logmc;'Warning: more than one Division listed in run options / currently not set to run multiple divisions at once (but very easily can be) - just running first listed Div'];
        end
    elseif strcmp(lower(line(1:eids(1)-1)),'wdlist')   %WD run list in order; seperate by commas from upper tribs first to lower/mainstem
        WDlist=[];
@@ -176,11 +156,46 @@ while 1
    else
        logtxt='WARNING: control file line not executed: ';
    end
-   logm=[logtxt line(1:tids(end)-1)];
-   domessage(logm,logfilename,displaymessage,writemessage)
+   logmc=[logmc;logtxt line(1:tids(end)-1)];
    end
 end
 fclose(fid);
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Initial log write/display given options from control file
+if writemessage==1
+    fidlog=fopen(logfilename,'w');
+end
+for i=1:length(logmc)
+    if displaymessage==1
+        disp(logmc{i});
+    end
+    if writemessage==1
+        fprintf(fidlog,'%s\r\n',logmc{i});
+    end
+end
+if writemessage==1
+    fclose(fidlog);   %for log, closing file after every write in case of crash (could speed up by removing this in domessage function)
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Initial date/time work - will need improvement
+% want to tag onto SR for date checks when loading mat files
+rdays=60; rhours=1;
+spinupdays=45;
+rsteps=rdays*24/rhours;
+datestid=spinupdays*24/rhours+1;
+rdates=datestart*ones(spinupdays*24/rhours,1);
+rdates=[rdates;[datestart:rhours/24:datestart+(rdays-spinupdays)-rhours/24]'];
+[ryear,rmonth,rday,rhour] = datevec(rdates);
+rdatesday=floor(rdates);
+rjulien=rdatesday-(datenum(ryear,1,1)-1);
+dateend=datestart+(rdays-spinupdays)-1;
+datedays=[datestart:dateend];
+
+
 
 % logm=['reading WD run list from file: ' basedir infofilename];
 % domessage(logm,logfilename,displaymessage,writemessage)
@@ -234,12 +249,15 @@ if readinfofile==1
 logm=['reading subreach info from file: ' basedir infofilename];
 domessage(logm,logfilename,displaymessage,writemessage)
 
-
-% inforaw=readcell([basedir infofilename],'Sheet','SR');
-% [inforawrow inforawcol]=size(inforaw);
-
-[infonum,infotxt,inforaw]=xlsread([basedir infofilename],'SR');
+if infofilename(end-3:end)=='xlsx'
+    inforaw=readcell([basedir infofilename],'Sheet','SR');
+else
+    inforaw=readcell([basedir infofilename]);
+end
 [inforawrow inforawcol]=size(inforaw);
+
+%[infonum,infotxt,inforaw]=xlsread([basedir infofilename],'SR');
+%[inforawrow inforawcol]=size(inforaw);
 
 infoheaderrow=1;
 
@@ -294,6 +312,12 @@ wdidk=0;
 for i=infoheaderrow+1:inforawrow
     
     if ~isempty(inforaw{i,infocol.subreach}) & ~ismissing(inforaw{i,infocol.subreach})
+        for j=1:inforawcol  %doing this as a quick fix for converting from xlsread to readcell
+            if ismissing(inforaw{i,j})
+                inforaw{i,j}=[NaN];            
+            end
+        end
+
         k=k+1;
         v.di=inforaw{i,infocol.div};if ischar(v.di); v.di=str2num(v.di); end
         v.wd=inforaw{i,infocol.wd};if ischar(v.wd); v.wd=str2num(v.wd); end
@@ -479,16 +503,23 @@ for wd=WDlist
 end
 SR.(ds).WDID=WDIDsortedbywdidlist;
 
+%%%%%%%%%%%%%%%%%%%%%%%%5
+%WARNING / WATCH
+%quick fix - for moment if using csv, still get evap and stagedischarge out of xlsx
+if ~strcmp(infofilename(end-3:end),'xlsx')  
+    infofilename=[infofilename(1:end-3) 'xlsx'];
+end
+
 %%%%%%%%%%%%%%%%%%
 % Evaporation data
 % this will have to be refined as expand reaches into new areas or use better data
 if readevap==1
-    [infonum,infotxt,inforaw]=xlsread([basedir infofilename],'evap');
+    infonum=readmatrix([basedir infofilename],'Sheet','evap');
     [infonumrow infonumcol]=size(infonum);
-    [inforawrow inforawcol]=size(inforaw);
+    
     for wd=WDlist
         wds=['WD' num2str(wd)];
-        SR.(ds).(wds).evap=infonum(:,1);
+        SR.(ds).(wds).evap=infonum(:,end);
         evap.(ds).(wds).evap=SR.(ds).(wds).evap;
     end
     
