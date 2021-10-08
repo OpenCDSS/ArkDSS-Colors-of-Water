@@ -1,6 +1,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % StateTL
 % Matlab (preliminary) Colors of Water Transit Loss and Timing engine
+% State of Colorado - Division of Water Resources / Colorado Water Conservation Board
 %
 
 %cd C:\Projects\Ark\ColorsofWater\matlab
@@ -15,7 +16,7 @@ j349dir=basedir;
 %Run control options (on=1) fed through control file need to be in this list -
 %watch out - if change variable names in code also need to change them here!
 %currently - if leave out one of these from control file will assign it a zero value
-controlvars={'srmethod','inputfilename','fullyear','readinputfile','readevap','readstagedischarge','pullstationdata','pulllongtermstationdata','pullreleaserecs','runriverloop','runwcloop','doexchanges','runcaptureloop','runcalibloop'};
+controlvars={'srmethod','j349fast','j349multurf','inputfilename','rundays','fullyear','readinputfile','readevap','readstagedischarge','pullstationdata','pulllongtermstationdata','pullreleaserecs','runriverloop','runwcloop','doexchanges','runcaptureloop','runcalibloop'};
 controlvars=[controlvars,{'logfilename','displaymessage','writemessage','outputfilebase','outputgage','outputwc','outputcal','outputhr','outputday','calibavggainloss'}];
 controlfilename='StateTL_control.txt';
 
@@ -24,16 +25,20 @@ controlfilename='StateTL_control.txt';
 % additional variable/run options
 % potentially some these might also be put into text file
 
-pred=0;  %if pred=0 subtracts water class from existing flows, if 1 adds to existing gage flows
-percrule=.10;  %percent rule - TLAP currently uses 10% of average release rate as trigger amount (Livingston 2011 says 10%; past Livingston 1978 detailed using 5% believe defined as 5% of max amount at headgate)
+rhours=1;                  %timestep in hours
+spinupdayspartialyear=30;  %days to spinup (bank/aquifer storage for j349) if partial year
+spinupdaysfullyear=9;      %days to spinup if full year option ((366days+9days)*24=9000 dimension in j349)
 
-flowcriteria=5; %to establish gage and node flows: 1 low, 2 avg, 3 high flow values from livingston; envision 4 for custom entry; 5 for actual flows; 6 average for xdays/yhours prior to now/date; 7 average between 2 dates
-iternum.j349=5;  %iterations of gageflow loop given method to iterate on gagediff (gain/loss/error correction for estimated vs actual gage flows) (had been using dynamic way to iterate but currently just number);
+flowcriteria=5;            %to establish gage and node flows: 1 low, 2 avg, 3 high flow values from livingston; envision 4 for custom entry; 5 for actual flows; 6 average for xdays/yhours prior to now/date; 7 average between 2 dates
+iternum.j349=5;            %iterations of gageflow loop given method to iterate on gagediff (gain/loss/error correction for estimated vs actual gage flows) (had been using dynamic way to iterate but currently just number);
 iternum.muskingum=5;
 iternum.default=5;
+pred=0;                    %if pred=0 subtracts water class from existing flows, if 1 adds to existing gage flows; not really using yet
+percrule=.10;              %percent rule - TLAP currently uses 10% of average release rate as trigger amount (Livingston 2011 says 10%; past Livingston 1978 detailed using 5% believe defined as 5% of max amount at headgate)
 
 adjustlastsrtogage=1;     %although gagediff process should be getting last sr very close to gage, this would make a final adjustment to exactly equal
-inadv1_letwaterby=1;      %this will let a single water class amt get by an internal node although wc amt exceeds initially estimated river amt - hopefully until internal river amt can be adjusted upwards by last step(ie since have no actual river data at internal node) 
+inadv1a_letwaterby=1;      %this will let a single water class amt get by an internal node although wc amt exceeds initially estimated river amt - hopefully until internal river amt can be adjusted upwards by last step(ie since have no actual river data at internal node) 
+inadv1b_letwaterby=0;      %not currently working - this will let a single water class amt get by an internal node although wc amt exceeds initially estimated river amt - B by temporarily increasing river amts
 inadv2_reducewcpushUS=0;        %this will attempt to reduce wc amts at upstream location (within R-reach) if native flow goes negative at gage - CURRENTLY SEEMS TO PRODUCE SOME OSCILLATIONS
     wcreduceamtlimit=0;  %limit of sum in negative native flow at gage above which will add wc reductions and reoperate
     iternative=10;        %iteration limit for above
@@ -44,7 +49,6 @@ inadv3a_increaseint=0;     %last step to then increase internal node river flow 
 inadv3b_increaseint=0;    %currently using over 3a; similar step as 3a / only use one or other / but keeps correction at us or ds location where wcs exceed native / acting a bit better than 3a
 minc=1;              %minimum flow applied to celerity, dispersion, and evaporation calculations (dont want to have a zero celerity for reverse operations etc) / this is also seperately in j349/musk functions
 minj349=1;           %minimum flow for j349 application - TLAP uses 1.0
-j349multurf=1;
 gainchangelimit=0.1;
 savefinalcalfile=0;  %saves final file after calibration loop, big and only need if want StateTLplot for cal after clearing
 
@@ -67,7 +71,6 @@ telemetryhoururl='https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/tele
 telemetrydayurl='https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeseriesday/';  %for gages and ditch telemetry
 divrecdayurl='https://dwr.state.co.us/Rest/GET/api/v2/structures/divrec/divrecday/';   %for release/diversion records
 logwdidlocations=1;  %for log also document all wdid locations when pulled for evap
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %READ INITIAL RUN INFO
@@ -129,7 +132,11 @@ while 1
        end
    elseif strcmpi(line(1:eids(1)-1),'datestart')   %calib startdate year,month,day
        yearstart=str2double(line(tids(1)+1:tids(2)-1));
-       datestart=datenum(yearstart,str2double(line(tids(2)+1:tids(3)-1)),str2double(line(tids(3)+1:tids(4)-1)));
+       if length(tids)>2
+            datestart=datenum(yearstart,str2double(line(tids(2)+1:tids(3)-1)),str2double(line(tids(3)+1:tids(4)-1)));
+       else
+           datestart=datenum(yearstart,1,1);
+       end
    elseif strcmpi(line(1:eids(1)-1),'calibstartdate')   %calib startdate year,month,day
        calibstartdate=datenum(str2double(line(tids(1)+1:tids(2)-1)),str2double(line(tids(2)+1:tids(3)-1)),str2double(line(tids(3)+1:tids(4)-1)));
    elseif strcmpi(line(1:eids(1)-1),'calibenddate')   %calib enddate year,month,day
@@ -164,14 +171,17 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Initial date/time work - will need improvement
 % want to tag onto SR for date checks when loading mat files
-rdays=60; rhours=1;
-spinupdays=45;
+% and potential flexibility to use annual based mat files if doing partial years
 
-% in development - whole calendar year or at least starting on Jan1
-if fullyear==1
+if fullyear==1  %whole calendar year starting on Jan1
     datestart=datenum(yearstart,1,1);
-    spinupdays=9;
+    spinupdays=spinupdaysfullyear;
     rdays=datenum(yearstart,12,31)-datestart+1+spinupdays;  %if doing whole year
+else
+    rundays=max(1,rundays);    %rundays is days without spinup, will override zero to one
+    rundays=min(366,rundays);  %max of a year as j349 dimensions set at 9000
+    spinupdays=min(spinupdayspartialyear,375-rundays);
+    rdays=rundays+spinupdays;  %rdays is with spinup
 end
 
 rsteps=rdays*24/rhours;
@@ -572,7 +582,7 @@ if readevap==1 && evapnew==1
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %Use HB REST to pull utm and lat/lon coordinates 
-logm=['for evaporation, reading wdid locations from HBRest'];
+logm=['for evaporation, reading wdid locations from HBRest, starting: '  datestr(now)];
 domessage(logm,logfilename,displaymessage,writemessage)
 
 for wd=SR.(ds).WD
@@ -839,6 +849,10 @@ end
 if pullstationdata>=1
 blankvalues=-999*ones(length(rdates(datestid:end)),1);
 reststarttime=now;
+
+logm=['Start pulling data from HBREST at: '  datestr(now)];
+domessage(logm,logfilename,displaymessage,writemessage)
+
 
 for wd=WDlist
     wds=['WD' num2str(wd)];
@@ -1537,6 +1551,25 @@ end
 % PROCESSING LOOPS
 %%%%%%%%%%%%%%%%%%
 
+% % testing
+% for wd=WDlist
+%     wds=['WD' num2str(wd)];
+%     Rt=SR.(ds).(wds).R(1);
+%     Rb=SR.(ds).(wds).R(end);
+%     
+%     for r=SR.(ds).(wds).R
+%         rs=['R' num2str(r)];
+%         for sr=SR.(ds).(wds).(rs).SR
+%             if SR.(ds).(wds).(rs).type(sr)==0  %add cfs to gages
+%                 SR.(ds).(wds).(rs).Qnode(:,sr)=SR.(ds).(wds).(rs).Qnode(:,sr)+500;
+%             end
+%         end
+%     end
+% end
+
+
+
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % RIVERLOOP / GAGEFLOW LOOP 
@@ -1547,6 +1580,10 @@ end
     
 if runriverloop==1
 
+logm=['Starting river/gageflow loop at: '  datestr(now)];
+domessage(logm,logfilename,displaymessage,writemessage)
+    
+    
 lastwdid=[];  %tracks last wdid/connection of processed wd reaches
 SR.(ds).Rivloc.loc=[]; %just tracks location listing of processed reaches
 SR.(ds).Rivloc.flowwc.wcloc=[];
@@ -1761,7 +1798,8 @@ for sr=SR.(ds).(wds).(rs).SR
     %%%%%%%%%%%%%%%%%%%%%%%
     % main portion to route subreach flow from us to ds
     
-    Qus=max(0,Qus);    
+    Qus=max(0,Qus);
+    Qmin=min(Qus);Qmax=max(Qus);
     
     if gain==-999   %gain=-999 to not run transittime but can have loss percent 
         losspercent=SR.(ds).(wds).(rs).losspercent(sr);
@@ -1771,7 +1809,7 @@ for sr=SR.(ds).(wds).(rs).SR
         if strcmp(srmethod,'j349') || (strcmp(srmethod,'default') && strcmp(SR.(ds).defaultmethod.(wds).(rs),'j349'))
             gainportion=gain*SR.(ds).(wds).(rs).reachportion(sr);
             Qus1=max(minj349,Qus);
-            [Qds,celerity,dispersion,logm]=runj349f(ds,wds,rs,sr,Qus1,gainportion,rdays,rhours,rsteps,j349dir,-999,-999,j349multurf);
+            [Qds,celerity,dispersion,Qmin,Qmax,logm]=runj349f(ds,wds,rs,sr,Qus1,gainportion,rdays,rhours,rsteps,j349dir,-999,-999,j349multurf,-999,-999,j349fast);
             Qds=Qds-(Qus1-Qus); %timing won't be perfect for this but keeps celerity exactly calculated above (may want to do as just pure addition/subtraction)
             if ~isempty(logm)
                 domessage(logm,logfilename,displaymessage,writemessage)
@@ -1835,6 +1873,8 @@ for sr=SR.(ds).(wds).(rs).SR
     SR.(ds).(wds).(rs).Qds(:,sr)=Qds;
     SR.(ds).(wds).(rs).celerity(:,sr)=celerity;    
     SR.(ds).(wds).(rs).dispersion(:,sr)=dispersion;    
+    SR.(ds).(wds).(rs).Qmin(sr)=Qmin;  %used in WC loops for multiple linearization
+    SR.(ds).(wds).(rs).Qmax(sr)=Qmax;
     SR.(ds).Rivloc.flowriv.us(:,SR.(ds).(wds).(rs).locid(sr))=Qus;
     SR.(ds).Rivloc.flowriv.ds(:,SR.(ds).(wds).(rs).locid(sr))=Qds;
 %    SR.(ds).Rivloc.celerity(:,SR.(ds).(wds).(rs).locid(sr))=celerity;   
@@ -1930,6 +1970,10 @@ end %river/gage loop
 
 if runwcloop==1
 
+logm=['Starting water class routing loop at: '  datestr(now)];
+domessage(logm,logfilename,displaymessage,writemessage)
+    
+    
 SR.(ds).WCloc.wslist=[];
 SR.(ds).WCloc.Rloc=[];
 
@@ -1948,6 +1992,7 @@ for wd=WDlist
 
 for w=1:length(wwcnums)
 ws=wwcnums{w};
+
 % if ~isfield(SR.(ds).WCloc,ws)  %if here will include missing WCs as empty
 %     SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
 %     SR.(ds).WCloc.(ws)=[];
@@ -2185,8 +2230,17 @@ SR.(ds).Rivloc.flowwc.us(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to
 SR.(ds).Rivloc.flowwc.ds(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to sum total wc release amounts within river
 end
 
+wsstop=0;
 for w=1:length(wwcnumids)
 ws=SR.(ds).WCloc.Rloc{wwcnumids(w),1};
+
+if wsstop==1
+    error('stop')
+%elseif strcmp(ws,'W151408') & r==2
+elseif strcmp(ws,'W151415') & r==7
+    wsstop=1;
+end
+
 srtt=SR.(ds).WCloc.Rloc{wwcnumids(w),5};
 srtb=SR.(ds).WCloc.Rloc{wwcnumids(w),6};
 Rtr=SR.(ds).WCloc.Rloc{wwcnumids(w),7};
@@ -2197,6 +2251,7 @@ wdidfrom=SR.(ds).WCloc.Rloc{wwcnumids(w),11};
 wdidto=SR.(ds).WCloc.Rloc{wwcnumids(w),12};
 wdidfromid=SR.(ds).WCloc.Rloc{wwcnumids(w),13};
 wdidtoid=SR.(ds).WCloc.Rloc{wwcnumids(w),14};
+
 
 logm=['running admin loop on waterclass:' ws ' ' WC.D2.WC.(ws).wc];
 domessage(logm,logfilename,displaymessage,writemessage)
@@ -2275,35 +2330,77 @@ for sr=srtt:srtb
         release=release-SR.(ds).(wds).(rs).(ws).wcreduceamt(:,sr);        
     end
     
+
+    %full river parameters, here in case get modified by action 1b 
     gain=SR.(ds).(wds).(rs).gain(end);
-    if pred==1
+    Qus=SR.(ds).(wds).(rs).Qus(:,sr);
+    Qds=SR.(ds).(wds).(rs).Qds(:,sr);
+    celerity=SR.(ds).(wds).(rs).celerity(:,sr);
+    dispersion=SR.(ds).(wds).(rs).dispersion(:,sr);
+    Qmin=SR.(ds).(wds).(rs).Qmin(sr);  %used in WC loops for multiple linearization
+    Qmax=SR.(ds).(wds).(rs).Qmax(sr);
+    gainportion=gain*SR.(ds).(wds).(rs).reachportion(sr);
+
+    QSRadd=-1*(min(0,Quspartial-minj349));  %amount of "potentially" negative native
+    Quspartial=Quspartial+QSRadd;           %WARNING: this by itself this will cut Qusrelease (waterclass) to Qus (gage) (if exceeds)
+%    Quspartial=max(minj349,Quspartial);  %WARNING: this by itself this will cut Qusrelease (waterclass) to Qus (gage) (if exceeds)
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%
+    % INADVERTANT DIVERSIONS - ACTION 1-B
+    % if individual Qusrelease (waterclass) exceeds Qus (gage-based) at interior node 
+    % measure to allow Qusrelease to pass by - in case of error in gageportion or exchanges on releases
+    % B - new method to "temporarily" increase river amount - NOT CURRENTLY WORKING
+    QSRaddsum=sum(QSRadd(datestid:end));
+    if inadv1b_letwaterby==1 && QSRaddsum>0 %if internal correction so native doesnt go negative
+        SR.(ds).(wds).(rs).QSRadd(:,sr)=SR.(ds).(wds).(rs).QSRadd(:,sr)+QSRadd;  %this is going to get overwritten by subsequent water classes (??)
+        Qustemp=Qus+QSRadd;
+
+        %rerun river flows with increases
+        if gain==-999   %gain=-999 to not run transittime but can have loss percent
+            losspercent=SR.(ds).(wds).(rs).losspercent(sr);
+            Qdstemp=max(0,Qustemp*(1-losspercent/100));
+            [celerity,dispersion]=calcceleritydisp((Qustemp+Qdstemp)/2,SR.(ds).(wds).(rs).celeritya(sr),SR.(ds).(wds).(rs).celerityb(sr),SR.(ds).(wds).(rs).dispersiona(sr),SR.(ds).(wds).(rs).dispersionb(sr),SR.(ds).(wds).(rs).celeritymethod(sr),SR.(ds).(wds).(rs).dispersionmethod(sr),1);
+        else
+            if strcmp(srmethod,'j349') || (strcmp(srmethod,'default') && strcmp(SR.(ds).defaultmethod.(wds).(rs),'j349'))
+                Qus1=max(minj349,Qustemp);
+                [Qdstemp,celerity,dispersion,Qmin,Qmax,logm]=runj349f(ds,wds,rs,sr,Qus1,gainportion,rdays,rhours,rsteps,j349dir,-999,-999,j349multurf,-999,-999,j349fast);
+                Qdstemp=Qdstemp-(Qus1-Qustemp); %timing won't be perfect for this but keeps celerity exactly calculated above (may want to do as just pure addition/subtraction)
+                if ~isempty(logm)
+                    domessage(logm,logfilename,displaymessage,writemessage)
+                end
+            else
+                [Qdstemp,celerity,dispersion]=runmuskingum(ds,wds,rs,sr,Qustemp,rhours,rsteps,-999,-999);
+            end
+        end
+%         if strcmp(ws,'W151408') & r==2
+%             plot(QSRadd)
+%         end
+        
+    end
+
+    
+    if pred==1  %not yet using - still need??
         celerity=SR.(ds).(wds).(rs).celeritya(sr)*max(minc,Quspartial).^SR.(ds).(wds).(rs).celerityb(sr);
         dispersion=SR.(ds).(wds).(rs).dispersiona(sr)*max(minc,Quspartial).^SR.(ds).(wds).(rs).dispersionb(sr);
         [celerity,dispersion]=calcceleritydisp(Quspartial,SR.(ds).(wds).(rs).celeritya(sr),SR.(ds).(wds).(rs).celerityb(sr),SR.(ds).(wds).(rs).dispersiona(sr),SR.(ds).(wds).(rs).dispersionb(sr),SR.(ds).(wds).(rs).celeritymethod(sr),SR.(ds).(wds).(rs).dispersionmethod(sr),1);
-    else
-        celerity=SR.(ds).(wds).(rs).celerity(:,sr);
-        dispersion=SR.(ds).(wds).(rs).dispersion(:,sr);
     end
     
-    QSRadd=-1*(min(0,Quspartial));  %amount of "potentially" negative native
-    Quspartial=max(0,Quspartial);  %WARNING: this by itself this would cut Qusrelease (waterclass) to Qus (gage) (if exceeds)
-        
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % routing based on partial river amount (river - release), Qmin/Qmax or celerity/disp from river or river+qsradd (action1b)    
     if gain==-999   %gain=-999 to not run timing but can still have loss percent 
         losspercent=SR.(ds).(wds).(rs).losspercent(sr);
         Qdspartial=Quspartial*(1-losspercent/100);
     else
         if strcmp(srmethod,'j349') || (strcmp(srmethod,'default') && strcmp(SR.(ds).defaultmethod.(wds).(rs),'j349'))
-            gainportion=gain*SR.(ds).(wds).(rs).reachportion(sr);
-            [Qdspartial,celeritypartial,dispersionpartial,logm]=runj349f(ds,wds,rs,sr,Quspartial+minj349,gainportion,rdays,rhours,rsteps,j349dir,celerity,dispersion,j349multurf); %celerity/disp based on gage flows / +minflow because cant have zero flow
-            Qdspartial=Qdspartial-minj349;
+            [Qdspartial,celeritypartial,dispersionpartial,Qmin,Qmax,logm]=runj349f(ds,wds,rs,sr,Quspartial,gainportion,rdays,rhours,rsteps,j349dir,celerity,dispersion,j349multurf,Qmin,Qmax,j349fast); %celerity/disp based on gage flows / +minflow because cant have zero flow
             if ~isempty(logm)
                 domessage(logm,logfilename,displaymessage,writemessage)
-            end
+            end 
         else
             [Qdspartial,celeritypartial,dispersionpartial]=runmuskingum(ds,wds,rs,sr,Quspartial,rhours,rsteps,celerity,dispersion);
         end
     end
-    Qdspartial=max(0,Qdspartial);
+    
     Qavg=(max(Quspartial,minc)+max(Qdspartial,minc))/2;
     width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
     evap=SR.(ds).(wds).(rs).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
@@ -2318,8 +2415,25 @@ for sr=srtt:srtb
         Qdspartial=Qdspartial+SR.(ds).(wds).(rs).(ws).wcreduceamtlast;
     end
 
-    
-    Qdspartial=max(0,Qdspartial);    
+    QSRdsadd=-1*(min(0,Qdspartial));  %amount of "potentially" negative native
+    Qdspartial=Qdspartial+QSRdsadd;  %WARNING: though less likely this by itself could also cut release amts
+%    Qdspartial=max(0,Qdspartial);  %WARNING: though less likely this by itself could also cut release amts
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%
+    % INADVERTANT DIVERSIONS - ACTION 1-B
+    % also add to ds river amts if Qdspartial goes negative
+    QSRdsaddsum=sum(QSRdsadd(datestid:end));
+    if inadv1b_letwaterby==1 && (QSRaddsum>0 | QSRdsaddsum>0) %if internal correction so native doesnt go negative
+        if QSRdsaddsum>0
+            Qdstemp=Qdstemp+QSRdsadd;
+        end
+        Qusrelease=Qustemp-Quspartial;   %resetting partial amounts to potentially negative amounts
+        Qdsrelease=Qdstemp-Qdspartial;
+        Quspartial=Qus-Qusrelease;
+        Qdspartial=Qds-Qdsrelease;
+        logm=['To avoid cutting wc: ' ws ' Action 1-B used to temporarily increase river flow US:' num2str(QSRaddsum)  ' DS:' num2str(QSRdsaddsum) ' wd:' wds ' r:' rs ' sr:' num2str(sr)];
+        domessage(logm,logfilename,displaymessage,writemessage)
+    end
 
     SR.(ds).(wds).(rs).(ws).Qusnodepartial(:,sr)=Qusnodepartial;
     SR.(ds).(wds).(rs).(ws).Quspartial(:,sr)=Quspartial;
@@ -2332,8 +2446,8 @@ for sr=srtt:srtb
 %         Qusrelease=SR.(ds).(wds).(rs).Qus(:,sr)-Quspartial+SR.(ds).(wds).(rs).QSRaddcum(:,sr);
 %         Qdsrelease=SR.(ds).(wds).(rs).Qds(:,sr)-Qdspartial+SR.(ds).(wds).(rs).QSRaddcum(:,sr);
         Qusnoderelease=SR.(ds).(wds).(rs).Qusnode(:,sr)-Qusnodepartial; %for usnode, would not add QSR on first reach that QSR occurred
-        Qusrelease=SR.(ds).(wds).(rs).Qus(:,sr)-Quspartial;
-        Qdsrelease=SR.(ds).(wds).(rs).Qds(:,sr)-Qdspartial;
+        Qusrelease=Qus-Quspartial;
+        Qdsrelease=Qds-Qdspartial;
     else        %if prediction, wc amounts are "partial" (gage+wcrelease) amount - gage amount 
         Qusnoderelease=Qusnodepartial-SR.(ds).(wds).(rs).Qusnode(:,sr);
         Qusrelease=Quspartial-SR.(ds).(wds).(rs).Qus(:,sr);
@@ -2353,14 +2467,16 @@ for sr=srtt:srtb
     SR.(ds).(wds).(rs).QSRadd(:,sr)=SR.(ds).(wds).(rs).QSRadd(:,sr)+QSRadd;  %this is going to get overwritten by subsequent water classes (??)
 %    SR.(ds).(wds).(rs).QSRaddcum(:,1:sr)=cumsum(SR.(ds).(wds).(rs).QSRadd(:,1:sr),2);  %this is what might get added back in as effect would go downstream   
     QSRaddsum=sum(QSRadd(datestid:end));
-    if QSRaddsum>0 && inadv1_letwaterby==1 %if internal correction so native doesnt go negate
+    if QSRaddsum>0 && inadv1a_letwaterby==1 %if internal correction so native doesnt go negate
         release=max(0,release);
         if gain==-999
             dsrelease=release;
             losspercent=SR.(ds).(wds).(rs).losspercent(sr);
             dsrelease=release*(1-losspercent/100);
         elseif strcmp(srmethod,'j349') || (strcmp(srmethod,'default') && strcmp(SR.(ds).defaultmethod.(wds).(rs),'j349'))
-            [dsrelease,celerityout,dispersionout,logm]=runj349f(ds,wds,rs,sr,release+minj349,gainportion,rdays,rhours,rsteps,j349dir,celerity,dispersion,j349multurf); %celerity/disp based on gage flows - wrong but so timing the same
+            Qmin=SR.(ds).(wds).(rs).Qmin(sr);
+            Qmax=SR.(ds).(wds).(rs).Qmax(sr);
+            [dsrelease,celerityout,dispersionout,Qmin,Qmax,logm]=runj349f(ds,wds,rs,sr,release+minj349,gainportion,rdays,rhours,rsteps,j349dir,celerity,dispersion,j349multurf,Qmin,Qmax,j349fast); %celerity/disp based on gage flows - wrong but so timing the same
             dsrelease=dsrelease-minj349-gainportion;  %minflow added in and subtracted - a Qus constant 1 should have Qds constant 1
             if ~isempty(logm)
                 domessage(logm,logfilename,displaymessage,writemessage)
@@ -2719,8 +2835,9 @@ end %runwcloop
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if runcaptureloop==1
-    logm=['running capture loop to characterize release capture amounts versus release/available amounts'];
+    logm=['Starting capture loop to characterize release capture amounts versus release/available amounts at: '  datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
+
     dt=rhours * 60 * 60; %sec
     
 %for j=1:length(SR.(ds).Rivloc.loc(:,1))
@@ -2879,6 +2996,9 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if runcalibloop==1
+    logm=['Starting simulation loop for use in calibration at: '  datestr(now)];
+    domessage(logm,logfilename,displaymessage,writemessage)
+
     %averages of gagediff etc taken with calibration period that is potentially within larger run period
     calibstid=find(rdates==calibstartdate);
     calibendid=find(rdates==calibenddate);
@@ -3011,7 +3131,9 @@ for sr=SR.(ds).(wds).(rs).SR
         if strcmp(srmethod,'j349') || (strcmp(srmethod,'default') && strcmp(SR.(ds).defaultmethod.(wds).(rs),'j349'))
             gainportion=gain*SR.(ds).(wds).(rs).reachportion(sr);
             Qus1=max(minj349,Qus);
-            [Qds,celerity,dispersion,logm]=runj349f(ds,wds,rs,sr,Qus1,gainportion,rdays,rhours,rsteps,j349dir,-999,-999,j349multurf);
+            Qmin=SR.(ds).(wds).(rs).Qmin(sr);
+            Qmax=SR.(ds).(wds).(rs).Qmax(sr);
+            [Qds,celerity,dispersion,Qmin,Qmax,logm]=runj349f(ds,wds,rs,sr,Qus1,gainportion,rdays,rhours,rsteps,j349dir,-999,-999,j349multurf,Qmin,Qmax,j349fast);
             Qds=Qds-(Qus1-Qus); %timing won't be perfect for this but keeps celerity exactly calculated above (may want to do as just pure addition/subtraction)
             if ~isempty(logm)
                 domessage(logm,logfilename,displaymessage,writemessage)
@@ -3064,6 +3186,9 @@ end  %runcalibloop
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if outputgage==1
+    logm=['Starting output of files oriented by subreach/node at: '  datestr(now)];
+    domessage(logm,logfilename,displaymessage,writemessage)
+
     titlelocline=[{'atWDID'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-USWDID/2-DSWDID'}];
     if outputhr==1
         titledates=cellstr(datestr(rdates(datestid:end),'mm/dd/yy HH:'));
@@ -3120,7 +3245,7 @@ if outputgage==1
 
     end
     if outputhr==1
-        logm=['writing hourly output files for river/native amounts (hourly is a bit slow)'];
+        logm=['writing hourly output files for river/native amounts (hourly is a bit slow), starting: ' datestr(now)];
         domessage(logm,logfilename,displaymessage,writemessage)
         writecell([loclineriver,num2cell(outputlineriver)],[outputfilebase srmethod '_riverhr.csv'],'WriteMode','append');
         writecell([loclineriver,num2cell(outputlinenative)],[outputfilebase srmethod '_nativehr.csv'],'WriteMode','append');
@@ -3132,7 +3257,7 @@ if outputgage==1
         end
     end
     if outputday==1
-        logm=['writing daily output files for river/native amounts'];
+        logm=['writing daily output files for river/native amounts, starting: ' datestr(now)];
         domessage(logm,logfilename,displaymessage,writemessage)
         for i=1:length(daymat(:,1))
             dayids=find(yr==daymat(i,1) & mh==daymat(i,2) & dy==daymat(i,3));
@@ -3162,13 +3287,15 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if outputwc==1 & isfield(SR.(ds),'WCloc')
+    logm=['Starting output of files ordered by water classes at: ' datestr(now)];
+    domessage(logm,logfilename,displaymessage,writemessage)
 
 wwcnums=SR.(ds).WCloc.wslist;
 %titlelocline=[{'WCnum'},{'WC code'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'srid'},{'1-US/2-DS'},{'WDID'}];
 titlelocline=[{'WCnum'},{'WC code'},{'atWDID'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-USWDID/2-DSWDID'}];
 
 if outputhr==1
-    logm=['writing hourly output file by water class amounts (hourly is a bit slow)'];
+    logm=['writing hourly output file by water class amounts (hourly is a bit slow), starting: ' datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
     titledates=cellstr(datestr(rdates(datestid:end),'mm/dd/yy HH:'));
     writecell([titlelocline,titledates'],[outputfilebase srmethod '_wchr.csv']);
@@ -3179,7 +3306,7 @@ if outputhr==1
     end
 end
 if outputday==1
-    logm=['writing daily output file by water class amounts'];
+    logm=['writing daily output file by water class amounts, starting: ' datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
     [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:end));
     daymat=unique([yr,mh,dy],'rows','stable');
@@ -3282,6 +3409,9 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if outputcal==1 & runcalibloop==1
+    logm=['Starting output of files listing just at gage locations at: ' datestr(now)];
+    domessage(logm,logfilename,displaymessage,writemessage)
+
     titlelocline=[{'WDID'},{'Abbrev'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-Gage/2-Sim'}];
     if outputhr==1
         titledates=cellstr(datestr(rdates(datestid:end),'mm/dd/yy HH:'));
@@ -3307,12 +3437,12 @@ if outputcal==1 & runcalibloop==1
         iadd=i;
     end
     if outputhr==1
-        logm=['writing hourly output files for gage and simulated (calibration) amounts (hourly is a bit slow)'];
+        logm=['writing hourly output files for gage and simulated (calibration) amounts (hourly is a bit slow), starting: ' datestr(now)];
         domessage(logm,logfilename,displaymessage,writemessage)
         writecell([loclinegage,num2cell(outputlinegage)],[outputfilebase srmethod '_calhr.csv'],'WriteMode','append');
     end
     if outputday==1
-        logm=['writing daily output files for gage and simulated (calibration) amounts'];
+        logm=['writing daily output files for gage and simulated (calibration) amounts, starting: ' datestr(now)];
         domessage(logm,logfilename,displaymessage,writemessage)
         for i=1:length(daymat(:,1))
             dayids=find(yr==daymat(i,1) & mh==daymat(i,2) & dy==daymat(i,3));
@@ -3328,6 +3458,10 @@ end
 logm=['Done Running StateTL endtime: ' datestr(now) ' elapsed (DD:HH:MM:SS): ' datestr(now-runstarttime,'DD:HH:MM:SS')];    %log message
 if displaymessage~=1;disp(logm);end
 domessage(logm,logfilename,displaymessage,writemessage)
+
+% if runcalibloop~=1
+% msgbox(logm,'StateTL - Colors of Water Model Engine')
+% end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -3437,9 +3571,19 @@ end
 %function for subreach to take upstream hydrograph and subreach specific data, build input card, 
 %run TLAP/j349 fortran, read output card, and return resulting downstream hydrograph
 
-function [Qds,celerity,dispersion,logm]=runj349f(ds,wds,rs,sr,Qus,gain,rdays,rhours,rsteps,j349dir,celerity,dispersion,j349multurf)
+function [Qds,celerity,dispersion,Qmin,Qmax,logm]=runj349f(ds,wds,rs,sr,Qus,gain,rdays,rhours,rsteps,j349dir,celerity,dispersion,j349multurf,Qmin,Qmax,j349fast)
 global SR
 logm='';
+
+if j349fast==1
+    inputcardfilename=['StateTL_j349input_us.dat'];
+    outputcardfilename=['StateTL_j349output_ds.dat'];
+    outputbinfilename=['StateTL_j349output_ds.bin'];
+else
+    inputcardfilename=['tStateTL_' ds wds rs 'SR' num2str(sr) '_us.dat'];
+    outputcardfilename=['tStateTL_' ds wds rs 'SR' num2str(sr) '_ds.dat'];    
+end
+filenamesfilename='StateTL_filenames.dat';  %changed this from just filenames
 
 qckmultnum=10; %j349 currently set to take table of 10 Q/C/K values (changed from 8 to 10)
 nursf=20; %number of flow urfs to force (max 20), 0 to not force
@@ -3451,25 +3595,29 @@ storagecoefficient=SR.(ds).(wds).(rs).storagecoefficient(sr);
 aquiferwidth=SR.(ds).(wds).(rs).aquiferwidth(sr);
 closure=SR.(ds).(wds).(rs).closure(sr);
 
-if length(celerity)>1
-%     if j349multurf=>0
-%         celeritymult=celerity;
-%         dispersionmult=dispersion;
-%     end 
-    posids=find(Qus>0);        %currently j349 only works with a single celerity (change??!!)
-    celerity=mean(celerity(posids));
-    dispersion=mean(dispersion(posids));
-elseif celerity==-999
-    %basing celerity on subreach Qus - this is slightly different than TLAP (based on average flow for entire reach) but think it better
-    celerityts=0; %indicating single value rather than time series
-    [celerity,dispersion]=calcceleritydisp(Qus,SR.(ds).(wds).(rs).celeritya(sr),SR.(ds).(wds).(rs).celerityb(sr),SR.(ds).(wds).(rs).dispersiona(sr),SR.(ds).(wds).(rs).dispersionb(sr),SR.(ds).(wds).(rs).celeritymethod(sr),SR.(ds).(wds).(rs).dispersionmethod(sr),celerityts);
-end
+if j349multurf==0   %single urf linearization
+    if length(celerity)>1
+        %     if j349multurf=>0
+        %         celeritymult=celerity;
+        %         dispersionmult=dispersion;
+        %     end
+        posids=find(Qus>0);        %currently j349 only works with a single celerity (change??!!)
+        celerity=mean(celerity(posids));
+        dispersion=mean(dispersion(posids));
+    elseif celerity==-999
+        %basing celerity on subreach Qus - this is slightly different than TLAP (based on average flow for entire reach) but think it better
+        celerityts=0; %indicating single value rather than time series
+        [celerity,dispersion]=calcceleritydisp(Qus,SR.(ds).(wds).(rs).celeritya(sr),SR.(ds).(wds).(rs).celerityb(sr),SR.(ds).(wds).(rs).dispersiona(sr),SR.(ds).(wds).(rs).dispersionb(sr),SR.(ds).(wds).(rs).celeritymethod(sr),SR.(ds).(wds).(rs).dispersionmethod(sr),celerityts);
+    end
+    Qmin=-999;
+    Qmax=-999;
 
-%if celerity==-999 && j349multurf>0
-if j349multurf>0
-    Qmin=min(Qus);Qmax=max(Qus);  %what if bad spikes in Q?
-    if Qmin==Qmax
-        Qmax=Qmin+1;
+else   %multiple urf linearization
+    if Qmin==-999
+        Qmin=min(Qus);Qmax=max(Qus);  %what if bad spikes in Q?
+        if Qmin==Qmax
+            Qmax=Qmin+1;
+        end
     end
     Qmulta=(Qmax-Qmin)/(qckmultnum-1);
     Qmult=[Qmin:Qmulta:Qmax];
@@ -3480,21 +3628,19 @@ if j349multurf>0
     if max(dispersionmult)>=10000
         exceedids=find(dispersionmult>=10000);
         dispersionmult(exceedids)=9999;
-        logm=[logm 'BIG WARNING: D:' ds ' WD:' wds ' R:' rs ' SR:' num2str(sr) ' dispersion exceeded/limited to 10000!!'];
+        logm=[logm 'WARNING: D:' ds ' WD:' wds ' R:' rs ' SR:' num2str(sr) ' dispersion exceeded/limited to 10000'];
     end
     if max(celeritymult)>=100
         exceedids=find(celeritymult>=100);
         celeritymult(exceedids)=99;
-        logm=[logm 'BIG WARNING: D:' ds ' WD:' wds ' R:' rs ' SR:' num2str(sr) ' celerity exceeded/limited to 100!!'];
+        logm=[logm 'WARNING: D:' ds ' WD:' wds ' R:' rs ' SR:' num2str(sr) ' celerity exceeded/limited to 100'];
     end
-    
+    celerity=mean(celeritymult);
+    dispersion=mean(dispersionmult);
 end
 
 
 stagedischarge=SR.(ds).stagedischarge.(['SD' num2str(SR.(ds).(wds).(rs).sdnum(sr))]);
-
-inputcardfilename=['tStateTL_' ds wds rs 'SR' num2str(sr) '_us.dat'];
-outputcardfilename=['tStateTL_' ds wds rs 'SR' num2str(sr) '_ds.dat'];
 
 fid=fopen([j349dir inputcardfilename],'w');
 
@@ -3502,8 +3648,10 @@ cardstr='CDWR TIMING AND TRANSIT LOSS MODEL                                     
     fprintf(fid,'%95s\r\n',cardstr);
 cardstr='SUBREACH  UPSTREAM                                                              CARD 2 RUN INFO';
     fprintf(fid,'%95s\r\n',cardstr);
-cardstr='         1         2                                                            CARD 3 INPUT SOURCE AND RUN OBJECTIVE';
-    fprintf(fid,'%117s\r\n',cardstr);
+cardstr='         1         2                                                            CARD 3 INPUT SOURCE AND RUN OBJECTIVE, COl C=j349fast';
+cardstr2=num2str(j349fast,'%10.0f');
+cardstr(31-length(cardstr2):30)=cardstr2;
+    fprintf(fid,'%133s\r\n',cardstr);
 cardstr='         1         0                                                            CARD 4 DESCRIB OF RUN>>> COL C=DAYS (MAX=100)';
 cardstr2=num2str(rdays,'%10.0f');cardstr3=num2str(rhours,'%10.1f');
 cardstr(31-length(cardstr2):30)=cardstr2;cardstr(41-length(cardstr3):40)=cardstr3;
@@ -3629,12 +3777,26 @@ end
 
 fclose(fid);
 
-fid=fopen([j349dir 'filenames'],'w');
+fid=fopen([j349dir filenamesfilename],'w');
 fprintf(fid,'%s\r\n',inputcardfilename);
 fprintf(fid,'%s\r\n',outputcardfilename);
+if j349fast==1
+    fprintf(fid,'%s\r\n',outputbinfilename);
+end
 fclose(fid);
 
-[s, w] = dos([j349dir 'j349.exe']);
+[s, w] = dos([j349dir 'StateTL_j349.exe']);  %changed this from just j349.exe
+
+
+if j349fast==1
+   fid=fopen([j349dir outputbinfilename],'r');
+   Qds=fread(fid,inf,'float32'); %even though compiled 64bit, seems output as 32bit REAL*4 rather than REAL*8
+   %hopefully its the right length etc..
+   if length(Qds)~=rsteps
+        errordlg(['ERROR: Qds read from j349 binary file not same length as rsteps for D:' ds ' WD:' wds ' R:' rs ' SR:' num2str(sr)])
+        error(['ERROR: Qds read from j349 binary file not same length as rsteps for D:' ds ' WD:' wds ' R:' rs ' SR:' num2str(sr)])
+   end
+else
 
 fid=fopen([j349dir outputcardfilename],'r');
 
@@ -3660,6 +3822,8 @@ for j=1:rsteps
 %    datechunk(j,:)=line(2:12);
     Qds(j,1)=str2num(line(42:54));
 end
+
+end  %fast
 fclose(fid);
 
 end
