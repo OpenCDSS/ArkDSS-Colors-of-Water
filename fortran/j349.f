@@ -57,6 +57,7 @@ C        ZBEGIN, ZEND- IDENTIFIES BEGINNING AND ENDING OF STUDY PERIOD  00003200
 C        ZMULT - IDENTIFIES MULTI-LINEARIZATION OPTION                  00003300
 C        ZDSQO--ALLOWS FOR INPUT OF DS OBSERVED FLOW FOR HYDRGRAPH COMPARISON.   G. KUHN, 3-18-87
 C        ZOUTPUT--ALLOWS FOR NO PRINT IF DAILY(HOURLY, ETC.) VALUES.             G. KUHN, 3-18-87
+C        ZFAST - option to speed up execution using binary for Qds output         kt fast option
 C                                                                       00003400
 C     SELECTED ARRAYS IN TIME DIMENSION                                 00003500
 C        USQ   - UPSTREAM DISCHARGE HYDROGRAPH.                         00003600
@@ -95,7 +96,7 @@ C
      1XKRAT(10), XKQRAT(10)                                             00006200
       REAL *8 UR
       COMMON /ZLOGIC/ ZBEGIN,ZEND,ZPLOT,ZROUTE,ZFLOW,ZLOSS,ZDISK,ZCARDS,00006300
-     1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT             00006400
+     1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT,ZFAST       00006400  kt fast option
       COMMON /PLT/ INITMO,INITDY,INITYR,LASTMO,LASTDY,LASTYR,NRECDS,STAN00006500
      1O1,STANM1,STANO2,STANM2,INFO,JYEAR                                00006600
       COMMON /RESFCT/ UR,DUSRF,QLIN,NURS,NRO,NRESP,ITT,NUR1,            00006700
@@ -122,17 +123,22 @@ c      WRITE(*,3)
 c3     FORMAT(5X,'TYPE IN OUTPUT FILENAME:')
 c      READ(*,2)FILENAME
 c      OPEN(10,FILE=FILENAME)
-      open (22,file='filenames',status='old')
-	read (22,1) filename
+      open (22,file='StateTL_filenames.dat',status='old')                         kt added StateTL_ and .dat to filenames
+	  read (22,1) filename
  1    format (a40)
       OPEN(7,FILE=FILENAME)
-	read (22,1) filename
-	OPEN(10,FILE=FILENAME)
+	  read (22,1) filename
+	  OPEN(10,FILE=FILENAME)                                                      kt even in fast option leaving open in case of closure error
+      CONTINUE
 C                                                                       00008200
 C                                                                       00008300
   999 CALL START
 C
-      IF (ZCARDS) GO TO 10                                              00008500
+      IF (.NOT.ZFAST) GO TO 5                                                     kt fast option
+	  read (22,1) filename                                                        kt fast option
+	  OPEN(12,FILE=FILENAME,ACCESS='STREAM')                                      kt fast option   
+C
+    5 IF (ZCARDS) GO TO 10                                              00008500  kt fast option
       IF (NRECDS.LE.0) NRECDS=20                                        00008600
 C             IF DISK OPTION - DEFINE FILES                             00008700
       CALL SETUP (NRECDS)                                               00008800
@@ -234,7 +240,7 @@ C             SKIP BANK STORAGE COMPUTATIONS FOR IMPERMEABLE AQUIFER    00018200
       IF (ALPHA.GT.1.) GO TO 130                                        00018300
       CALL RATNG (DSQ1,DSS,DSQB,DS)                                     00018400
       QILOST=0.0                                                        00018500
-      WRITE (10,300)                                                    00018600
+      IF (.NOT.ZFAST) WRITE (10,300)                                    00018600  kt fast option
       GO TO 140                                                         00018700
 C                                                                       00018800
 C             COMPUTE BANK STORAGE DISCHARGE AND DOWNSTREAM DISCHARGE   00018900
@@ -377,7 +383,7 @@ C              DISK                                                     00030500
      1XKRAT(10), XKQRAT(10)                                             00006200
       REAL *8 UR
       COMMON /ZLOGIC/ ZBEGIN,ZEND,ZPLOT,ZROUTE,ZFLOW,ZLOSS,ZDISK,ZCARDS,00006300
-     1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT             00006400
+     1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT,ZFAST       00006400  kt fast option
       COMMON /PLT/ INITMO,INITDY,INITYR,LASTMO,LASTDY,LASTYR,NRECDS,STAN00006500
      1O1,STANM1,STANO2,STANM2,INFO,JYEAR                                00006600
       COMMON /RESFCT/ UR,DUSRF,QLIN,NURS,NRO,NRESP,ITT,NUR1,            00006700
@@ -407,6 +413,7 @@ C          INFO  - INFORMATION CARD                                     00034100
 C          STANO1, STANM1- UPSTREAM STATION NUMBER AND NAME             00034200
 C          ISOURC- CODE TO IDENTIFY LOCATION OF HYDROGRAPH DATA         00034300
 C          IDDATA- CODE TO IDENTIFY MODEL OBJECTIVE                     00034400
+C          IFAST - kt read option to speed up execution by reducing output        kt fast option
 C          NRCHS - NUMBER OF REACHES IN THIS MODEL RUN                  00034500
 C          NPREVR- NUMBER OF PREVIOUS REACHS                            00034600
 C          ITMAX - NUMBER OF DAYS IN MODEL RUN                          00034700
@@ -503,7 +510,7 @@ C
 C             INPUT DATA FROM CARDS                                     00042200
       READ (7,140,END=50) INFO                                          00042300
       READ (7,250,END=50) STANO1,STANM1                                 00042400
-      READ (7,161,END=50) ISOURC,IDDATA                                 00042500
+      READ (7,161,END=50) ISOURC,IDDATA,IFAST                           00042500  kt fast option
       READ (7,162,END=50) NRCHS,NPREVR,ITMAX,DT                         00042600
       READ (7,161,END=50) INITMO,INITDY,INITYR,LASTMO,LASTDY,LASTYR,
      &NRECDS                                                            00042700
@@ -538,6 +545,7 @@ C
       IF (IDDATA.NE.1) ZROUTE=.TRUE.                                    00044500
       IF (ISOURC.EQ.2) ZDISK=.TRUE.                                     00044600
       IF (ISOURC.NE.2) ZCARDS=.TRUE.                                    00044700
+      IF (IFAST.EQ.1) ZFAST=.TRUE.                                      00044400  kt fast option
       IF (ZDISK) DT=24.0                                                00044800
       NDT24=24./DT+.5                                                   00044900
       NTS=TMAX*24./DT+.001                                              00045000
@@ -546,6 +554,7 @@ C
       N2ND=N1ST+1                                                       00045300
       NLST=NTS                                                          00045400
 C             PRINT DATA                                                00045500
+      IF (ZFAST) GO TO 50                                                        kt fast option
       WRITE (10,150) INFO                                               00045600
       WRITE (10,170) INITMO,INITDY,INITYR,LASTMO,LASTDY,LASTYR          00045700
       IF (ZROUTE) WRITE (10,180)                                        00045800
@@ -685,6 +694,7 @@ C
       ALPHA=(T/24.)*DT/SS                                               00054900
       IF (DSQB.LE.0.0) ZWARN=.TRUE.                                     00055000
 C             PRINT DATA                                                00055100
+      IF (ZFAST) GO TO 128                                                        kt fast option
       WRITE (10,260) INFO,KR                                            00055200
       WRITE (10,270) CHLGTH,ALLGTH                                      00055300
       WRITE (10,280) TTEST                                              00055400
@@ -710,6 +720,7 @@ C             PRINT DATA                                                00055100
   126 WRITE(10,368) I,AC0(I),AXK(I),ITT(I),QLIN(I),(J,UR(I,J),J=1,N)    00057300
   128 CONTINUE                                                          00057400
       CALL AQTYPE (ICASE)                                               00057500
+      IF (ZFAST) GO TO 130                                                        kt fast option
       WRITE (10,370)                                                    00057600
       WRITE (10,230) (SRAT(DS,K),QRAT(DS,K),K=1,NDSRP)
       IF (.NOT.ZDSHFT) GO TO 130                                        00057800
@@ -830,7 +841,7 @@ C                                                                       00066900
       DIMENSION USQ(9000),DSQ(18000),DSQ1(9000),SQLOSS(18000),QI(18000) 00067600  kt fixed DSQ array size typo
       DIMENSION DSQO(9000)                                              00067601  kt added DSQO dim
       COMMON /ZLOGIC/ ZBEGIN,ZEND,ZPLOT,ZROUTE,ZFLOW,ZLOSS,ZDISK,ZCARDS,00067700
-     1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT             00067800
+     1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT,ZFAST       00067800  kt fast option
       COMMON /PLT/ INITMO,INITDY,INITYR,LASTMO,LASTDY,LASTYR,NRECDS,STAN00067900
      1O1,STANM1,STANO2,STANM2,INFO,JYEAR                                00068000
       COMMON /RESFCT/ UR,DUSRF,QLIN,NURS,NRO,NRESP,ITT,NUR1,            00068100
@@ -852,6 +863,7 @@ C        Q     - TEMPORARY QI.                                          00069600
 C                                                                       00069700
 C             INITIALIZE                                                00069800
       IF (ZFLOW) GO TO 10                                               00069900
+      IF (ZFAST) GO TO 10                                                         kt fast option
       WRITE (10,200)                                                    00070000
       JYEAR1=JYEAR+1                                                    00070100
       IF (ZROUTE.AND.ZDISK) WRITE (10,210) JYEAR1                       00070200
@@ -930,14 +942,14 @@ C             COMPUTE ADJUSTMENTS FOR DOWNSTREAM HYDROGRAPH             00075600
       SQA2=SQA2*CONST2/86400.                                           00077200
       SDSQ12=SDSQ12*CONST2/86400.                                       00077300
       SQI2=SQI2*CONST2/86400.                                           00077400
-      WRITE (10,230) I,TEST,SQA2,SQI2,SDSQ12                            00077500
+      IF (.NOT.ZFAST) WRITE (10,230) I,TEST,SQA2,SQI2,SDSQ12            00077500  kt fast option
 C             LEAVE ITERATION LOOP IF TOLERANCE IS MET                  00077600
       IF (TEST.LT.TOLRNC) GO TO 130                                     00077700
   120 CONTINUE                                                          00077800
 C                                                                       00077900
       WRITE (10,250)                                                    00078000
       STOP                                                              00078100
-  130 WRITE (10,240) I,TOLRNC,TEST,NADJ                                 00078200
+  130 IF (.NOT.ZFAST) WRITE (10,240) I,TOLRNC,TEST,NADJ                 00078200  kt fast option
       CALL RATNG (DSQ1,DSS,DSQB,DS)                                     00078300
       QILOST=QILOST+QILOS2                                              00078400
       DSAV3=DELS(NLST-2)                                                00078500
@@ -1006,6 +1018,8 @@ C                                                                       00084700
       INTEGER OPFILE,C,P,PU,US,DS                                       00084800
       DIMENSION UR(20,100), DUSRF(9000), QLIN(20), NRESP(20), ITT(20)    00084900
       REAL *8 UR
+C      COMMON /ZLOGIC/ ZBEGIN,ZEND,ZPLOT,ZROUTE,ZFLOW,ZLOSS,ZDISK,ZCARDS,00067700  kt fast option
+C     1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT,ZFAST       00067800  kt fast option
       COMMON /RESFCT/ UR,DUSRF,QLIN,NURS,NRO,NRESP,ITT,NUR1,            00085000
      1                NSTAIL,NATAIL                                     00085100
       COMMON /TIMEPR/ TMAX,ITMAX,DT,NTS,KR,NDT24,NRCHS,NSR,KTSTRT,N1ST,N00085200
@@ -1016,7 +1030,10 @@ C                                                                       00084700
 C                                                                       00085700
       CALL FILLB (DUSRF,1,NTS,0.0)                                      00085800  kt changed to smaller dim B function
       IF (ALPHA.LT.1.) RETURN                                           00085900
+C      IF (ZFAST) GO TO 5                                                          kt fast option
+      GO TO 5                                                                     kt fast option hardwired
       WRITE (10,190)                                                    00086000
+    5 CONTINUE                                                                    kt fast option
       IF (ICASE.EQ.1) GO TO 10                                          00086100
       IF (ICASE.EQ.2) GO TO 30                                          00086200
       IF (ICASE.EQ.3) GO TO 70                                          00086300
@@ -1100,11 +1117,14 @@ C
   150 CONTINUE                                                          00093800
   160 NUR1=NT                                                           00093900
 C             PRINT RESULTS                                             00094000
+C      IF (ZFAST) GO TO 181                                                        kt fast option
+      GO TO 181                                                                    kt fast option hardwiring
       WRITE (10,210) NUR1                                               00094100
       GO TO 180                                                         00094200
   170 NUR1=NTS                                                          00094300
       WRITE (10,210) NUR1                                               00094100
   180 WRITE (10,200) (NT,DUSRF(NT),NT=1,NUR1)                           00094400
+  181 CONTINUE                                                                    kt fast option
       NATAIL=NUR1-1                                                     00094500
 C                                                                       00094600
 C                                                                       00094700
@@ -2044,7 +2064,7 @@ C     NEW VARIABLE.  SEE MAIN.
 C
       DIMENSION IYEAR(9000),IDAY(9000),IMON(9000),TIME(9000),IHOUR(9000)00181500
       COMMON /ZLOGIC/ ZBEGIN,ZEND,ZPLOT,ZROUTE,ZFLOW,ZLOSS,ZDISK,ZCARDS,00181600
-     1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT             00181700
+     1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT,ZFAST       00181700  kt fast option
       COMMON /PLT/ INITMO,INITDY,INITYR,LASTMO,LASTDY,LASTYR,NRECDS,STAN00181800
      1O1,STANM1,STANO2,STANM2,INFO,JYEAR                                00181900
       COMMON /DISCHA/ USQ,DSQ,DSQ1,QI,SQLOSS,USQB,DSQB,TOLRNC,DSQO      00182000
@@ -2088,9 +2108,10 @@ C                                                                       00184200
       IF (.NOT.ZPRINT) GO TO 70                                         00185600
 C                                                                       00185700
 C             PRINT HEADER INFORMATION                                  00185800
+      CALL DATE (DT,NLST,DT,INITMO,INITDY,INITYR)                       00186100  kt moved above fast option
+      IF (ZFAST) GO TO 55                                                         kt fast option
       WRITE (10,260) KR,STANO1,STANM1,STANO2,STANM2,INITMO,INITDY,INITYR00185900
      1,LASTMO,LASTDY,LASTYR                                              00186000
-      CALL DATE (DT,NLST,DT,INITMO,INITDY,INITYR)                       00186100
       GO TO 20                                                          00186200
    10 IF (.NOT.ZPRINT) GO TO 70                                         00186300
       WRITE (10,280)                                                    00186400
@@ -2118,7 +2139,7 @@ C     NEW WRITE STATEMENT REARRANGES OUTPUT AND ADDS DSQO VARIABLE.  G KUHN, 9-2
 C
    50 WRITE (10,321)
 C
-      SUMUSQ=0.0
+   55 SUMUSQ=0.0                                                                  kt fast option
       SUMDSQO=0.0
       SUMPRED=0.0
       SUMDSQ=0.0
@@ -2135,6 +2156,10 @@ C
 C  60 WRITE (10,340) IMON(NT),IDAY(NT),IYEAR(NT),IHOUR(NT),USQ(NT),DSQ(N00188800
 C    1T),USS(NT),DSS(NT),DELS(NT),SQLOSS(NT),QI(NT),DSQ1(NT),IWARN(NT)   00188900
 C
+   58 IF (.NOT.ZFAST) GO TO 60
+      WRITE (12) DSQ1(NT)
+      GO TO 61
+
    60 WRITE (10,341) IMON(NT),IDAY(NT),IYEAR(NT),IHOUR(NT),USQ(NT),
      *DSQO(NT),DSQ1(NT),IWARN(NT),DSQ(NT),QI(NT),SQLOSS(NT),USS(NT),
      *DSS(NT),DELS(NT)
@@ -2149,6 +2174,7 @@ C
       SUMQI=SUMQI+QI(NT)
    62 SUMLOSS=SUMLOSS+SQLOSS(NT)
 C
+      IF (ZFAST) GO TO 80                                                         kt fast option
       WRITE (10,342)
       WRITE (10,343) SUMUSQ,SUMDSQO,SUMPRED,SUMDSQ,SUMQI,SUMLOSS
 C
@@ -2232,6 +2258,7 @@ C      WRITE (10,218) USREL1                                                    
       VOLOUT=QIAVOL-VOLIN                                               00195800
   180 VOLSTO=-1.*QIVOL-QILSVO                                           00195900
 C             PRINT VOLUME DATA  AND MASS BALANCE                       00196000
+      IF (ZFAST) GO TO 181                                                        kt fast option
       WRITE (10,250)                                                    00196100
       IF (ZROUTE) WRITE (10,220) USQVOL,DSQVOL,DSQ1VO,UBQVOL,DBQVOL,USQR00196200
      1EL,QLSTOT,DSQREL,VOLOUT,VOLSTO,QILSVO,VOLIN,QIVOL,QLSVOL           00196300
@@ -2243,6 +2270,7 @@ C
       IF (ZFLOW) WRITE (10,230) USQVOL,DSQVOL,UBQVOL,DBQVOL,USQREL,DSQRE00196400
      1L,VOLOUT,VOLSTO,QILSVO,VOLIN,QIVOL                                 00196500
       WRITE (10,240)                                                    00196600
+  181 CONTINUE                                                                    kt fast option
 C                                                                       00196700
 C                                                                       00196800
 C                                                                       00196900

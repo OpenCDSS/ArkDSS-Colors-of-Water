@@ -28,6 +28,7 @@ The original USGS fortran code was updated to compile in the 64bit gfortran comp
 3. Code from Jim Brannon, as modified from the Lou Parslow code.  Fixes were primarily to get to run in 32bit gfortran.  Includes executable which is currently used by TLAP used by DWR Div2 for administration. Fortan file dated 9/10/2018 3:08 PM
 4. Code modified by Kelley Thompson to run on 64bit gfortran; starting from Lou Parslow code.  Compile errors but not warnings were resolved. Fortan file dated 9/20/2021 12:41 PM
 5. Increased dimensions of main arrays from 1600/3200 to 9000/18000.  Enables calendar year time step of 9000 hours which is 365 or 366 days plus 9 days spinup.  Fortan file dated 9/22/2021 10:37 AM
+6. Added 'fast' option to reduce output to Qds in a binary rather than text file.  A bug fix to multiple linearization method was also fixed and Q/celerity/dispersion input dimension increased from 8 to 10.  The fast option is turned on in the input text file in column C of row 3; an example input text file is included that shows fast option as well as multiple linearization input.
 
 ## Compiling
 Fortran code for use in COW project is being compiled with 64bit GNU gcc/gfortran (https://gcc.gnu.org/fortran/) and using the Msys2 environment.  Installation and use followed information at:https://opencdss.state.co.us/statemod/16.00.47/doc-dev/dev-env/machine/#install-mingw also looking at: https://gcc.gnu.org/wiki/GFortranUsage and https://gcc.gnu.org/onlinedocs/gfortran/ .
@@ -41,3 +42,9 @@ but the following dlls are still required for deployement:
 libgcc_s_seh-1.dll
 libwinpthread-1.dll
 ```
+For COW project, currently renaming executable as StateTL_j349.exe that is placed and ran from within the matlab folder.
+
+## Remaining Issues
+* Fast options are currently hardwired within the subroutine AQTYPE, so output from this function would not display when fast is off.
+* The multiple linearization method runs well at higher river flow rates, but is causing added noise and oscillations at low flow rates (that when used in current StateTL code can potentially "create" water at low flow/release rates). 
+* To increase efficiency, may also want to use binary file as input but may still need text file to trigger fast option unless OK to have binary file hardwired.
