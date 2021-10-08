@@ -2,6 +2,10 @@
 % StateTL
 % Matlab (preliminary) Colors of Water Transit Loss and Timing engine
 %
+%
+% Major version changes starting June 2021
+% 
+
 
 cd C:\Projects\Ark\ColorsofWater\matlab
 clear all
@@ -19,7 +23,7 @@ readinfofile=2;  %1 reads from excel and saves mat file; 2 reads mat file;
 readgageinfo=2;  %if using real gage data, 1 reads from REST, 2 reads from file - watch out currently saves into SR file
 infofilename='StateTL_inputdata.xlsx';
 pullnewdivrecs=2;  %0 if want to repull all from REST, 1 if only pull new/modified from REST for same period, 2 load from saved mat file
-plotmovie=0;  %this will probably be moved to a seperate plotting script - will add plot command to pick wc and plot wc-time for locations
+plotmovie=1;  %this will probably be moved to a seperate plotting script - will add plot command to pick wc and plot wc-time for locations
     figtop=1500;
 doexchanges=1;
 
@@ -30,8 +34,14 @@ pred=0;  %if pred=0 subtracts water class from existing flows, if 1 adds to exis
 flowcriteria=5; %to establish gage and node flows: 1 low, 2 avg, 3 high flow values from livingston; envision 4 for custom entry; 5 for actual flows; 6 average for xdays/yhours prior to now/date; 7 average between 2 dates
 iternum.j349=5;  %iterations of gageflow loop given method (had been using dynamic way to iterate but currently just number);
 iternum.muskingum=3;
+iternative=10;
+inadv1_letwaterby=1;
+inadv2_reducewc=1;
+minc=1;              %minimum flow applied to celerity, dispersion, and evaporation calculations (dont want to have a zero celerity for reverse operations etc) / this is also seperately in j349/musk functions
+minj349=1;           %minimum flow for j349 application - TLAP uses 1.0
+gainchangelimit=0.1;
 
-outputfilename='StateTL_out_';  %will add srmethod + gage/wc/etc + hour/day + .csv
+outputfilename='StateTL_outnewwcreduce_';  %will add srmethod + gage/wc/etc + hour/day + .csv
 outputgage=0;  %output waterclass amounts by reach
     outputgagehr=1;  %output on hour timestep
     outputgageday=1;  %output on day timestep
@@ -47,8 +57,7 @@ datestart=datenum(2018,4,01);
 rdays=60; rhours=1;
 spinupdays=45;
 rsteps=rdays*24/rhours;
-gainchangelimit=0.1;
-
+datest=spinupdays*24/rhours+1;
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -658,6 +667,206 @@ end
 % PROCESSING LOOPS
 %%%%%%%%%%%%%%%%%%
 
+lastwdid=[];  %tracks last wdid/connection of processed wd reaches
+SR.(ds).Rivloc.loc=[]; %just tracks location listing of processed reaches
+SR.(ds).WCloc.wslist=[];
+SR.(ds).WCloc.Rloc=[];
+SR.(ds).Rivloc.flowwc.wcloc=[];
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Routing of water classes
+%   new - put above other loops to build WCloc list first purely for inadvertant diversion correction
+%   so can do both gageflow and admin together on a R-reach by reach basis
+%
+%  WATCH!-currently requires WDID list to be in spatial order to know whats going upstream
+%         may want to change that to ordered lists 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+for wd=WDlist
+    wds=['WD' num2str(wd)];
+    if ~isfield(SR.(ds).(wds),'wwcnums')
+        disp(['no water classes identified (admin loop not run) for D:' ds ' WD:' wds]) 
+    else
+    wwcnums=SR.(ds).(wds).wwcnums;
+    Rt=SR.(ds).(wds).R(1);
+    Rb=SR.(ds).(wds).R(end);
+    disp(['running admin loop for D:' ds ' WD:' wds]) 
+
+for w=1:length(wwcnums)
+ws=wwcnums{w};
+% if ~isfield(SR.(ds).WCloc,ws)  %if here will include missing WCs as empty
+%     SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
+%     SR.(ds).WCloc.(ws)=[];
+% end
+
+%disp(['running admin loop for D:' ds ' WD:' wds ' wc:' ws]) 
+
+
+wdinwdidlist=find([SR.(ds).WDID{:,3}]==wd);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%   the next/first block is looking for water classes passed from another WDreach
+%   these could have been passed from an upstream release or
+%   from an exchange that was first routed down an upstream reach
+
+parkwcid=0;
+if isfield(SR.(ds).(wds),'park')
+    parkwcid=find(strcmp(SR.(ds).(wds).park(:,1),ws));
+end
+if parkwcid~=0
+    wdidfrom=SR.(ds).(wds).park{parkwcid,2};
+    wdidfromid=SR.(ds).(wds).park{parkwcid,3};
+    fromWDs=SR.(ds).(wds).park{parkwcid,4};
+    fromRs=SR.(ds).(wds).park{parkwcid,5};
+    fromsr=SR.(ds).(wds).park{parkwcid,6};
+else  %if not parked
+    wdidfrom=WC.(ds).WC.(ws).wdid;
+    wdidfromid=intersect(find(strcmp(SR.(ds).WDID(:,1),wdidfrom)),wdinwdidlist);
+end
+    
+wdidto=WC.(ds).WC.(ws).to;
+wdidtoid=find(strcmp(SR.(ds).WDID(:,1),wdidto));
+wdidtoidwd=intersect(wdidtoid,wdinwdidlist);
+
+parkwdidid=0;
+exchtype=0;
+if isempty(wdidtoid)                                    %wdid To: listed in divrecs but cant find To:wdid in network list of wdids
+    wdidtoid=wdidfromid;
+    disp(['WARNING: not routing (either exchange or missing) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ]);
+else
+    if ~isfield(SR.(ds).WCloc,ws)
+        SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
+        SR.(ds).WCloc.(ws)=[];
+    end
+    dswdidids=find(wdidtoid>=wdidfromid);
+    if ~isempty(dswdidids)                              %DS RELEASE TO ROUTE (could include US Exchange that is first routed to end of WD)
+        if SR.(ds).WDID{wdidtoid(dswdidids(1)),3} == wd %DS release located in same WD - so route to first node that is at or below release point
+            wdidtoid=wdidtoid(dswdidids(1));            %if multiple points (could be multiple reach defs or same wdid at top of next ds reach)
+        else                                            %DS release located in different WD - so route to bottom of WD and park into next WD
+            wdidtoid=wdinwdidlist(end);
+            parkwdidid=find(strcmp(SR.(ds).WDID(:,1),SR.(ds).WDID(wdidtoid,1)));
+            parkwdidid=setdiff(parkwdidid,wdinwdidlist);
+            parktype=1;  %1 push DS to end of reach
+            disp(['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To:' wdidto ' external to WD reach, routing to end of WD reach']);
+        end  
+    elseif isempty(dswdidids)                             %US EXCHANGE RELEASE - ONLY ROUTING HERE IF FIRST DOWN TO MID-WD BRANCH
+        wdidtoidnotwd=setdiff(wdidtoid,wdinwdidlist);
+        branchid=find(SR.(ds).(wds).branch{:,1}==SR.D2.WDID{wdidtoidnotwd,3});
+
+        if ~isempty(branchid)      %us exchange from DS branch within WD (exchtype=3)
+            exchtype=3;
+            SR.(ds).EXCH.(ws).wdidtoid=wdidtoid;
+            SR.(ds).EXCH.(ws).WDto=SR.(ds).WDID{wdidtoid(1),3};
+            wdidbranch=SR.(ds).(wds).branch{branchid,2};
+            wdidtoids=find(strcmp(SR.(ds).WDID(:,1),wdidbranch));
+            parkwdidid=setdiff(wdidtoids,wdinwdidlist);
+            wdidtoid=intersect(wdidtoids,wdinwdidlist);
+            parktype=2;  %2 push DS releases to internal node
+            SR.(ds).EXCH.(ws).wdidfromid=parkwdidid;
+            SR.(ds).EXCH.(ws).WDfrom=SR.(ds).WDID{parkwdidid,3};
+            SR.(ds).EXCH.(ws).exchtype=3;            
+            disp(['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To Confluence:' wdidbranch ' US exchange first routing with TL to internal confluence point within WD reach']);
+            disp(['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ]);    
+            
+        elseif ~isempty(wdidtoidwd)                    %us exchange within WD (exchtype=1)
+            exchtype=1;
+            SR.(ds).EXCH.(ws).wdidtoid=wdidtoidwd(end);  %last in list in case multiple reach listing (will go to lowest) - remember that wdid is listed "above" subreach so sr will be next one after
+            SR.(ds).EXCH.(ws).wdidfromid=wdidfromid;
+            SR.(ds).EXCH.(ws).WDfrom=wd;
+            SR.(ds).EXCH.(ws).WDto=wd;
+            SR.(ds).EXCH.(ws).exchtype=1;
+            wdidtoid=wdidfromid;  %leaving it there
+            disp(['Exchange: (internal to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ]);
+        else                                           %us exchange in different WD (exchtype=2)
+            exchtype=2;
+            SR.(ds).EXCH.(ws).wdidtoid=wdidtoid(end);
+            SR.(ds).EXCH.(ws).wdidfromid=wdidfromid;
+            SR.(ds).EXCH.(ws).WDfrom=wd;
+            SR.(ds).EXCH.(ws).WDto=SR.(ds).WDID{wdidtoid(1),3};
+            SR.(ds).EXCH.(ws).exchtype=2;
+            wdidtoid=wdidfromid;
+%            wdidtoid=wdinwdidlist(end);
+            disp(['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ]);    
+        end
+
+    end       
+end
+
+
+WDtr=SR.(ds).WDID{wdidfromid,3};
+WDbr=SR.(ds).WDID{wdidtoid,3};
+Rtr=SR.(ds).WDID{wdidfromid,4};
+Rbr=SR.(ds).WDID{wdidtoid,4};
+SRtr=SR.(ds).WDID{wdidfromid,5}+SR.(ds).WDID{wdidfromid,6};  %new ordering - if col6=1 then sr=dswdid / col6=0 then sr=uswdid, so for from sr add 0 or 1 to move to top of next sr
+SRbr=SR.(ds).WDID{wdidtoid,5};
+
+
+if wdidtoid==wdidfromid   %EXCHANGES (or missing releases)
+    if exchtype>0
+        SR.(ds).WCloc.Rloc=[SR.(ds).WCloc.Rloc;[{ws},{ds},{wds},{['R' num2str(Rtr)]},{SRtr},{SRbr},{Rtr},{Rbr},{SRtr},{SRbr},{wdidfrom},{wdidto},{wdidfromid},{wdidtoid}]];
+    end
+else
+    
+wd=WDtr;
+    wds=['WD' num2str(wd)];
+    for r=Rtr:Rbr
+        rs=['R' num2str(r)];
+        if r==Rtr
+            srt=SRtr;
+        else
+            srt=1;
+        end
+        if r==Rbr
+            srb=SRbr;
+        else
+            srb=SR.(ds).(wds).(rs).SR(end);
+        end
+        SR.(ds).WCloc.Rloc=[SR.(ds).WCloc.Rloc;[{ws},{ds},{wds},{rs},{srt},{srb},{Rtr},{Rbr},{SRtr},{SRbr},{wdidfrom},{wdidto},{wdidfromid},{wdidtoid}]];
+
+for sr=srt:srb
+    % WCloc.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/2-exch) is num)
+    lsr=SR.(ds).(wds).(rs).subreachid(sr);
+    SR.(ds).WCloc.(ws)=[SR.(ds).WCloc.(ws);[{ds},{wds},{rs},{sr},{lsr},{1},{SR.(ds).(wds).(rs).wdid{sr}},{SR.(ds).(wds).(rs).dswdid{sr}}]];
+    
+end %sr
+
+    end %r
+%end %wd
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% parking - transfering waterclass from one WD to another
+%   for releases, ds WDreach should then pick up, for exchanges waits for exchange loop
+if parkwdidid ~= 0  %placing park - place wcnum and park parameters in downstream WDreach
+    SR.(ds).(wds).(ws).parkwdidid=parkwdidid; %this is needed for process/admin loop
+    parkwdid=SR.(ds).WDID{parkwdidid,1};
+    parkWD=SR.(ds).WDID{parkwdidid,3};
+    pwds=['WD' num2str(parkWD)];
+    parkR=SR.(ds).WDID{parkwdidid,4};
+    prs=['R' num2str(parkR)];
+    psr=SR.(ds).WDID{parkwdidid,5};
+    
+    lsr=SR.(ds).(wds).(rs).subreachid(sr);
+%    parklsr=SR.(ds).(['WD' num2str(SR.(ds).WDID{wdidtoid,3})]).(['R' num2str(SR.(ds).WDID{wdidtoid,4})]).subreachid(SR.(ds).WDID{wdidtoid,5}); %this should also work - keep in case above breaks down
+
+    if ~isfield(SR.(ds).(pwds),'wwcnums')
+        SR.(ds).(pwds).wwcnums={ws};
+    else
+        SR.(ds).(pwds).wwcnums=[SR.(ds).(pwds).wwcnums;{ws}];
+    end    
+    if ~isfield(SR.(ds).(pwds),'park')
+        SR.(ds).(pwds).park=[{ws},{parkwdid},{parkwdidid},{wds},{rs},{sr},{parktype},{lsr}];  %this is destination wdidid but source wds,rs,sr
+    else
+        SR.(ds).(pwds).park=[SR.(ds).(pwds).park;{ws},{parkwdid},{parkwdidid},{wds},{rs},{sr},{parktype},{lsr}];        
+    end
+  
+end
+
+end %j - waterclass
+end
+end
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % BASEFLOW / GAGEFLOW LOOP ESTABLISHING CORRECTIONS TO ACTUAL FLOWS
@@ -668,8 +877,7 @@ end
 % will change resulting gagediff added - but loop until settles down - then
 % this is the gagediff that will be added in the admin loop..
 
-lastwdid=[];  %tracks last wdid/connection of processed wd reaches
-SR.(ds).Rivloc.loc=[]; %just tracks location listing of processed reaches
+
 for wd=WDlist
     wds=['WD' num2str(wd)];
     Rt=SR.(ds).(wds).R(1);
@@ -699,10 +907,14 @@ for sr=SR.(ds).(wds).(rs).SR
     SR.(ds).(wds).(rs).locid(sr)=length(SR.(ds).Rivloc.loc(:,1));      %this will be used for flowriv and flowwc
     SR.(ds).Rivloc.flowwc.us(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to sum total wc release amounts within river - note that dimensions reversed
     SR.(ds).Rivloc.flowwc.ds(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to sum total wc release amounts within river
+    SR.(ds).(wds).(rs).Qusnodewc(:,sr)=zeros(rsteps,1);  %also variable to sum total wc release amounts
+    SR.(ds).(wds).(rs).Quswc(:,sr)=zeros(rsteps,1);
+    SR.(ds).(wds).(rs).Qdswc(:,sr)=zeros(rsteps,1);
 end
         
 
 gagediff=zeros(rsteps,1);
+SR.(ds).(wds).(rs).gagediffportion=zeros(rsteps,length(SR.(ds).(wds).(rs).SR));
 gagediffavg=10;
 
 gain=SR.(ds).(wds).(rs).gaininitial(1);
@@ -716,6 +928,9 @@ SR.(ds).(wds).(rs).gain=gain;
 
 %while abs(gagediffavg)>gainchangelimit
 
+change=1;
+while change==1
+    change=0;
 
 for ii=1:iternum.(srmethod)
     
@@ -756,43 +971,48 @@ for sr=SR.(ds).(wds).(rs).SR
     %this block seeing if inflow should be defined from by a modeled branch flow at a wdid connection point
     if type==1 && strcmp(SR.(ds).(wds).(rs).station{sr},'NaN')  && ~isempty(lastwdid)
         branchid=find(strcmp(lastwdid(:,1),SR.(ds).(wds).(rs).wdid(sr)));
+        if ~isempty(branchid)
+            SR.(ds).(wds).(rs).Qnode(:,sr)=SR.(ds).(lastwdid{branchid,3}).(lastwdid{branchid,4}).Qds(:,lastwdid{branchid,5});
+        end
     else
         branchid=[];
     end
-    if ~isempty(branchid)
-        Qnode=SR.(ds).(lastwdid{branchid,3}).(lastwdid{branchid,4}).Qds(:,lastwdid{branchid,5});
-    else
-        Qnode=SR.(ds).(wds).(rs).Qnode(:,sr);
-    end
     
+    Qnode=SR.(ds).(wds).(rs).Qnode(:,sr);  %if branchid above this will be coming from branch
     %new setup - going from Qusnode to Qus (after usnodes) then to Qds
     Qus=Qusnode+type*Qnode;
+    Qus=max(0,Qus);
     
     if gain==-999   %gain=-999 to not run transittime but can have loss percent 
-        Qus=max(0,Qus);
         losspercent=SR.(ds).(wds).(rs).losspercent(sr);
         Qds=Qus*(1-losspercent/100);
-        celerity=0;
-        dispersion=0;
-        
+        celeritya=SR.(ds).(wds).(rs).celeritya(sr);
+        celerityb=SR.(ds).(wds).(rs).celerityb(sr);
+        celerity=celeritya*(max(minc,(Qus+Qds)/2)).^celerityb;
+        dispersiona=SR.(ds).(wds).(rs).dispersiona(sr);
+        dispersionb=SR.(ds).(wds).(rs).dispersionb(sr);
+        dispersion=dispersiona*(max(minc,(Qus+Qds)/2)).^dispersionb;    
     else
-        Qus=max(1,Qus);
-        gainportion=gain*SR.(ds).(wds).(rs).reachportion(sr);
         if strcmp(srmethod,'j349')
-            [Qds,celerity,dispersion]=runj349f(ds,wds,rs,sr,Qus,gainportion,rdays,rhours,rsteps,j349dir,-999,-999);
+            gainportion=gain*SR.(ds).(wds).(rs).reachportion(sr);
+            Qus1=max(minj349,Qus);
+            [Qds,celerity,dispersion]=runj349f(ds,wds,rs,sr,Qus1,gainportion,rdays,rhours,rsteps,j349dir,-999,-999);
+            Qds=Qds-(Qus1-Qus); %timing won't be perfect for this but keeps celerity exactly calculated above (may want to do as just pure addition/subtraction)
         elseif strcmp(srmethod,'muskingum')
             [Qds,celerity,dispersion]=runmuskingum(ds,wds,rs,sr,Qus,rhours,rsteps,-999,-999);
         end
-        Qds=max(0,Qds);
-    end
         
-    Qavg=(max(Qus,1)+max(Qds,1))/2;
+    end
+    Qds=max(0,Qds);
+        
+    Qavg=(max(Qus,minc)+max(Qds,minc))/2;
     width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
     evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr); %EvapFactor = 0 to not have evap 
-    Qds=Qds-evap+gagediff*SR.(ds).(wds).(rs).reachportion(sr);
+    Qds=Qds-evap+SR.(ds).(wds).(rs).gagediffportion(:,sr);
+%    Qds=Qds-evap+gagediff*SR.(ds).(wds).(rs).reachportion(sr);
     Qds=max(0,Qds);
     
-    SR.(ds).(wds).(rs).gagediffportion(:,sr)=gagediff*SR.(ds).(wds).(rs).reachportion(sr);
+%    SR.(ds).(wds).(rs).gagediffportion(:,sr)=gagediff*SR.(ds).(wds).(rs).reachportion(sr);
     SR.(ds).(wds).(rs).evap(:,sr)=evap;
     SR.(ds).(wds).(rs).Qusnode(:,sr)=Qusnode;    
     SR.(ds).(wds).(rs).Qus(:,sr)=Qus;
@@ -802,7 +1022,6 @@ for sr=SR.(ds).(wds).(rs).SR
     SR.(ds).Rivloc.flowriv.us(:,SR.(ds).(wds).(rs).locid(sr))=Qus;
     SR.(ds).Rivloc.flowriv.ds(:,SR.(ds).(wds).(rs).locid(sr))=Qds;
     Qusnode=Qds;
-    
 end %sr
 
 SR.(ds).(wds).(rs).gagediff=gagediff;  %this one that was applied
@@ -819,214 +1038,135 @@ else
         gagediffchange=gagediffnew-gagediff;
         gagediffavg=gagediffchange(rdatesstartid-1,1);
         gagediff=gagediffnew+gagediff;
+        
+        if ii<iternum.(srmethod)
+%            SR.(ds).(wds).(rs).gagediffportion=gagediff*SR.(ds).(wds).(rs).reachportion;
+            %reverse gagediff with evaporation to determine portion to apply within each reach
+            gagediffds=gagediff;
+            exchtimerem=0;
+            for sr=srb:-1:srt
+                gagediffportion=gagediffds*SR.(ds).(wds).(rs).reachportion(sr)/sum(SR.(ds).(wds).(rs).reachportion(1:sr));
+                SR.(ds).(wds).(rs).gagediffportion(:,sr)=gagediffportion;
+                celerity=SR.(ds).(wds).(rs).celerity(:,sr);
+                if or(strcmp(srmethod,'j349'),strcmp(srmethod,'muskingum'))
+                    [gagediffus,exchtimerem,celerity]=reversecelerity(ds,wds,rs,sr,gagediffds,exchtimerem,rhours,rsteps,celerity); %using river celerity
+                else
+                    gagediffus=gagediffds;
+                end
+                gagediffus=gagediffus-gagediffportion;
+                Qavg=(max(0,gagediffus)+max(0,gagediffds))/2;  %hopefully this doesn't smeer timing
+                width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
+                evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
+                gagediffus=gagediffus+evap;
+                gagediffds=gagediffus;
+            end
+        end
+        
+
     end
     SR.(ds).(wds).(rs).gain=[SR.(ds).(wds).(rs).gain gain];
     SR.(ds).(wds).(rs).gagediffseries(:,ii)=gagediff;
 end
 
-end %gainchange
-%SR.(ds).(wds).(rs).gagediff=gagediff;  %this not the last one that was applied
+end %ii iteration on gainchange
 
-    end %r
-    lastwdid=[lastwdid;SR.(ds).(wds).(rs).dswdid{sr} {ds} {wds} {rs} {sr}];
-end %wd
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% (INTERNAL) ADMIN LOOP FOR WATERCLASSES
+%   now internal to process loop but just working on one reach at a time
+%   this is so that can re-run gage loop if calculated native flows go negative
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% ADMIN LOOP FOR WATERCLASSES
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-SR.(ds).WCloc.wslist=[];
-SR.(ds).Rivloc.flowwc.wcloc=[];
-for wd=WDlist
-    wds=['WD' num2str(wd)];
-    if ~isfield(SR.(ds).(wds),'wwcnums')
-        disp(['no water classes identified (admin loop not run) for D:' ds ' WD:' wds]) 
+changewc=1;changewccount=0;
+while changewc==1
+    changewc=0;
+    if changewccount==0
+        disp(['running admin loop on D:' ds ' WD:' wds ' R:' rs])
     else
-    wwcnums=SR.(ds).(wds).wwcnums;
-    Rt=SR.(ds).(wds).R(1);
-    Rb=SR.(ds).(wds).R(end);
-    disp(['running admin loop for D:' ds ' WD:' wds]) 
-
-for w=1:length(wwcnums)
-ws=wwcnums{w};
-% if ~isfield(SR.(ds).WCloc,ws)  %if here will include missing WCs as empty
-%     SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
-%     SR.(ds).WCloc.(ws)=[];
-% end
-
-%disp(['running admin loop for D:' ds ' WD:' wds ' wc:' ws]) 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% routing of water classes
-%  WATCH!-currently requires WDID list to be in spatial order to know whats going upstream
-%         may want to change that to ordered lists 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-wdinwdidlist=find([SR.(ds).WDID{:,3}]==wd);
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%   the next/first block is looking for water classes that were passed from another WDreach
-%   these could have been passed from an upstream release or
-%   from an exchange that was first routed down an upstream reach
-
-parkwcid=0;
-if isfield(SR.(ds).(wds),'park')
-    parkwcid=find(strcmp(SR.(ds).(wds).park(:,1),ws));
-end
-if parkwcid~=0
-    wdidfrom=SR.(ds).(wds).park{parkwcid,2};
-    wdidfromid=SR.(ds).(wds).park{parkwcid,3};
-    fromWDs=SR.(ds).(wds).park{parkwcid,4};
-%    fromlsr=SR.(ds).(wds).park{parkwcid,8};
-%    release=SR.(ds).(fromWD).(ws).Qdsrelease(:,fromlsr);
-    fromRs=SR.(ds).(wds).park{parkwcid,5};
-    fromsr=SR.(ds).(wds).park{parkwcid,6};
-    release=SR.(ds).(fromWDs).(fromRs).(ws).Qdsrelease(:,fromsr);
-else  %if not parked
-    wdidfrom=WC.(ds).WC.(ws).wdid;
-    wdidfromid=intersect(find(strcmp(SR.(ds).WDID(:,1),wdidfrom)),wdinwdidlist);
-    release=WC.(ds).(wds).(ws).release;
-end
-    
-wdidto=WC.(ds).WC.(ws).to;
-wdidtoid=find(strcmp(SR.(ds).WDID(:,1),wdidto));
-wdidtoidwd=intersect(wdidtoid,wdinwdidlist);
-
-parkwdidid=0;
-exchtype=0;
-if isempty(wdidtoid)                                    %wdid To: listed in divrecs but cant find To:wdid in network list of wdids
-    wdidtoid=wdidfromid;
-    disp(['WARNING: not routing (either exchange or missing) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ' sum: ' num2str(sum(release)) ]);
-else
-    if ~isfield(SR.(ds).WCloc,ws)
-        SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
-        SR.(ds).WCloc.(ws)=[];
+        disp(['Reoperating admin loop, count: ' num2str(changewccount) ' on D:' ds ' WD:' wds ' R:' rs])
     end
-    dswdidids=find(wdidtoid>=wdidfromid);
-    if ~isempty(dswdidids)                              %DS RELEASE TO ROUTE (could include US Exchange that is first routed to end of WD)
-        if SR.(ds).WDID{wdidtoid(dswdidids(1)),3} == wd %DS release located in same WD - so route to first node that is at or below release point
-            wdidtoid=wdidtoid(dswdidids(1));            %if multiple points (could be multiple reach defs or same wdid at top of next ds reach)
-        else                                            %DS release located in different WD - so route to bottom of WD and park into next WD
-            wdidtoid=wdinwdidlist(end);
-            parkwdidid=find(strcmp(SR.(ds).WDID(:,1),SR.(ds).WDID(wdidtoid,1)));
-            parkwdidid=setdiff(parkwdidid,wdinwdidlist);
-            parktype=1;  %1 push DS to end of reach
-            disp(['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To:' wdidto ' external to WD reach, routing to end of WD reach']);
-        end  
-    elseif isempty(dswdidids)                             %US EXCHANGE RELEASE - ONLY ROUTING HERE IF FIRST DOWN TO MID-WD BRANCH
-        wdidtoidnotwd=setdiff(wdidtoid,wdinwdidlist);
-        branchid=find(SR.(ds).(wds).branch{:,1}==SR.D2.WDID{wdidtoidnotwd,3});
 
-        if ~isempty(branchid)      %us exchange from DS branch within WD (exchtype=3)
-            exchtype=3;
-            SR.(ds).EXCH.(ws).wdidtoid=wdidtoid;
-            SR.(ds).EXCH.(ws).WDto=SR.(ds).WDID{wdidtoid(1),3};
-            wdidbranch=SR.(ds).(wds).branch{branchid,2};
-            wdidtoids=find(strcmp(SR.(ds).WDID(:,1),wdidbranch));
-            parkwdidid=setdiff(wdidtoids,wdinwdidlist);
-            wdidtoid=intersect(wdidtoids,wdinwdidlist);
-            parktype=2;  %2 push DS releases to internal node
-            SR.(ds).EXCH.(ws).wdidfromid=parkwdidid;
-            SR.(ds).EXCH.(ws).WDfrom=SR.(ds).WDID{parkwdidid,3};
-            SR.(ds).EXCH.(ws).exchtype=3;            
-            disp(['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To Confluence:' wdidbranch ' US exchange first routing with TL to internal confluence point within WD reach']);
-            disp(['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ' sum: ' num2str(sum(release)) ]);    
-            
-        elseif ~isempty(wdidtoidwd)                    %us exchange within WD (exchtype=1)
-            exchtype=1;
-            SR.(ds).EXCH.(ws).wdidtoid=wdidtoidwd(end);  %last in list in case multiple reach listing (will go to lowest) - remember that wdid is listed "above" subreach so sr will be next one after
-            SR.(ds).EXCH.(ws).wdidfromid=wdidfromid;
-            SR.(ds).EXCH.(ws).WDfrom=wd;
-            SR.(ds).EXCH.(ws).WDto=wd;
-            SR.(ds).EXCH.(ws).exchtype=1;
-            wdidtoid=wdidfromid;  %leaving it there
-            disp(['Exchange: (internal to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ' sum: ' num2str(sum(release)) ]);
-        else                                           %us exchange in different WD (exchtype=2)
-            exchtype=2;
-            SR.(ds).EXCH.(ws).wdidtoid=wdidtoid(end);
-            SR.(ds).EXCH.(ws).wdidfromid=wdidfromid;
-            SR.(ds).EXCH.(ws).WDfrom=wd;
-            SR.(ds).EXCH.(ws).WDto=SR.(ds).WDID{wdidtoid(1),3};
-            SR.(ds).EXCH.(ws).exchtype=2;
-            wdidtoid=wdidfromid;
-%            wdidtoid=wdinwdidlist(end);
-            disp(['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ' sum: ' num2str(sum(release)) ]);    
-        end
+wwcnumids=intersect(find(strcmp(SR.(ds).WCloc.Rloc(:,3),wds)),find(strcmp(SR.(ds).WCloc.Rloc(:,4),rs)));
+wwcnums=SR.(ds).WCloc.Rloc(wwcnumids,1);
 
-    end       
+%will refresh to zero every time reoperate
+for sr=SR.(ds).(wds).(rs).SR
+SR.(ds).(wds).(rs).QSRadd(:,sr)=zeros(rsteps,1);
+SR.(ds).(wds).(rs).Qusnodewc(:,sr)=zeros(rsteps,1);  %also variable to sum total wc release amounts
+SR.(ds).(wds).(rs).Quswc(:,sr)=zeros(rsteps,1);
+SR.(ds).(wds).(rs).Qdswc(:,sr)=zeros(rsteps,1);
+SR.(ds).Rivloc.flowwc.us(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to sum total wc release amounts within river - note that dimensions reversed - not sure if need now with above
+SR.(ds).Rivloc.flowwc.ds(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to sum total wc release amounts within river
 end
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-% if WC.(ds).WC.(ws).type==1 %exchange (?)  %exchange defined by upstream record - not using anymore??
-%     release=release*-1;
-% end
-srids=SR.(ds).(wds).(['R' num2str(Rb)]).subreachid(end);  %just to set size of release matrices
-SR.(ds).(wds).(ws).Qusnoderelease(length(rdates),srids)=0;     %just used for plotting, maybe better way..
-SR.(ds).(wds).(ws).Qusrelease(length(rdates),srids)=0;
-SR.(ds).(wds).(ws).Qdsrelease(length(rdates),srids)=0;
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if wdidtoid==wdidfromid   %EXCHANGES (or missing releases) - Exchanges put into Qds of US reach so consistent (not currently had been: missing gets parked in Qus)
-    rs=['R' num2str(SR.(ds).WDID{wdidfromid,4})];
+for w=1:length(wwcnumids)
+ws=SR.(ds).WCloc.Rloc{wwcnumids(w),1};
+srt=SR.(ds).WCloc.Rloc{wwcnumids(w),5};
+srb=SR.(ds).WCloc.Rloc{wwcnumids(w),6};
+Rtr=SR.(ds).WCloc.Rloc{wwcnumids(w),7};
+Rtb=SR.(ds).WCloc.Rloc{wwcnumids(w),8};
+SRtr=SR.(ds).WCloc.Rloc{wwcnumids(w),9};
+SRtb=SR.(ds).WCloc.Rloc{wwcnumids(w),10};
+wdidfrom=SR.(ds).WCloc.Rloc{wwcnumids(w),11};
+wdidto=SR.(ds).WCloc.Rloc{wwcnumids(w),12};
+wdidfromid=SR.(ds).WCloc.Rloc{wwcnumids(w),13};
+wdidtoid=SR.(ds).WCloc.Rloc{wwcnumids(w),14};
+
+disp(['running admin loop on waterclass:' ws])
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% If r is top reach within WD get original or parked release
+
+if r==Rtr
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %look to see if "parked" water passed from upstream WD
+    parkwcid=0;
+    if isfield(SR.(ds).(wds),'park')
+        parkwcid=find(strcmp(SR.(ds).(wds).park(:,1),ws));
+    end
+    if parkwcid~=0
+        fromWDs=SR.(ds).(wds).park{parkwcid,4};
+        fromRs=SR.(ds).(wds).park{parkwcid,5};
+        fromsr=SR.(ds).(wds).park{parkwcid,6};
+        release=SR.(ds).(fromWDs).(fromRs).(ws).Qdsrelease(:,fromsr);
+    else  %if not parked
+        release=WC.(ds).(wds).(ws).release;
+    end
+else  %new - OK??? - WATCH
+%    Qusnodepartial=SR.(ds).(wds).(['R' num2str(r-1)]).(ws).Qdspartial(:,end);
+    release=SR.(ds).(wds).(['R' num2str(r-1)]).(ws).Qdsrelease(:,end);  %when restarting a r-reach dont include effect of previous SRadd
+    Qusnodepartial=SR.(ds).(wds).(rs).Qusnode(:,1)-release;
+end  
+    
+        
+if wdidtoid==wdidfromid   %EXCHANGES
+    rsnew=['R' num2str(SR.(ds).WDID{wdidfromid,4})];
     sr=SR.(ds).WDID{wdidfromid,5};
+    exchtype=SR.(ds).EXCH.(ws).exchtype;
     if exchtype==1 | exchtype==2  %for us exchanges putting into Qds of reach above node rather than Qus of reach below node
+        wdinwdidlist=find([SR.(ds).WDID{:,3}]==wd);
         wdsnew=wds;
         if SR.(ds).WDID{wdidfromid,6}==0 %uswdid/top of wd - push into us wd
             wdidnewid=setdiff(find(strcmp(SR.(ds).WDID(:,1),wdidfrom)),wdinwdidlist);
             wdsnew=['WD' num2str(SR.(ds).WDID{wdidnewid,3})];
-            rs=['R' num2str(SR.(ds).WDID{wdidnewid,4})];
+            rsnew=['R' num2str(SR.(ds).WDID{wdidnewid,4})];
             sr=SR.(ds).WDID{wdidnewid,5};
             SR.(ds).EXCH.(ws).wdidfromid=wdidnewid;
             SR.(ds).EXCH.(ws).WDfrom=SR.(ds).WDID{wdidnewid,3};
         end 
-        lsr=SR.(ds).(wdsnew).(rs).subreachid(sr);
-        SR.(ds).(wdsnew).(rs).(ws).Qusnoderelease(:,sr)=zeros(length(rdates),1);
-        SR.(ds).(wdsnew).(rs).(ws).Qusrelease(:,sr)=zeros(length(rdates),1);
-        SR.(ds).(wdsnew).(rs).(ws).Qdsrelease(:,sr)=-1*release;
-        SR.(ds).(wdsnew).(ws).Qusnoderelease(:,lsr)=zeros(length(rdates),1);
-        SR.(ds).(wdsnew).(ws).Qusrelease(:,lsr)=zeros(length(rdates),1);
+        lsr=SR.(ds).(wdsnew).(rsnew).subreachid(sr);
+        SR.(ds).(wdsnew).(rsnew).(ws).Qusnoderelease(:,sr)=zeros(rsteps,1);
+        SR.(ds).(wdsnew).(rsnew).(ws).Qusrelease(:,sr)=zeros(rsteps,1);
+        SR.(ds).(wdsnew).(rsnew).(ws).Qdsrelease(:,sr)=-1*release;
+        SR.(ds).(wdsnew).(ws).Qusnoderelease(:,lsr)=zeros(rsteps,1);
+        SR.(ds).(wdsnew).(ws).Qusrelease(:,lsr)=zeros(rsteps,1);
         SR.(ds).(wdsnew).(ws).Qdsrelease(:,lsr)=-1*release;
 %        SR.(ds).WCloc.(ws)=[SR.(ds).WCloc.(ws);[{ds},{wdsnew},{rs},{sr},{lsr},{2}]];  %type=1release,2exchange - instead putting this in in exchange loop
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %if want to do something with missing releases (ie put into Qusrelease) put an else here
         
     end
+    
 else
-    
-WDtr=SR.(ds).WDID{wdidfromid,3};
-WDbr=SR.(ds).WDID{wdidtoid,3};
-Rtr=SR.(ds).WDID{wdidfromid,4};
-Rbr=SR.(ds).WDID{wdidtoid,4};
-SRtr=SR.(ds).WDID{wdidfromid,5}+SR.(ds).WDID{wdidfromid,6};  %new ordering - if col6=1 then sr=dswdid / col6=0 then sr=uswdid, so for from sr add 0 or 1 to move to top of next sr
-SRbr=SR.(ds).WDID{wdidtoid,5};
-
-% if Rtr==0  %WATCH!! wdid listed is at bottom of reach - so for releases from starts at top of next reach, top reach 0 put into srid 1
-%     Rtr=1;SRtr=1;
-% elseif SRtr==SR.(ds).(wds).(['R' num2str(Rtr)]).SR(end)  %not sure if this condition would ever happen (wdid at bottom of Reach) currently no instances
-%     Rtr=Rtr+1;SRt=1;
-% else
-%     SRtr=SRtr+1;
-% end
-        
-    
-
-%for wd=WDtr:WDbr  %remove as should now just be in one wd?
-wd=WDtr;
-    wds=['WD' num2str(wd)];
-    for r=Rtr:Rbr
-        rs=['R' num2str(r)];
-        if r==Rtr
-            srt=SRtr;
-        else
-            srt=1;
-        end
-        if r==Rbr
-            srb=SRbr;
-        else
-            srb=SR.(ds).(wds).(rs).SR(end);
-        end
-
 for sr=srt:srb
     if and(sr==SRtr,r==Rtr)
         Qusnodepartial=SR.(ds).(wds).(rs).Qus(:,sr); %this makes Qusnoderelease=0
@@ -1040,56 +1180,53 @@ for sr=srt:srb
         Qnode=SR.(ds).(wds).(rs).Qnode(:,sr);
         Quspartial=Qusnodepartial+type*Qnode;
     end
+    %reduce WC based on negative native at gage
+    if isfield(SR.(ds).(wds).(rs),ws) && isfield(SR.(ds).(wds).(rs).(ws),'wcreduce') && SR.(ds).(wds).(rs).(ws).wcreduce(sr)==1
+        Quspartial=Quspartial+SR.(ds).(wds).(rs).(ws).wcreduceamt(:,sr);
+        release=release-SR.(ds).(wds).(rs).(ws).wcreduceamt(:,sr);        
+    end
     
     gain=SR.(ds).(wds).(rs).gain(end);
-%     if gain<0;  %if losses, distribute to release also.. %this needs to be discussed further!!
-%         
-%         
-%     end
     if pred==1
         celerity=-999;dispersion=-999;
     else
         celerity=SR.(ds).(wds).(rs).celerity(:,sr);
         dispersion=SR.(ds).(wds).(rs).dispersion(:,sr);
     end
+    
+    QSRadd=-1*(min(0,Quspartial));  %amount of "potentially" negative native
+    Quspartial=max(0,Quspartial);  %WARNING: this by itself this would cut Qusrelease (waterclass) to Qus (gage) (if exceeds)
         
-    if gain==-999   %gain=-999 to not run J349 
-        Quspartial=max(0,Quspartial);  %WARNING: this effectively cuts Qusrelease (waterclass) to Qus (gage); 
-        Qdspartial=Quspartial;
-        SR.(ds).(wds).(rs).QSRadd(:,sr)=zeros(length(rdates),1);
+    if gain==-999   %gain=-999 to not run timing but can still have loss percent 
+        losspercent=SR.(ds).(wds).(rs).losspercent(sr);
+        Qdspartial=Quspartial*(1-losspercent/100);
     else
-        SR.(ds).(wds).(rs).QSRadd(:,sr)=-1*(min(1,Quspartial)-1);  %amount to add to SR - internal "potential" inadvertant diversion
-        Quspartial=max(1,Quspartial);  %WARNING: this effectively cuts Qusrelease (waterclass) to Qus (gage); using one needed for for j349
-        
-        gainportion=gain*SR.(ds).(wds).(rs).reachportion(sr);
         if strcmp(srmethod,'j349')
-%            [Qdspartial,celerity,dispersion]=runj349f(ds,wds,rs,sr,Quspartial,gainportion,rdays,rhours,rsteps,basedir,-999,-999); %celerity/disp based on gage-release (ie partial) flows
-            [Qdspartial,celerity,dispersion]=runj349f(ds,wds,rs,sr,Quspartial,gainportion,rdays,rhours,rsteps,j349dir,celerity,dispersion); %celerity/disp based on gage flows
+            gainportion=gain*SR.(ds).(wds).(rs).reachportion(sr);
+            [Qdspartial,celeritypartial,dispersionpartial]=runj349f(ds,wds,rs,sr,Quspartial+minj349,gainportion,rdays,rhours,rsteps,j349dir,celerity,dispersion); %celerity/disp based on gage flows / +minflow because cant have zero flow
+            Qdspartial=Qdspartial-minj349;
         elseif strcmp(srmethod,'muskingum')
-%            [Qdspartial,celerity,dispersion]=runmuskingum(ds,wds,rs,sr,Quspartial,rhours,rsteps,-999,-999);
-            [Qdspartial,celerity,dispersion]=runmuskingum(ds,wds,rs,sr,Quspartial,rhours,rsteps,celerity,dispersion);
+            [Qdspartial,celeritypartial,dispersionpartial]=runmuskingum(ds,wds,rs,sr,Quspartial,rhours,rsteps,celerity,dispersion);
         end
-        Qdspartial=max(0,Qdspartial);
-        
     end
-    Qavg=(max(Quspartial,1)+max(Qdspartial,1))/2;
+    Qdspartial=max(0,Qdspartial);
+    Qavg=(max(Quspartial,minc)+max(Qdspartial,minc))/2;
     width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
-    if WC.(ds).WC.(ws).type==1 %exchange
-        evap=0;
-    else
-        evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
-    end
-    Qdspartial=Qdspartial-evap+SR.(ds).(wds).(rs).gagediff*SR.(ds).(wds).(rs).reachportion(sr);
+    evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
+    Qdspartial=Qdspartial-evap+SR.(ds).(wds).(rs).gagediffportion(:,sr);
     Qdspartial=max(0,Qdspartial);
 
     SR.(ds).(wds).(rs).(ws).Qusnodepartial(:,sr)=Qusnodepartial;
     SR.(ds).(wds).(rs).(ws).Quspartial(:,sr)=Quspartial;
     SR.(ds).(wds).(rs).(ws).Qdspartial(:,sr)=Qdspartial;
     
-    %%%%%%%%%%%%%%%%%%%%%%%%%%
-    % calc of actual WC amount
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % calc of WC release amount from river - partial
     if pred~=1  %if not prediction, wc amounts are gage amount - "partial" (gage-wcrelease) amount 
-        Qusnoderelease=SR.(ds).(wds).(rs).Qusnode(:,sr)-Qusnodepartial;
+%         Qusnoderelease=SR.(ds).(wds).(rs).Qusnode(:,sr)-Qusnodepartial+SR.(ds).(wds).(rs).QSRaddcum(:,sr)-QSRadd; %for usnode, would not add QSR on first reach that QSR occurred
+%         Qusrelease=SR.(ds).(wds).(rs).Qus(:,sr)-Quspartial+SR.(ds).(wds).(rs).QSRaddcum(:,sr);
+%         Qdsrelease=SR.(ds).(wds).(rs).Qds(:,sr)-Qdspartial+SR.(ds).(wds).(rs).QSRaddcum(:,sr);
+        Qusnoderelease=SR.(ds).(wds).(rs).Qusnode(:,sr)-Qusnodepartial; %for usnode, would not add QSR on first reach that QSR occurred
         Qusrelease=SR.(ds).(wds).(rs).Qus(:,sr)-Quspartial;
         Qdsrelease=SR.(ds).(wds).(rs).Qds(:,sr)-Qdspartial;
     else        %if prediction, wc amounts are "partial" (gage+wcrelease) amount - gage amount 
@@ -1102,10 +1239,57 @@ for sr=srt:srb
     Qusrelease=max(0,Qusrelease);  %this seems to happen in muskingham - reason?? - need to worry about lost negative amount??
     Qdsrelease=max(0,Qdsrelease);
     
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%
+    % INADVERTANT DIVERSIONS - ACTION 1
+    % if individual Qusrelease (waterclass) exceeds Qus (gage-based) at interior node 
+    % temporary measure to avoid cuting Qusrelease until reoperations deal with it
+    % as could be that we just arent estimating interior node amount correctly given return flows etc
+    SR.(ds).(wds).(rs).QSRadd(:,sr)=SR.(ds).(wds).(rs).QSRadd(:,sr)+QSRadd;  %currently just for output file - this is going to get overwritten by subsequent water classes (??)
+%    SR.(ds).(wds).(rs).QSRaddcum(:,1:sr)=cumsum(SR.(ds).(wds).(rs).QSRadd(:,1:sr),2);  %this is what might get added back in as effect would go downstream   
+    QSRaddsum=sum(QSRadd(datest:end));
+    if QSRaddsum>0 && inadv1_letwaterby==1 %if internal correction so native doesnt go negate
+        release=max(0,release);
+        if gain==-999
+            dsrelease=release;
+            losspercent=SR.(ds).(wds).(rs).losspercent(sr);
+            dsrelease=release*(1-losspercent/100);
+        elseif strcmp(srmethod,'muskingum')
+            [dsrelease,celerity,dispersion]=runmuskingum(ds,wds,rs,sr,release,rhours,rsteps,celerity,dispersion);
+        elseif strcmp(srmethod,'j349')
+            [dsrelease,celerity,dispersion]=runj349f(ds,wds,rs,sr,release+minj349,gainportion,rdays,rhours,rsteps,j349dir,celerity,dispersion); %celerity/disp based on gage flows - wrong but so timing the same
+            dsrelease=dsrelease-minj349-gainportion;  %minflow added in and subtracted - a Qus constant 1 should have Qds constant 1
+        end
+        dsrelease=max(0,dsrelease);
+        Qavg=(max(dsrelease,minc)+max(release,minc))/2;
+        width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
+        evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
+        dsrelease=dsrelease-evap;
+        dsrelease=max(0,dsrelease);
+        SR.(ds).(wds).(rs).(ws).QSRadded(:,sr)=1;
+        QSRaddus=max(0,release-Qusrelease);
+        QSRaddds=max(0,dsrelease-Qdsrelease);
+        SR.(ds).(wds).(rs).(ws).QSRaddus(:,sr)=QSRaddus;
+        SR.(ds).(wds).(rs).(ws).QSRaddds(:,sr)=QSRaddds;
+        Qusrelease=max(release,Qusrelease);  %Qusrelease/Qdsrelease max of partial/cut method and just running release by itself
+        Qdsrelease=max(dsrelease,Qdsrelease);
+        Qdspartial=SR.(ds).(wds).(rs).Qds(:,sr)-Qdsrelease;
+        disp(['To avoid cutting wc: ' ws ' total wcamount exceeding river: ' num2str(QSRaddsum) ' added US:' num2str(sum(QSRaddus(datest:end))) ' added DS:' num2str(sum(QSRaddds(datest:end))) ' wd:' wds ' r:' rs ' sr:' num2str(sr)])
+    else
+        SR.(ds).(wds).(rs).(ws).QSRadded(:,sr)=0;
+        SR.(ds).(wds).(rs).(ws).QSRaddus(:,sr)=zeros(rsteps,1);
+        SR.(ds).(wds).(rs).(ws).QSRaddds(:,sr)=zeros(rsteps,1);
+    end
+    
     % wc listed within R at sr position
     SR.(ds).(wds).(rs).(ws).Qusnoderelease(:,sr)=Qusnoderelease;
     SR.(ds).(wds).(rs).(ws).Qusrelease(:,sr)=Qusrelease;
     SR.(ds).(wds).(rs).(ws).Qdsrelease(:,sr)=Qdsrelease;
+    
+    %total of all wc releases
+    SR.(ds).(wds).(rs).Qusnodewc(:,sr)=SR.(ds).(wds).(rs).Qusnodewc(:,sr)+Qusnoderelease;
+    SR.(ds).(wds).(rs).Quswc(:,sr)=SR.(ds).(wds).(rs).Quswc(:,sr)+Qusrelease;
+    SR.(ds).(wds).(rs).Qdswc(:,sr)=SR.(ds).(wds).(rs).Qdswc(:,sr)+Qdsrelease;
     
     % wc listed within WD at subreachid position (only for movie plotting?)
     lsr=SR.(ds).(wds).(rs).subreachid(sr);
@@ -1114,44 +1298,30 @@ for sr=srt:srb
     SR.(ds).(wds).(ws).Qdsrelease(:,lsr)=Qdsrelease;
 
     % WCloc.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/2-exch) is num)
-    SR.(ds).WCloc.(ws)=[SR.(ds).WCloc.(ws);[{ds},{wds},{rs},{sr},{lsr},{1},{SR.(ds).(wds).(rs).wdid{sr}},{SR.(ds).(wds).(rs).dswdid{sr}}]];
     SR.(ds).Rivloc.flowwc.us(:,SR.(ds).(wds).(rs).locid(sr))=SR.(ds).Rivloc.flowwc.us(:,SR.(ds).(wds).(rs).locid(sr))+Qusrelease;
     SR.(ds).Rivloc.flowwc.ds(:,SR.(ds).(wds).(rs).locid(sr))=SR.(ds).Rivloc.flowwc.ds(:,SR.(ds).(wds).(rs).locid(sr))+Qdsrelease;
     %this has Rivloc column, wc-id, line within WCloc.ws to get SR nodes
     SR.(ds).Rivloc.flowwc.wcloc=[SR.(ds).Rivloc.flowwc.wcloc;{SR.(ds).(wds).(rs).locid(sr)} {ws} {length(SR.(ds).WCloc.(ws)(:,1))}];
     
     Qusnodepartial=Qdspartial;
+    release=Qdsrelease;
     
 end %sr
-
-    end %r
-%end %wd
-end
+  
+end %if
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% parking - transfering waterclass from one WD to another
-%   for releases, ds WDreach should then pick up, for exchanges waits for exchange loop
-if parkwdidid ~= 0  %placing park - place wcnum and park parameters in downstream WDreach 
-    parkwdid=SR.(ds).WDID{parkwdidid,1};
+% parking - transfering waterclass amt from one WD to another - currently only for release/exchange through internal confluence
+if r==Rtb && isfield(SR.(ds).(wds),ws) && isfield(SR.(ds).(wds).(ws),parkwdidid)  %placing park - place wcnum and park parameters in downstream WDreach
+    parkwdidid=SR.(ds).(wds).(ws).parkwdidid;    
+    did=SR.(ds).WDID{parkwdidid,1};
     parkWD=SR.(ds).WDID{parkwdidid,3};
     pwds=['WD' num2str(parkWD)];
     parkR=SR.(ds).WDID{parkwdidid,4};
     prs=['R' num2str(parkR)];
-    psr=SR.(ds).WDID{parkwdidid,5};
-    
+    psr=SR.(ds).WDID{parkwdidid,5};   
     lsr=SR.(ds).(wds).(rs).subreachid(sr);
 %    parklsr=SR.(ds).(['WD' num2str(SR.(ds).WDID{wdidtoid,3})]).(['R' num2str(SR.(ds).WDID{wdidtoid,4})]).subreachid(SR.(ds).WDID{wdidtoid,5}); %this should also work - keep in case above breaks down
-
-    if ~isfield(SR.(ds).(pwds),'wwcnums')
-        SR.(ds).(pwds).wwcnums={ws};
-    else
-        SR.(ds).(pwds).wwcnums=[SR.(ds).(pwds).wwcnums;{ws}];
-    end    
-    if ~isfield(SR.(ds).(pwds),'park')
-        SR.(ds).(pwds).park=[{ws},{parkwdid},{parkwdidid},{wds},{rs},{sr},{parktype},{lsr}];  %this is destination wdidid but source wds,rs,sr
-    else
-        SR.(ds).(pwds).park=[SR.(ds).(pwds).park;{ws},{parkwdid},{parkwdidid},{wds},{rs},{sr},{parktype},{lsr}];        
-    end
     if parktype==2  %for us exchange through internal confluence, placing routed exchange amount at end of US WDreach - cant do this like this like regular us exchange since upper tribs already executed
         parklsr=SR.(ds).(pwds).(['R' num2str(SR.(ds).(pwds).R(end))]).subreachid(end);
         SR.(ds).(pwds).(prs).(ws).Qusnoderelease(:,psr)=zeros(length(rdates),1);
@@ -1161,17 +1331,449 @@ if parkwdidid ~= 0  %placing park - place wcnum and park parameters in downstrea
         SR.(ds).(pwds).(ws).Qusnoderelease(:,parklsr)=zeros(length(rdates),1);
         SR.(ds).(pwds).(ws).Qusrelease(:,parklsr)=zeros(length(rdates),1);
         SR.(ds).(pwds).(ws).Qdsrelease(:,parklsr)=-1*SR.(ds).(wds).(ws).Qdsrelease(:,lsr);
-    end
-    
-    
+    end 
 end
 
-end %j - waterclass
+
+end %w
+
+%native as river minus total of all wc releases
+SR.(ds).(wds).(rs).Qusnodenative=SR.(ds).(wds).(rs).Qusnode-SR.(ds).(wds).(rs).Qusnodewc;
+SR.(ds).(wds).(rs).Qusnative=SR.(ds).(wds).(rs).Qus-SR.(ds).(wds).(rs).Quswc;
+SR.(ds).(wds).(rs).Qdsnative=SR.(ds).(wds).(rs).Qds-SR.(ds).(wds).(rs).Qdswc;
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+% INADVERTANT DIVERSIONS - ACTION 2
+% if native (river-totalwcreleases) negative at gage then seems there was an actual inadvertant diversion
+% so try to reduce wc releases where they are going negative at internal node upstream
+    
+negnativeds=-1*min(0,SR.(ds).(wds).(rs).Qdsnative);
+negnativedssum=sum(negnativeds(datest:end,:));
+
+if r~=Rb & negnativedssum(1,end)>0 & inadv2_reducewc==1
+    %trying to find best upstream spots to reduce wcs
+    disp(['Negative Native Flow at end of wd:' wds ' r:' rs ' total amount:' num2str(negnativedssum(1,end))]);
+    negnativeus=-1*min(0,SR.(ds).(wds).(rs).Qusnative);
+    negnativeussum=sum(negnativeus(datest:end,:));
+    negnativeussumoutflows=-1*min(0,negnativeussum.*SR.(ds).(wds).(rs).type); %just at outflow nodes
+    clear negnativeussumdiff
+    negnativeussumdiff(1)=negnativeussumoutflows(1);  %thinking increase from previous node is potentially attributable to inadvertant at us node
+    if length(negnativeussum)>1
+        for i=length(negnativeussum):-1:2
+            negnativeussumdiff(i)=max(0,negnativeussumoutflows(i)-sum(negnativeussumoutflows(1:i-1)));
+        end
+    end
+    if sum(negnativeussumdiff)==0
+        wcreduceperc=ones(1,length(negnativeussumdiff))/length(negnativeussumdiff);
+    else
+        wcreduceperc=negnativeussumdiff/sum(negnativeussumdiff);
+    end
+    wcreducepercids=find(wcreduceperc>0);
+
+    srb=length(wcreduceperc);
+    for i=1:length(wcreducepercids)
+        exchtimerem=0;
+        srt=wcreducepercids(i);
+        wcreducepercent=wcreduceperc(wcreducepercids(i));
+        Qnegds=negnativeds(:,end)*wcreducepercent;
+        
+        for sr=srb:-1:srt
+            celerity=SR.(ds).(wds).(rs).celerity(:,sr);
+            if or(strcmp(srmethod,'j349'),strcmp(srmethod,'muskingum'))
+                [Qnegus,exchtimerem,celerity]=reversecelerity(ds,wds,rs,sr,Qnegds,exchtimerem,rhours,rsteps,celerity); %using river celerity
+            else
+                Qnegus=Qnegds;
+            end
+            Qavg=Qnegus;  %us and ds should be same amounts but using us to not smeer timing
+            width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
+            evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
+            Qnegus=Qnegus+evap;
+            Qnegds=Qnegus;
+        end
+        
+        %finding water classes that are running in stream both at given node for reduction and at end where gage 
+        wwcnumids=intersect(find(strcmp(SR.(ds).WCloc.Rloc(:,3),wds)),find(strcmp(SR.(ds).WCloc.Rloc(:,4),rs)));
+        wwcnumids=intersect(find([SR.(ds).WCloc.Rloc{:,5}]<=srt),wwcnumids);
+        wwcnumids=intersect(find([SR.(ds).WCloc.Rloc{:,6}]==srb),wwcnumids); %wc also has to be in stream at end where gage (?)
+%        wwcnumids=intersect(find([SR.(ds).WCloc.Rloc{:,6}]>=srb),wwcnumids);
+             
+        for w=1:length(wwcnumids)
+            ws=SR.(ds).WCloc.Rloc{wwcnumids(w),1};
+            if ~isfield(SR.(ds).(wds).(rs).(ws),'wcreduce')
+                numsrs=length(SR.(ds).(wds).(rs).SR);
+                SR.(ds).(wds).(rs).(ws).wcreduce(1,numsrs)=0;
+                SR.(ds).(wds).(rs).(ws).wcreduceamt(:,numsrs)=zeros(rsteps,1);
+            end
+                
+            wcportion=wcreducepercent*SR.(ds).(wds).(rs).(ws).Qusrelease(:,sr)./SR.(ds).(wds).(rs).Quswc(:,sr);
+            wcreduceamt=Qnegus.*wcportion;
+            nanids=find(isnan(wcreduceamt));
+            wcreduceamt(nanids)=0;
+            SR.(ds).(wds).(rs).(ws).wcreduce(:,srt)=1; 
+            SR.(ds).(wds).(rs).(ws).wcreduceamt(:,srt)=SR.(ds).(wds).(rs).(ws).wcreduceamt(:,srt)+wcreduceamt;
+            if sum(wcreduceamt)>10  %WATCH - is this OK limit?
+                changewc=1;  %WATCH - is this OK limit and/or need to cap iterations?
+                disp(['Reducing WC:' ws ' by additional:' num2str(sum(wcreduceamt)) ' total:' num2str(sum(SR.(ds).(wds).(rs).(ws).wcreduceamt(:,srt))) ' wd:' wds ' r:' rs ' sr: ' num2str(srt) ' will reoperate admin loop']);
+            end
+        end
+    end 
+end
+if changewccount < iternative  %WATCH - is this OK cap on iterations?
+    changewccount=changewccount+1;
+else
+    disp(['Stopping reoperation to reduce wcs as hit iterations: ' num2str(changewccount)]);
+    changewc=0;
 end
 end
+
+end %change
+    end %r
+    lastwdid=[lastwdid;SR.(ds).(wds).(rs).dswdid{sr} {ds} {wds} {rs} {sr}];
+end %wd
 
 SR.(ds).Rivloc.flownative.us=SR.(ds).Rivloc.flowriv.us-SR.(ds).Rivloc.flowwc.us;
 SR.(ds).Rivloc.flownative.ds=SR.(ds).Rivloc.flowriv.ds-SR.(ds).Rivloc.flowwc.ds;
+
+
+if 1==2 %will cut this out
+% 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % ADMIN LOOP FOR WATERCLASSES
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 
+% 
+% for wd=WDlist
+%     wds=['WD' num2str(wd)];
+%     if ~isfield(SR.(ds).(wds),'wwcnums')
+%         disp(['no water classes identified (admin loop not run) for D:' ds ' WD:' wds]) 
+%     else
+%     wwcnums=SR.(ds).(wds).wwcnums;
+%     Rt=SR.(ds).(wds).R(1);
+%     Rb=SR.(ds).(wds).R(end);
+%     disp(['running admin loop for D:' ds ' WD:' wds]) 
+% 
+% for w=1:length(wwcnums)
+% ws=wwcnums{w};
+% % if ~isfield(SR.(ds).WCloc,ws)  %if here will include missing WCs as empty
+% %     SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
+% %     SR.(ds).WCloc.(ws)=[];
+% % end
+% 
+% %disp(['running admin loop for D:' ds ' WD:' wds ' wc:' ws]) 
+% 
+% 
+% wdinwdidlist=find([SR.(ds).WDID{:,3}]==wd);
+% 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %   the next/first block is looking for water classes that were passed from another WDreach
+% %   these could have been passed from an upstream release or
+% %   from an exchange that was first routed down an upstream reach
+% 
+% parkwcid=0;
+% if isfield(SR.(ds).(wds),'park')
+%     parkwcid=find(strcmp(SR.(ds).(wds).park(:,1),ws));
+% end
+% if parkwcid~=0
+%     wdidfrom=SR.(ds).(wds).park{parkwcid,2};
+%     wdidfromid=SR.(ds).(wds).park{parkwcid,3};
+%     fromWDs=SR.(ds).(wds).park{parkwcid,4};
+% %    fromlsr=SR.(ds).(wds).park{parkwcid,8};
+% %    release=SR.(ds).(fromWD).(ws).Qdsrelease(:,fromlsr);
+%     fromRs=SR.(ds).(wds).park{parkwcid,5};
+%     fromsr=SR.(ds).(wds).park{parkwcid,6};
+%     release=SR.(ds).(fromWDs).(fromRs).(ws).Qdsrelease(:,fromsr);
+% else  %if not parked
+%     wdidfrom=WC.(ds).WC.(ws).wdid;
+%     wdidfromid=intersect(find(strcmp(SR.(ds).WDID(:,1),wdidfrom)),wdinwdidlist);
+%     release=WC.(ds).(wds).(ws).release;
+% end
+%     
+% wdidto=WC.(ds).WC.(ws).to;
+% wdidtoid=find(strcmp(SR.(ds).WDID(:,1),wdidto));
+% wdidtoidwd=intersect(wdidtoid,wdinwdidlist);
+% 
+% parkwdidid=0;
+% exchtype=0;
+% if isempty(wdidtoid)                                    %wdid To: listed in divrecs but cant find To:wdid in network list of wdids
+%     wdidtoid=wdidfromid;
+%     disp(['WARNING: not routing (either exchange or missing) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ' sum: ' num2str(sum(release)) ]);
+% else
+%     if ~isfield(SR.(ds).WCloc,ws)
+%         SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
+%         SR.(ds).WCloc.(ws)=[];
+%     end
+%     dswdidids=find(wdidtoid>=wdidfromid);
+%     if ~isempty(dswdidids)                              %DS RELEASE TO ROUTE (could include US Exchange that is first routed to end of WD)
+%         if SR.(ds).WDID{wdidtoid(dswdidids(1)),3} == wd %DS release located in same WD - so route to first node that is at or below release point
+%             wdidtoid=wdidtoid(dswdidids(1));            %if multiple points (could be multiple reach defs or same wdid at top of next ds reach)
+%         else                                            %DS release located in different WD - so route to bottom of WD and park into next WD
+%             wdidtoid=wdinwdidlist(end);
+%             parkwdidid=find(strcmp(SR.(ds).WDID(:,1),SR.(ds).WDID(wdidtoid,1)));
+%             parkwdidid=setdiff(parkwdidid,wdinwdidlist);
+%             parktype=1;  %1 push DS to end of reach
+%             disp(['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To:' wdidto ' external to WD reach, routing to end of WD reach']);
+%         end  
+%     elseif isempty(dswdidids)                             %US EXCHANGE RELEASE - ONLY ROUTING HERE IF FIRST DOWN TO MID-WD BRANCH
+%         wdidtoidnotwd=setdiff(wdidtoid,wdinwdidlist);
+%         branchid=find(SR.(ds).(wds).branch{:,1}==SR.D2.WDID{wdidtoidnotwd,3});
+% 
+%         if ~isempty(branchid)      %us exchange from DS branch within WD (exchtype=3)
+%             exchtype=3;
+%             SR.(ds).EXCH.(ws).wdidtoid=wdidtoid;
+%             SR.(ds).EXCH.(ws).WDto=SR.(ds).WDID{wdidtoid(1),3};
+%             wdidbranch=SR.(ds).(wds).branch{branchid,2};
+%             wdidtoids=find(strcmp(SR.(ds).WDID(:,1),wdidbranch));
+%             parkwdidid=setdiff(wdidtoids,wdinwdidlist);
+%             wdidtoid=intersect(wdidtoids,wdinwdidlist);
+%             parktype=2;  %2 push DS releases to internal node
+%             SR.(ds).EXCH.(ws).wdidfromid=parkwdidid;
+%             SR.(ds).EXCH.(ws).WDfrom=SR.(ds).WDID{parkwdidid,3};
+%             SR.(ds).EXCH.(ws).exchtype=3;            
+%             disp(['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To Confluence:' wdidbranch ' US exchange first routing with TL to internal confluence point within WD reach']);
+%             disp(['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ' sum: ' num2str(sum(release)) ]);    
+%             
+%         elseif ~isempty(wdidtoidwd)                    %us exchange within WD (exchtype=1)
+%             exchtype=1;
+%             SR.(ds).EXCH.(ws).wdidtoid=wdidtoidwd(end);  %last in list in case multiple reach listing (will go to lowest) - remember that wdid is listed "above" subreach so sr will be next one after
+%             SR.(ds).EXCH.(ws).wdidfromid=wdidfromid;
+%             SR.(ds).EXCH.(ws).WDfrom=wd;
+%             SR.(ds).EXCH.(ws).WDto=wd;
+%             SR.(ds).EXCH.(ws).exchtype=1;
+%             wdidtoid=wdidfromid;  %leaving it there
+%             disp(['Exchange: (internal to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ' sum: ' num2str(sum(release)) ]);
+%         else                                           %us exchange in different WD (exchtype=2)
+%             exchtype=2;
+%             SR.(ds).EXCH.(ws).wdidtoid=wdidtoid(end);
+%             SR.(ds).EXCH.(ws).wdidfromid=wdidfromid;
+%             SR.(ds).EXCH.(ws).WDfrom=wd;
+%             SR.(ds).EXCH.(ws).WDto=SR.(ds).WDID{wdidtoid(1),3};
+%             SR.(ds).EXCH.(ws).exchtype=2;
+%             wdidtoid=wdidfromid;
+% %            wdidtoid=wdinwdidlist(end);
+%             disp(['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ' sum: ' num2str(sum(release)) ]);    
+%         end
+% 
+%     end       
+% end
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%     
+% % if WC.(ds).WC.(ws).type==1 %exchange (?)  %exchange defined by upstream record - not using anymore??
+% %     release=release*-1;
+% % end
+% srids=SR.(ds).(wds).(['R' num2str(Rb)]).subreachid(end);  %just to set size of release matrices
+% SR.(ds).(wds).(ws).Qusnoderelease(length(rdates),srids)=0;     %just used for plotting, maybe better way..
+% SR.(ds).(wds).(ws).Qusrelease(length(rdates),srids)=0;
+% SR.(ds).(wds).(ws).Qdsrelease(length(rdates),srids)=0;
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 
+% if wdidtoid==wdidfromid   %EXCHANGES (or missing releases) - Exchanges put into Qds of US reach so consistent (not currently had been: missing gets parked in Qus)
+%     rs=['R' num2str(SR.(ds).WDID{wdidfromid,4})];
+%     sr=SR.(ds).WDID{wdidfromid,5};
+%     if exchtype==1 | exchtype==2  %for us exchanges putting into Qds of reach above node rather than Qus of reach below node
+%         wdsnew=wds;
+%         if SR.(ds).WDID{wdidfromid,6}==0 %uswdid/top of wd - push into us wd
+%             wdidnewid=setdiff(find(strcmp(SR.(ds).WDID(:,1),wdidfrom)),wdinwdidlist);
+%             wdsnew=['WD' num2str(SR.(ds).WDID{wdidnewid,3})];
+%             rs=['R' num2str(SR.(ds).WDID{wdidnewid,4})];
+%             sr=SR.(ds).WDID{wdidnewid,5};
+%             SR.(ds).EXCH.(ws).wdidfromid=wdidnewid;
+%             SR.(ds).EXCH.(ws).WDfrom=SR.(ds).WDID{wdidnewid,3};
+%         end 
+%         lsr=SR.(ds).(wdsnew).(rs).subreachid(sr);
+%         SR.(ds).(wdsnew).(rs).(ws).Qusnoderelease(:,sr)=zeros(length(rdates),1);
+%         SR.(ds).(wdsnew).(rs).(ws).Qusrelease(:,sr)=zeros(length(rdates),1);
+%         SR.(ds).(wdsnew).(rs).(ws).Qdsrelease(:,sr)=-1*release;
+%         SR.(ds).(wdsnew).(ws).Qusnoderelease(:,lsr)=zeros(length(rdates),1);
+%         SR.(ds).(wdsnew).(ws).Qusrelease(:,lsr)=zeros(length(rdates),1);
+%         SR.(ds).(wdsnew).(ws).Qdsrelease(:,lsr)=-1*release;
+% %        SR.(ds).WCloc.(ws)=[SR.(ds).WCloc.(ws);[{ds},{wdsnew},{rs},{sr},{lsr},{2}]];  %type=1release,2exchange - instead putting this in in exchange loop
+%         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%         %if want to do something with missing releases (ie put into Qusrelease) put an else here
+%         
+%     end
+% else
+%     
+% WDtr=SR.(ds).WDID{wdidfromid,3};
+% WDbr=SR.(ds).WDID{wdidtoid,3};
+% Rtr=SR.(ds).WDID{wdidfromid,4};
+% Rbr=SR.(ds).WDID{wdidtoid,4};
+% SRtr=SR.(ds).WDID{wdidfromid,5}+SR.(ds).WDID{wdidfromid,6};  %new ordering - if col6=1 then sr=dswdid / col6=0 then sr=uswdid, so for from sr add 0 or 1 to move to top of next sr
+% SRbr=SR.(ds).WDID{wdidtoid,5};
+% 
+% % if Rtr==0  %WATCH!! wdid listed is at bottom of reach - so for releases from starts at top of next reach, top reach 0 put into srid 1
+% %     Rtr=1;SRtr=1;
+% % elseif SRtr==SR.(ds).(wds).(['R' num2str(Rtr)]).SR(end)  %not sure if this condition would ever happen (wdid at bottom of Reach) currently no instances
+% %     Rtr=Rtr+1;SRt=1;
+% % else
+% %     SRtr=SRtr+1;
+% % end
+%         
+%     
+% 
+% %for wd=WDtr:WDbr  %remove as should now just be in one wd?
+% wd=WDtr;
+%     wds=['WD' num2str(wd)];
+%     for r=Rtr:Rbr
+%         rs=['R' num2str(r)];
+%         if r==Rtr
+%             srt=SRtr;
+%         else
+%             srt=1;
+%         end
+%         if r==Rbr
+%             srb=SRbr;
+%         else
+%             srb=SR.(ds).(wds).(rs).SR(end);
+%         end
+% 
+% for sr=srt:srb
+%     if and(sr==SRtr,r==Rtr)
+%         Qusnodepartial=SR.(ds).(wds).(rs).Qus(:,sr); %this makes Qusnoderelease=0
+%         if pred==1 %predictive case
+%             Quspartial=SR.(ds).(wds).(rs).Qus(:,sr)+release;
+%         else  %administrative case
+%             Quspartial=SR.(ds).(wds).(rs).Qus(:,sr)-release;
+%         end
+%     else
+%         type=SR.(ds).(wds).(rs).type(1,sr);
+%         Qnode=SR.(ds).(wds).(rs).Qnode(:,sr);
+%         Quspartial=Qusnodepartial+type*Qnode;
+%     end
+%     
+%     gain=SR.(ds).(wds).(rs).gain(end);
+% %     if gain<0;  %if losses, distribute to release also.. %this needs to be discussed further!!
+% %         
+% %         
+% %     end
+%     if pred==1
+%         celerity=-999;dispersion=-999;
+%     else
+%         celerity=SR.(ds).(wds).(rs).celerity(:,sr);
+%         dispersion=SR.(ds).(wds).(rs).dispersion(:,sr);
+%     end
+%         
+%     if gain==-999   %gain=-999 to not run J349 
+%         Quspartial=max(0,Quspartial);  %WARNING: this effectively cuts Qusrelease (waterclass) to Qus (gage); 
+%         Qdspartial=Quspartial;
+%         SR.(ds).(wds).(rs).QSRadd(:,sr)=zeros(length(rdates),1);
+%     else
+%         SR.(ds).(wds).(rs).QSRadd(:,sr)=-1*(min(1,Quspartial)-1);  %amount to add to SR - internal "potential" inadvertant diversion
+%         Quspartial=max(1,Quspartial);  %WARNING: this effectively cuts Qusrelease (waterclass) to Qus (gage); using one needed for for j349
+%         
+%         gainportion=gain*SR.(ds).(wds).(rs).reachportion(sr);
+%         if strcmp(srmethod,'j349')
+% %            [Qdspartial,celerity,dispersion]=runj349f(ds,wds,rs,sr,Quspartial,gainportion,rdays,rhours,rsteps,basedir,-999,-999); %celerity/disp based on gage-release (ie partial) flows
+%             [Qdspartial,celerity,dispersion]=runj349f(ds,wds,rs,sr,Quspartial,gainportion,rdays,rhours,rsteps,j349dir,celerity,dispersion); %celerity/disp based on gage flows
+%         elseif strcmp(srmethod,'muskingum')
+% %            [Qdspartial,celerity,dispersion]=runmuskingum(ds,wds,rs,sr,Quspartial,rhours,rsteps,-999,-999);
+%             [Qdspartial,celerity,dispersion]=runmuskingum(ds,wds,rs,sr,Quspartial,rhours,rsteps,celerity,dispersion);
+%         end
+%         Qdspartial=max(0,Qdspartial);
+%         
+%     end
+%     Qavg=(max(Quspartial,1)+max(Qdspartial,1))/2;
+%     width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
+%     if WC.(ds).WC.(ws).type==1 %exchange
+%         evap=0;
+%     else
+%         evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
+%     end
+%     Qdspartial=Qdspartial-evap+SR.(ds).(wds).(rs).gagediff*SR.(ds).(wds).(rs).reachportion(sr);
+%     Qdspartial=max(0,Qdspartial);
+% 
+%     SR.(ds).(wds).(rs).(ws).Qusnodepartial(:,sr)=Qusnodepartial;
+%     SR.(ds).(wds).(rs).(ws).Quspartial(:,sr)=Quspartial;
+%     SR.(ds).(wds).(rs).(ws).Qdspartial(:,sr)=Qdspartial;
+%     
+%     %%%%%%%%%%%%%%%%%%%%%%%%%%
+%     % calc of actual WC amount
+%     if pred~=1  %if not prediction, wc amounts are gage amount - "partial" (gage-wcrelease) amount 
+%         Qusnoderelease=SR.(ds).(wds).(rs).Qusnode(:,sr)-Qusnodepartial;
+%         Qusrelease=SR.(ds).(wds).(rs).Qus(:,sr)-Quspartial;
+%         Qdsrelease=SR.(ds).(wds).(rs).Qds(:,sr)-Qdspartial;
+%     else        %if prediction, wc amounts are "partial" (gage+wcrelease) amount - gage amount 
+%         Qusnoderelease=Qusnodepartial-SR.(ds).(wds).(rs).Qusnode(:,sr);
+%         Qusrelease=Quspartial-SR.(ds).(wds).(rs).Qus(:,sr);
+%         Qdsrelease=Qdspartial-SR.(ds).(wds).(rs).Qds(:,sr);
+%     end
+%     
+%     Qusnoderelease=max(0,Qusnoderelease);
+%     Qusrelease=max(0,Qusrelease);  %this seems to happen in muskingham - reason?? - need to worry about lost negative amount??
+%     Qdsrelease=max(0,Qdsrelease);
+%     
+%     % wc listed within R at sr position
+%     SR.(ds).(wds).(rs).(ws).Qusnoderelease(:,sr)=Qusnoderelease;
+%     SR.(ds).(wds).(rs).(ws).Qusrelease(:,sr)=Qusrelease;
+%     SR.(ds).(wds).(rs).(ws).Qdsrelease(:,sr)=Qdsrelease;
+%     
+%     % wc listed within WD at subreachid position (only for movie plotting?)
+%     lsr=SR.(ds).(wds).(rs).subreachid(sr);
+%     SR.(ds).(wds).(ws).Qusnoderelease(:,lsr)=Qusnoderelease;
+%     SR.(ds).(wds).(ws).Qusrelease(:,lsr)=Qusrelease;
+%     SR.(ds).(wds).(ws).Qdsrelease(:,lsr)=Qdsrelease;
+% 
+%     % WCloc.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/2-exch) is num)
+%     SR.(ds).WCloc.(ws)=[SR.(ds).WCloc.(ws);[{ds},{wds},{rs},{sr},{lsr},{1},{SR.(ds).(wds).(rs).wdid{sr}},{SR.(ds).(wds).(rs).dswdid{sr}}]];
+%     SR.(ds).Rivloc.flowwc.us(:,SR.(ds).(wds).(rs).locid(sr))=SR.(ds).Rivloc.flowwc.us(:,SR.(ds).(wds).(rs).locid(sr))+Qusrelease;
+%     SR.(ds).Rivloc.flowwc.ds(:,SR.(ds).(wds).(rs).locid(sr))=SR.(ds).Rivloc.flowwc.ds(:,SR.(ds).(wds).(rs).locid(sr))+Qdsrelease;
+%     %this has Rivloc column, wc-id, line within WCloc.ws to get SR nodes
+%     SR.(ds).Rivloc.flowwc.wcloc=[SR.(ds).Rivloc.flowwc.wcloc;{SR.(ds).(wds).(rs).locid(sr)} {ws} {length(SR.(ds).WCloc.(ws)(:,1))}];
+%     
+%     Qusnodepartial=Qdspartial;
+%     
+% end %sr
+% 
+%     end %r
+% %end %wd
+% end
+% 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % parking - transfering waterclass from one WD to another
+% %   for releases, ds WDreach should then pick up, for exchanges waits for exchange loop
+% if parkwdidid ~= 0  %placing park - place wcnum and park parameters in downstream WDreach 
+%     parkwdid=SR.(ds).WDID{parkwdidid,1};
+%     parkWD=SR.(ds).WDID{parkwdidid,3};
+%     pwds=['WD' num2str(parkWD)];
+%     parkR=SR.(ds).WDID{parkwdidid,4};
+%     prs=['R' num2str(parkR)];
+%     psr=SR.(ds).WDID{parkwdidid,5};
+%     
+%     lsr=SR.(ds).(wds).(rs).subreachid(sr);
+% %    parklsr=SR.(ds).(['WD' num2str(SR.(ds).WDID{wdidtoid,3})]).(['R' num2str(SR.(ds).WDID{wdidtoid,4})]).subreachid(SR.(ds).WDID{wdidtoid,5}); %this should also work - keep in case above breaks down
+% 
+%     if ~isfield(SR.(ds).(pwds),'wwcnums')
+%         SR.(ds).(pwds).wwcnums={ws};
+%     else
+%         SR.(ds).(pwds).wwcnums=[SR.(ds).(pwds).wwcnums;{ws}];
+%     end    
+%     if ~isfield(SR.(ds).(pwds),'park')
+%         SR.(ds).(pwds).park=[{ws},{parkwdid},{parkwdidid},{wds},{rs},{sr},{parktype},{lsr}];  %this is destination wdidid but source wds,rs,sr
+%     else
+%         SR.(ds).(pwds).park=[SR.(ds).(pwds).park;{ws},{parkwdid},{parkwdidid},{wds},{rs},{sr},{parktype},{lsr}];        
+%     end
+%     if parktype==2  %for us exchange through internal confluence, placing routed exchange amount at end of US WDreach - cant do this like this like regular us exchange since upper tribs already executed
+%         parklsr=SR.(ds).(pwds).(['R' num2str(SR.(ds).(pwds).R(end))]).subreachid(end);
+%         SR.(ds).(pwds).(prs).(ws).Qusnoderelease(:,psr)=zeros(length(rdates),1);
+%         SR.(ds).(pwds).(prs).(ws).Qusrelease(:,psr)=zeros(length(rdates),1);
+% %        SR.(ds).(pwds).(prs).(ws).Qdsrelease(:,psr)=SR.(ds).(wds).(ws).Qdsrelease(:,lsr);
+%         SR.(ds).(pwds).(prs).(ws).Qdsrelease(:,psr)=-1*SR.(ds).(wds).(rs).(ws).Qdsrelease(:,sr); %-1 for exchange - (or might this also be used for some sort of release?) 
+%         SR.(ds).(pwds).(ws).Qusnoderelease(:,parklsr)=zeros(length(rdates),1);
+%         SR.(ds).(pwds).(ws).Qusrelease(:,parklsr)=zeros(length(rdates),1);
+%         SR.(ds).(pwds).(ws).Qdsrelease(:,parklsr)=-1*SR.(ds).(wds).(ws).Qdsrelease(:,lsr);
+%     end
+%     
+%     
+% end
+% 
+% end %j - waterclass
+% end
+% end
+% 
+% SR.(ds).Rivloc.flownative.us=SR.(ds).Rivloc.flowriv.us-SR.(ds).Rivloc.flowwc.us;
+% SR.(ds).Rivloc.flownative.ds=SR.(ds).Rivloc.flowriv.ds-SR.(ds).Rivloc.flowwc.ds;
+% 
+end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1241,8 +1843,8 @@ for w=1:length(wwcnums)
 %                QEus=QEds;  %NEED EXCHANGE METHOD/FUNCION HERE - wont alter amounts but will alter timing
                 
                 if or(strcmp(srmethod,'j349'),strcmp(srmethod,'muskingum'))
-%                    [QEus]=exchangecelerity(QEds);
-                     [QEus,exchtimerem,celerity]=exchangecelerity(ds,wds,rs,sr,QEds,exchtimerem,rhours,rsteps,-999);
+%                    [QEus]=reversecelerity(QEds);
+                     [QEus,exchtimerem,celerity]=reversecelerity(ds,wds,rs,sr,QEds,exchtimerem,rhours,rsteps,-999);
                 else
                     QEus=QEds;
                 end
@@ -1254,9 +1856,9 @@ for w=1:length(wwcnums)
                 
                 % wc listed within WD at subreachid position (only for movie plotting?)
                 lsr=SR.(ds).(wds).(rs).subreachid(sr);
-                SR.(ds).(wds).(ws).Qusnoderelease(:,lsr)=SR.(ds).(wds).(rs).(ws).Qusnoderelease(:,sr);
-                SR.(ds).(wds).(ws).Qusrelease(:,lsr)=SR.(ds).(wds).(rs).(ws).Qusrelease(:,sr);
-                SR.(ds).(wds).(ws).Qdsrelease(:,lsr)=SR.(ds).(wds).(rs).(ws).Qdsrelease(:,sr);
+                SR.(ds).(wds).(ws).Qusnoderelease(:,lsr)=QEus;
+                SR.(ds).(wds).(ws).Qusrelease(:,lsr)=QEus;
+                SR.(ds).(wds).(ws).Qdsrelease(:,lsr)=QEds;
                 
                 % WCloc.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/2-exch) is num)
                 SR.(ds).WCloc.(ws)=[SR.(ds).WCloc.(ws);[{ds},{wds},{rs},{sr},{lsr},{2},{SR.(ds).(wds).(rs).wdid{sr}},{SR.(ds).(wds).(rs).dswdid{sr}}]];
@@ -1276,7 +1878,6 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if outputgage==1
-    datest=spinupdays*24/rhours+1;
     titlelocline=[{'atWDID'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-USWDID/2-DSWDID'}];
     if outputgagehr==1
         titledates=cellstr(datestr(rdates(datest:end),'mm/dd/yy HH:'));
@@ -1340,7 +1941,6 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if outputwc==1 & isfield(SR.(ds),'WCloc')
-datest=spinupdays*24/rhours+1;
 
 wwcnums=SR.(ds).WCloc.wslist;
 %titlelocline=[{'WCnum'},{'WC code'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'srid'},{'1-US/2-DS'},{'WDID'}];
@@ -1350,6 +1950,8 @@ if outputwchr==1
     disp('writing hourly output file by water class amounts (hourly is a bit slow)')
     titledates=cellstr(datestr(rdates(datest:end),'mm/dd/yy HH:'));
     writecell([titlelocline,titledates'],[outputfilename srmethod '_wchr.csv']);
+    writecell([titlelocline,titledates'],[outputfilename srmethod '_wcsraddhr.csv']);
+    writecell([titlelocline,titledates'],[outputfilename srmethod '_wcreducehr.csv']);
 end
 if outputwcday==1
     disp('writing daily output file by water class amounts')
@@ -1357,36 +1959,61 @@ if outputwcday==1
     daymat=unique([yr,mh,dy],'rows','stable');
     titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
     writecell([titlelocline,titledatesday'],[outputfilename srmethod '_wcday.csv']);
+    writecell([titlelocline,titledatesday'],[outputfilename srmethod '_wcreduceday.csv']);
 end
 
 
 for w=1:length(wwcnums)
     ws=wwcnums{w};
-    clear loclinewc outputlinewc outputlinedaywc
+    clear loclinewc outputlinewc outputlinedaywc outputlinewcsradd outputlinedaywcsradd outputlinewcreduce outputlinedaywcreduce loclinewcreduce
+    outwcreduce=0;k=0;
     for i=1:length(SR.(ds).WCloc.(ws)(:,1))  %JVO said wanted both us and ds of WDID (??) - OK then
         if SR.(ds).WCloc.(ws){i,6}==1 %release - list from us to ds
            loclinewc(2*i-1,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WCloc.(ws)(i,7),SR.(ds).WCloc.(ws)(i,1:4),{2}];
            outputlinewc(2*i-1,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).Qusrelease(datest:end,SR.(ds).WCloc.(ws){i,4})';
            loclinewc(2*i,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WCloc.(ws)(i,8),SR.(ds).WCloc.(ws)(i,1:4),{1}];
            outputlinewc(2*i,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).Qdsrelease(datest:end,SR.(ds).WCloc.(ws){i,4})';
+           outputlinewcsradd(2*i-1,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).QSRaddus(datest:end,SR.(ds).WCloc.(ws){i,4})';
+           outputlinewcsradd(2*i,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).QSRaddds(datest:end,SR.(ds).WCloc.(ws){i,4})';
+           
+           if isfield(SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws),'wcreduceamt')
+               outwcreduce=1;k=k+1;
+                loclinewcreduce(k,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WCloc.(ws)(i,7),SR.(ds).WCloc.(ws)(i,1:4),{1}]; %lists us wdid
+                outputlinewcreduce(k,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).wcreduceamt(datest:end,SR.(ds).WCloc.(ws){i,4})';
+           end
+           
         else  %exchange - list from ds to us - if ok from us to ds could delete these
            loclinewc(2*i-1,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WCloc.(ws)(i,8),SR.(ds).WCloc.(ws)(i,1:4),{1}];
            outputlinewc(2*i-1,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).Qdsrelease(datest:end,SR.(ds).WCloc.(ws){i,4})';
            loclinewc(2*i,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WCloc.(ws)(i,7),SR.(ds).WCloc.(ws)(i,1:4),{2}];
            outputlinewc(2*i,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).Qusrelease(datest:end,SR.(ds).WCloc.(ws){i,4})';
+           outputlinewcsradd(2*i-1,:)=zeros(1,length(rdates(datest:end)));
+           outputlinewcsradd(2*i,:)=zeros(1,length(rdates(datest:end)));
         end
     end 
     
     if outputwchr==1
         writecell([loclinewc,num2cell(outputlinewc)],[outputfilename srmethod '_wchr.csv'],'WriteMode','append');
+        writecell([loclinewc,num2cell(outputlinewcsradd)],[outputfilename srmethod '_wcsraddhr.csv'],'WriteMode','append');
+           if outwcreduce==1
+                writecell([loclinewcreduce,num2cell(outputlinewcreduce)],[outputfilename srmethod '_wcreducehr.csv'],'WriteMode','append');
+           end
     end
 
     if outputwcday==1
         for i=1:length(daymat(:,1))
             dayids=find(yr==daymat(i,1) & mh==daymat(i,2) & dy==daymat(i,3));
             outputlinedaywc(:,i)=mean(outputlinewc(:,dayids),2);
+            outputlinedaywcsradd(:,i)=mean(outputlinewcsradd(:,dayids),2);
+           if outwcreduce==1
+                outputlinedaywcreduce(:,i)=mean(outputlinewcreduce(:,dayids),2);
+           end
         end
         writecell([loclinewc,num2cell(outputlinedaywc)],[outputfilename srmethod '_wcday.csv'],'WriteMode','append');        
+        writecell([loclinewc,num2cell(outputlinedaywcsradd)],[outputfilename srmethod '_wcsraddday.csv'],'WriteMode','append');             
+        if outwcreduce==1
+            writecell([loclinewcreduce,num2cell(outputlinedaywcreduce)],[outputfilename srmethod '_wcreduceday.csv'],'WriteMode','append');             
+        end
     end
 end
 
@@ -1461,7 +2088,12 @@ for sr=srt:srb
             plotline(k+1:k+3,kwe)=[SR.(ds).(wds).(ws).Qusnoderelease(ts,lsr);SR.(ds).(wds).(ws).Qusrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsrelease(ts,lsr)];
          else
             kwr=kwr+1;
-            plotlinerelease(k+1:k+3,kwr)=[SR.(ds).(wds).(ws).Qusnoderelease(ts,lsr);SR.(ds).(wds).(ws).Qusrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsrelease(ts,lsr)];
+            if length(SR.(ds).(wds).(ws).Qusrelease(ts,:))>=lsr
+                plotlinerelease(k+1:k+3,kwr)=[SR.(ds).(wds).(ws).Qusnoderelease(ts,lsr);SR.(ds).(wds).(ws).Qusrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsrelease(ts,lsr)];
+            else
+                plotlinerelease(k+1:k+3,kwr)=[0,0,0];
+            end
+                
          end
           
 %         plotlinerelease(k+1:k+3,w)=[SR.(ds).(wds).(ws).Qusrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsnodesrelease(ts,lsr)];
@@ -1513,7 +2145,7 @@ text(127.5,0,'JohnMartin','Rotation',90,'HorizontalAlignment','Right')
 end
 end
         
-% movie(F,1,8)
+% reversecelerity(F,1,8)
 
 disp(datestr(now))
 
@@ -1543,25 +2175,26 @@ disp(datestr(now))
 function [Qds,celerity,dispersion]=runmuskingum(ds,wds,rs,sr,Qus,rhours,rsteps,celerity,dispersion)
 global SR
 
+cmin=1;
 %posids=find(Qus>0);        %at least for wc releases this limits to release times; could potentially have celerity time series as time ser..
 %Qusavg=mean(Qus(posids));  %orig single celerity / as add to time series length - may need to do this on smaller time steps??
 
 %when commented out above; trying celerity/dispersion as time series ... NOT SURE IF CORRECT TO DO WITH CHANGING CELERITY/DISPERSION??
-negids=find(Qus<0);
-Qus(negids)=0;
+% negids=find(Qus<0); - %commenting these two out for speed but may want in for safety
+% Qus(negids)=0;
 
 channellength=SR.(ds).(wds).(rs).channellength(sr);
 if celerity==-999
     celeritya=SR.(ds).(wds).(rs).celeritya(sr);
     celerityb=SR.(ds).(wds).(rs).celerityb(sr);
 %    celerity=celeritya*Qusavg^celerityb;
-    celerity=celeritya*Qus.^celerityb;
+    celerity=celeritya*max(cmin,Qus).^celerityb;
 end
 if dispersion==-999
     dispersiona=SR.(ds).(wds).(rs).dispersiona(sr);
     dispersionb=SR.(ds).(wds).(rs).dispersionb(sr);
 %    dispersion=dispersiona*Qusavg^dispersionb;
-    dispersion=dispersiona*Qus.^dispersionb;
+    dispersion=dispersiona*max(cmin,Qus).^dispersionb;
 end
 
 losspercent=SR.(ds).(wds).(rs).losspercent(sr);
@@ -1596,7 +2229,8 @@ end
 function [Qds,celerity,dispersion]=runj349f(ds,wds,rs,sr,Qus,gain,rdays,rhours,rsteps,j349dir,celerity,dispersion)
 global SR
 
-Qusavg=mean(Qus);  %watch - this would be different than TLAP; but think basing on that subreach flow might be more correct
+cmin=1;   
+Qusavg=max(cmin,mean(Qus));  %watch - this would be different than TLAP; but think basing on that subreach flow might be more correct
 %Qusavg=(667+ARKAVOCO)/2; %current in TLAP- based on average flow for entire reach
 
 channellength=SR.(ds).(wds).(rs).channellength(sr);
@@ -1734,11 +2368,11 @@ end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% function to route exchanges from DS to US (in reverse time) using same celerity coefficients..
+% function to route exchanges or other water from DS to US (in reverse time) using same celerity coefficients..
 %
 
 
-function [QEus,srtimerem,celerity]=exchangecelerity(ds,wds,rs,sr,QEds,exchtimerem,rhours,rsteps,celerity)
+function [QEus,srtimerem,celerity]=reversecelerity(ds,wds,rs,sr,QEds,exchtimerem,rhours,rsteps,celerity)
 global SR
 
 channellength=SR.(ds).(wds).(rs).channellength(sr);
@@ -1762,8 +2396,10 @@ srtimeadj=srtime+exchtimerem;  %add in fractional hours remaining from last subr
 srtimehrs=round(srtimeadj);
 srtimerem=srtimeadj-srtimehrs;
 
-QEus=zeros(1,rsteps);
-QEus(1:rsteps-srtimehrs)=QEds(1+srtimehrs:end);
+%QEus=zeros(1,rsteps);
+%QEus(1:rsteps-srtimehrs)=QEds(1+srtimehrs:end);
+QEus=zeros(rsteps,1);
+QEus(1:rsteps-srtimehrs,1)=QEds(1+srtimehrs:end,1);
 
 end
 
