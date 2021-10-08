@@ -22,6 +22,7 @@ The original USGS fortran code was updated to compile in the 64bit gfortran comp
 1. Original j349.f code from USGS
 2. Code acquired from Lou Parslow, an original TLAP developer, by Jim Brannon.  This version had some arrays (originally at 1600) dimensioned to 3200 and has modified versions of RATNG and ERFC.  The dimensioning was confirmed to be needed and may be due to the bank storage URFs being of equal size as the original time series so that the array sizing needs to be double the time step. 
 3. Code from Jim Brannon, as modified from the Lou Parslow code.  Fixes were primarily to get to run in 32bit gfortran.  This is a branch not committed back to master.
-4. 
+4.
+5.  
 
 ## Compiling
