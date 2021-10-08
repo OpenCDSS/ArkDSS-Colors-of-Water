@@ -32,11 +32,15 @@ srmethod='j349';       %dynamic j349/Livinston method
 %srmethod='muskingum';   %percent loss TL plus muskingum-cunge for travel time
 pred=0;  %if pred=0 subtracts water class from existing flows, if 1 adds to existing gage flows
 flowcriteria=5; %to establish gage and node flows: 1 low, 2 avg, 3 high flow values from livingston; envision 4 for custom entry; 5 for actual flows; 6 average for xdays/yhours prior to now/date; 7 average between 2 dates
-iternum.j349=5;  %iterations of gageflow loop given method (had been using dynamic way to iterate but currently just number);
+iternum.j349=5;  %iterations of gageflow loop given method to iterate on gagediff (gain/loss/error correction for estimated vs actual gage flows) (had been using dynamic way to iterate but currently just number);
 iternum.muskingum=3;
-iternative=10;
-inadv1_letwaterby=1;
-inadv2_reducewc=1;
+
+adjustlastsrtogage=1;     %although gagediff process should be getting last sr very close to gage, this would make a final adjustment to exactly equal
+inadv1_letwaterby=1;      %this will let a single water class amt get by an internal node although wc amt exceeds initially estimated river amt - hopefully until internal river amt can be adjusted upwards by last step(ie since have no actual river data at internal node) 
+inadv2_reducewc=1;        %this will attempt to reduce wc amts at upstream location (within R-reach) if native flow goes negative at gage
+    wcreduceamtlimit=10;  %limit of sum in negative native flow at gage above which will add wc reductions and reoperate
+    iternative=10;        %iteration limit for above
+inadv3_increaseint=1;     %last step to then increase internal node river flow amounts above those initially estimated  
 minc=1;              %minimum flow applied to celerity, dispersion, and evaporation calculations (dont want to have a zero celerity for reverse operations etc) / this is also seperately in j349/musk functions
 minj349=1;           %minimum flow for j349 application - TLAP uses 1.0
 gainchangelimit=0.1;
@@ -915,6 +919,8 @@ end
 
 gagediff=zeros(rsteps,1);
 SR.(ds).(wds).(rs).gagediffportion=zeros(rsteps,length(SR.(ds).(wds).(rs).SR));
+SR.(ds).(wds).(rs).gagedifflast=zeros(rsteps,1);
+SR.(ds).(wds).(rs).Quswc=zeros(rsteps,length(SR.(ds).(wds).(rs).SR)); %will be zero before iteration loops
 gagediffavg=10;
 
 gain=SR.(ds).(wds).(rs).gaininitial(1);
@@ -982,6 +988,28 @@ for sr=SR.(ds).(wds).(rs).SR
     %new setup - going from Qusnode to Qus (after usnodes) then to Qds
     Qus=Qusnode+type*Qnode;
     Qus=max(0,Qus);
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%
+    % INADVERTANT DIVERSIONS - ACTION 3
+    % after know what totalwcreleases are and have potentially reduced those where indicated by gage
+    % then if native (river-totalwcreleases) negative at internal then increase river flow at that node
+    % thinking that internal portion isnt as the same or as pure as length based ratio
+    
+    %native as river minus total of all wc releases
+    Qusnative=Qus-SR.(ds).(wds).(rs).Quswc(:,sr);
+    negnativeus=-1*min(0,Qusnative);
+    negnativeussum=sum(negnativeus(datest:end,:));
+    if negnativeussum>0 && inadv3_increaseint == 1
+        
+        
+        
+        
+    end
+
+    
+       
+    
+    
     
     if gain==-999   %gain=-999 to not run transittime but can have loss percent 
         losspercent=SR.(ds).(wds).(rs).losspercent(sr);
@@ -1060,6 +1088,10 @@ else
                 gagediffus=gagediffus+evap;
                 gagediffds=gagediffus;
             end
+        elseif adjustlastsrtogage==1
+            SR.(ds).(wds).(rs).gagedifflast=gagediffnew;
+            SR.(ds).(wds).(rs).Qds(:,end)=Qdsgage;
+            SR.(ds).Rivloc.flowriv.ds(:,SR.(ds).(wds).(rs).locid(sr))=Qdsgage;
         end
         
 
@@ -1214,6 +1246,10 @@ for sr=srt:srb
     width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
     evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
     Qdspartial=Qdspartial-evap+SR.(ds).(wds).(rs).gagediffportion(:,sr);
+    if adjustlastsrtogage==1 && sr==srb
+        Qdspartial=Qdspartial+SR.(ds).(wds).(rs).gagedifflast;
+    end
+    
     Qdspartial=max(0,Qdspartial);
 
     SR.(ds).(wds).(rs).(ws).Qusnodepartial(:,sr)=Qusnodepartial;
@@ -1412,19 +1448,24 @@ if r~=Rb & negnativedssum(1,end)>0 & inadv2_reducewc==1
             wcreduceamt(nanids)=0;
             SR.(ds).(wds).(rs).(ws).wcreduce(:,srt)=1; 
             SR.(ds).(wds).(rs).(ws).wcreduceamt(:,srt)=SR.(ds).(wds).(rs).(ws).wcreduceamt(:,srt)+wcreduceamt;
-            if sum(wcreduceamt)>10  %WATCH - is this OK limit?
+            if sum(wcreduceamt)>wcreduceamtlimit  %WATCH... limit based on how close have to get
                 changewc=1;  %WATCH - is this OK limit and/or need to cap iterations?
                 disp(['Reducing WC:' ws ' by additional:' num2str(sum(wcreduceamt)) ' total:' num2str(sum(SR.(ds).(wds).(rs).(ws).wcreduceamt(:,srt))) ' wd:' wds ' r:' rs ' sr: ' num2str(srt) ' will reoperate admin loop']);
             end
         end
     end 
 end
-if changewccount < iternative  %WATCH - is this OK cap on iterations?
+if changewc==1 & changewccount < iternative  %WATCH - is this OK cap on iterations?
     changewccount=changewccount+1;
-else
+elseif changewc==1
     disp(['Stopping reoperation to reduce wcs as hit iterations: ' num2str(changewccount)]);
     changewc=0;
 end
+end
+
+
+if inadv3_increaseint==1 
+%    negnativeussum=sum(negnativeus(datest:end,:));
 end
 
 end %change
