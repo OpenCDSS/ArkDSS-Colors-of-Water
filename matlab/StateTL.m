@@ -2,14 +2,13 @@
 % StateTL
 % Matlab (preliminary) Colors of Water Transit Loss and Timing engine
 %
-%
 % Major version changes starting June 2021
 % 
 
 
 cd C:\Projects\Ark\ColorsofWater\matlab
 clear all
-disp(datestr(now))
+runstarttime=now;
 basedir=cd;basedir=[basedir '\'];
 %j349dir=[basedir 'j349dir\']; %currently need to a cd where run fortran but may slow to cd at every instance
 j349dir=basedir;
@@ -23,52 +22,88 @@ readinfofile=2;  %1 reads from excel and saves mat file; 2 reads mat file;
 readgageinfo=2;  %if using real gage data, 1 reads from REST, 2 reads from file - watch out currently saves into SR file
 infofilename='StateTL_inputdata.xlsx';
 pullnewdivrecs=2;  %0 if want to repull all from REST, 1 if only pull new/modified from REST for same period, 2 load from saved mat file
-plotmovie=1;  %this will probably be moved to a seperate plotting script - will add plot command to pick wc and plot wc-time for locations
-    figtop=1500;
+runadminloop=2;  %1 runs loops that processing both river and water class amounts, doing routing, releases, and exchanges, for historical period; 2 reads mat file;
 doexchanges=1;
+pred=0;  %if pred=0 subtracts water class from existing flows, if 1 adds to existing gage flows
+
+runcaptureloop=1;  %loop to characterize potential capture amt vs available amt.
+    percrule=.10;  %percent rule - TLAP currently uses 10% of average release rate as trigger amount (Livingston 2011 says 10%; past Livingston 1978 detailed using 5% believe defined as 5% of max amount at headgate)
+
+
+runcalibloop=1;
+    WDcaliblist=[17];
+    calibdatestart=datenum(2018,4,02);
+    calibdateend=datenum(2018,4,15);
+    calibmeth='linreg'; %currently mean or linreg - method to establish gain/loss/error correction for period that might be like we will do future forecasting
+    calibmeth='mean';
 
 %Methods - these currently override method for all reaches, but planning default method by Reach that would run if not overrided  
 srmethod='j349';       %dynamic j349/Livinston method
 %srmethod='muskingum';   %percent loss TL plus muskingum-cunge for travel time
-pred=0;  %if pred=0 subtracts water class from existing flows, if 1 adds to existing gage flows
 flowcriteria=5; %to establish gage and node flows: 1 low, 2 avg, 3 high flow values from livingston; envision 4 for custom entry; 5 for actual flows; 6 average for xdays/yhours prior to now/date; 7 average between 2 dates
 iternum.j349=5;  %iterations of gageflow loop given method to iterate on gagediff (gain/loss/error correction for estimated vs actual gage flows) (had been using dynamic way to iterate but currently just number);
-iternum.muskingum=3;
+iternum.muskingum=5;
 
 adjustlastsrtogage=1;     %although gagediff process should be getting last sr very close to gage, this would make a final adjustment to exactly equal
 inadv1_letwaterby=1;      %this will let a single water class amt get by an internal node although wc amt exceeds initially estimated river amt - hopefully until internal river amt can be adjusted upwards by last step(ie since have no actual river data at internal node) 
-inadv2_reducewc=1;        %this will attempt to reduce wc amts at upstream location (within R-reach) if native flow goes negative at gage
-    wcreduceamtlimit=10;  %limit of sum in negative native flow at gage above which will add wc reductions and reoperate
+inadv2_reducewcpushUS=0;        %this will attempt to reduce wc amts at upstream location (within R-reach) if native flow goes negative at gage - CURRENTLY SEEMS TO PRODUCE SOME OSCILLATIONS
+    wcreduceamtlimit=0;  %limit of sum in negative native flow at gage above which will add wc reductions and reoperate
     iternative=10;        %iteration limit for above
-inadv3_increaseint=1;     %last step to then increase internal node river flow amounts above those initially estimated  
+inadv2_reducewclastatgage=1;    %this applies water class reducation at ds end of reach rather than push up - this will also occur if above option hits iteration limit and also uses amtlimit  - THIS IS ACTING A LOT SMOOTHER THAN PUSHING US
+inadv3a_increaseint=0;     %last step to then increase internal node river flow amounts above those initially estimated - this option is attitude that problem is from inadvertant diversion and so pushes up a reach - but doesnt seem to work quite as well as b option
+    nhrs=1;              %number of hours to average over to increase river flow amounts for above operation
+    sraddamtlimit=10;     %limit of reachwide sum in negative native flows above which will adjust internal flows and reoperate
+inadv3b_increaseint=1;    %similar step as 3a / only use one or other / but keeps correction at us or ds location where wcs exceed native / acting a bit better than 3a
 minc=1;              %minimum flow applied to celerity, dispersion, and evaporation calculations (dont want to have a zero celerity for reverse operations etc) / this is also seperately in j349/musk functions
 minj349=1;           %minimum flow for j349 application - TLAP uses 1.0
 gainchangelimit=0.1;
 
-outputfilename='StateTL_outnewwcreduce_';  %will add srmethod + gage/wc/etc + hour/day + .csv
+outputfilename='StateTL_outnewsradd_';  %will add srmethod + gage/wc/etc + hour/day + .csv
 outputgage=0;  %output waterclass amounts by reach
     outputgagehr=1;  %output on hour timestep
     outputgageday=1;  %output on day timestep
 outputwc=0;  %output waterclass amounts by reach
     outputwchr=1;  %output on hour timestep
     outputwcday=1;  %output on day timestep
+outputcal=0;  %output calibration amounts by gage location
+    outputcalhr=1;  %output on hour timestep
+    outputcalday=1;  %output on day timestep
+
+logfilename='StateTL_runlog.txt';  %log filename
+    displaymessage=0;  %1=display messages to screen
+    writemessage=1; %1=write messages to logfile
+    
+logm=['Running StateTL starting: ' datestr(runstarttime)];    %log message
+disp(logm);    %log message
+if writemessage==1;fidlog=fopen(logfilename,'w');fprintf(fidlog,'%s\r\n',logm);fclose(fidlog);end
 
 
 apikey='D2D7AF63-C286-40A8-9';  %this is KT1 personal - will want to get one for this tool or cdss etc
 
 % Date - will be reworked - j349 currently only works for 60 days at 1hour - may alter fortran to run full calendar year at 1 hour without spinup
+% also this needs to be integrated into SR structure
 datestart=datenum(2018,4,01);
+
 rdays=60; rhours=1;
 spinupdays=45;
 rsteps=rdays*24/rhours;
-datest=spinupdays*24/rhours+1;
+datestid=spinupdays*24/rhours+1;
+rdates=datestart*ones(spinupdays*24/rhours,1);
+rdates=[rdates;[datestart:rhours/24:datestart+(rdays-spinupdays)-rhours/24]'];
+[ryear,rmonth,rday,rhour] = datevec(rdates);
+rdatesday=floor(rdates);
+rjulien=rdatesday-(datenum(ryear,1,1)-1);
+dateend=datestart+(rdays-spinupdays)-1;
+datedays=[datestart:dateend];
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %READ INITIAL RUN INFO
 % initially have WDlist in xlsx that defines division and WDs to run in order (upper tribs first)
 %%%%%%%%%%%%%%%%%%%%%%%%%%
-disp(['reading WD run list from file: ' basedir infofilename] )
+logm=['reading WD run list from file: ' basedir infofilename];
+domessage(logm,logfilename,displaymessage,writemessage)
+
 inforaw=readcell([basedir infofilename],'Sheet','WDlist');
 [inforawrow inforawcol]=size(inforaw);
 
@@ -110,7 +145,9 @@ if readinfofile==1
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%    
 % read subreach data    
-disp(['reading subreach info from file: ' basedir infofilename] )
+logm=['reading subreach info from file: ' basedir infofilename];
+domessage(logm,logfilename,displaymessage,writemessage)
+
 
 % inforaw=readcell([basedir infofilename],'Sheet','SR');
 % [inforawrow inforawcol]=size(inforaw);
@@ -406,15 +443,6 @@ end
 % READ GAGE AND TELEMETRY BASED FLOW DATA
 % much of this needs to be improved for larger application; particularly handling of dates
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-rdates=datestart*ones(spinupdays*24/rhours,1);
-rdates=[rdates;[datestart:rhours/24:datestart+(rdays-spinupdays)-rhours/24]'];
-rdatesstartid=spinupdays*24/rhours+1;
-[ryear,rmonth,rday,rhour] = datevec(rdates);
-rdatesday=floor(rdates);
-rjulien=rdatesday-(datenum(ryear,1,1)-1);
-dateend=datestart+(rdays-spinupdays)-1;
-datedays=[datestart:dateend];
-
 
 flowtestloc=[2,17,8,1];
 
@@ -428,7 +456,9 @@ switch flowcriteria
     case 3
         flow='high';
     otherwise
-        disp('reading gage data from HB using REST services')    
+        logm=['reading gage data from HB using REST services'];
+        domessage(logm,logfilename,displaymessage,writemessage)
+
         d=flowtestloc(1);wd=flowtestloc(2);r=flowtestloc(3);sr=flowtestloc(4);
         station=SR.(['D' num2str(d)]).(['WD' num2str(wd)]).(['R' num2str(r)]).station{1,sr};
         parameter=SR.(['D' num2str(d)]).(['WD' num2str(wd)]).(['R' num2str(r)]).parameter{1,sr};
@@ -485,11 +515,12 @@ for wd=SR.(ds).WD
                         end
                         %here need to work out various Qnode options
                         %initial below assuming all data there and one hour timestep
-                        Qnode(1:rdatesstartid-1,1)=measvalues(1);
-                        Qnode(rdatesstartid:length(rdates),1)=measvalues;
+                        Qnode(1:datestid-1,1)=measvalues(1);
+                        Qnode(datestid:length(rdates),1)=measvalues;
                         SR.(ds).(wds).(rs).Qnode(:,sr,1)=Qnode;
                     catch
-                        disp(['WARNING: didnt get telemetry data for gage: ' station ' parameter: ' parameter ' have to use flow rate for conditions: ' flow ])
+                        logm=['WARNING: didnt get telemetry data for gage: ' station ' parameter: ' parameter ' have to use flow rate for conditions: ' flow ];
+                        domessage(logm,logfilename,displaymessage,writemessage)
                         SR.(ds).(wds).(rs).Qnode(:,sr,1)=SR.(ds).(wds).(rs).(flow)(1,sr)*ones(rsteps,1);
                     end
                 end
@@ -540,7 +571,9 @@ for j=1:length(SR.(ds).(wds).releasestructures)
     %divrecdata=webread(divrecdayurl,'format','json','min-datameasdate',datestr(datestart,23),'max-datameasdate',datestr(dateend,23),'min-dataValue',0.0001,'wdid',reswdid,'wcIdentifier',['*T:' num2str(type) '*'],'min-modified',datestr(WC.date.modified,23),weboptions('Timeout',30));
     
     try
-        disp(['Using HBREST for  ' reswdid ' from: ' datestr(datestart,23) ' to ' datestr(dateend,23) ' and modified: ' datestr(modified) ]);
+        logm=['Using HBREST for  ' reswdid ' from: ' datestr(datestart,23) ' to ' datestr(dateend,23) ' and modified: ' datestr(modified) ];
+        domessage(logm,logfilename,displaymessage,writemessage)
+                
         divrecdata=webread(divrecdayurl,'format','json','min-datameasdate',datestr(datestart,23),'max-datameasdate',datestr(dateend,23),'min-dataValue',0.0001,'wdid',reswdid,'min-modified',datestr(modified+1/24/60,'mm/dd/yyyy HH:MM'),weboptions('Timeout',30),'apiKey',apikey);
 %        divrecdata=webread(divrecdayurl,'format','json','min-datameasdate',datestr(datestart,23),'max-datameasdate',datestr(dateend,23),'min-dataValue',0.0001,'wdid',reswdid,'min-modified',datestr(modified+1/24/60,'mm/dd/yyyy HH:MM'),weboptions('Timeout',30,'CertificateFilename',''));
         
@@ -568,9 +601,11 @@ for j=1:length(SR.(ds).(wds).releasestructures)
             measunits=divrecdata.ResultList(i).measUnits;
             
             if ~strcmp(measinterval,'Daily') | ~strcmp(measunits,'CFS')
-                disp(['WARNING: skipping REST divrec ' wdid ' ' num2str(wcnum) ' with measinterval: ' measinterval ' with measunits: ' measunits]);
+                logm=['WARNING: skipping REST divrec ' wdid ' ' num2str(wcnum) ' with measinterval: ' measinterval ' with measunits: ' measunits];
+                domessage(logm,logfilename,displaymessage,writemessage)
             elseif isempty(dateid)
-                disp(['WARNING: skipping REST divrec ' wdid ' ' num2str(wcnum) ' with measdatestr: ' measdatestr]);
+                logm=['WARNING: skipping REST divrec ' wdid ' ' num2str(wcnum) ' with measdatestr: ' measdatestr];
+                domessage(logm,logfilename,displaymessage,writemessage)
             elseif type==7   % | type==1 | type==4   %release, exchange, apd(?)
                 WC.(ds).WC.(wwcnum).wdid=wdid;
                 WC.(ds).WC.(wwcnum).wc=wc;  %will end up with last listed..
@@ -601,7 +636,8 @@ for j=1:length(SR.(ds).(wds).releasestructures)
             
         end
     catch ME
-        disp(['WARNING: didnt find new records using REST for  ' reswdid ' with pullnewdivrecs: ' num2str(pullnewdivrecs) ' and modified: ' datestr(WC.date.(ds).(wds).modified) ]);
+        logm=['WARNING: didnt find new records using REST for  ' reswdid ' with pullnewdivrecs: ' num2str(pullnewdivrecs) ' and modified: ' datestr(WC.date.(ds).(wds).modified) ];
+        domessage(logm,logfilename,displaymessage,writemessage)   
     end
     %end
     
@@ -671,16 +707,20 @@ end
 % PROCESSING LOOPS
 %%%%%%%%%%%%%%%%%%
 
+if runadminloop==1
+
 lastwdid=[];  %tracks last wdid/connection of processed wd reaches
 SR.(ds).Rivloc.loc=[]; %just tracks location listing of processed reaches
-SR.(ds).WCloc.wslist=[];
-SR.(ds).WCloc.Rloc=[];
+SR.(ds).WC.wslist=[];
+SR.(ds).WC.Rloc=[];
 SR.(ds).Rivloc.flowwc.wcloc=[];
+SR.(ds).Gageloc.loc=[];
+SR.(ds).Rivloc.length=[];
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Routing of water classes
-%   new - put above other loops to build WCloc list first purely for inadvertant diversion correction
+%   new - put above other loops to build WC list first purely for inadvertant diversion correction
 %   so can do both gageflow and admin together on a R-reach by reach basis
 %
 %  WATCH!-currently requires WDID list to be in spatial order to know whats going upstream
@@ -690,22 +730,22 @@ SR.(ds).Rivloc.flowwc.wcloc=[];
 for wd=WDlist
     wds=['WD' num2str(wd)];
     if ~isfield(SR.(ds).(wds),'wwcnums')
-        disp(['no water classes identified (admin loop not run) for D:' ds ' WD:' wds]) 
+        logm=['no water classes identified (admin loop not run) for D:' ds ' WD:' wds];
+        domessage(logm,logfilename,displaymessage,writemessage)
     else
     wwcnums=SR.(ds).(wds).wwcnums;
     Rt=SR.(ds).(wds).R(1);
     Rb=SR.(ds).(wds).R(end);
-    disp(['running admin loop for D:' ds ' WD:' wds]) 
+    logm=['running admin loop to pre-establish routing for D:' ds ' WD:' wds];
+    domessage(logm,logfilename,displaymessage,writemessage)
+
 
 for w=1:length(wwcnums)
 ws=wwcnums{w};
-% if ~isfield(SR.(ds).WCloc,ws)  %if here will include missing WCs as empty
-%     SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
-%     SR.(ds).WCloc.(ws)=[];
+% if ~isfield(SR.(ds).WC,ws)  %if here will include missing WCs as empty
+%     SR.(ds).WC.wslist=[SR.(ds).WC.wslist,{ws}];
+%     SR.(ds).WC.(ws)=[];
 % end
-
-%disp(['running admin loop for D:' ds ' WD:' wds ' wc:' ws]) 
-
 
 wdinwdidlist=find([SR.(ds).WDID{:,3}]==wd);
 
@@ -737,11 +777,12 @@ parkwdidid=0;
 exchtype=0;
 if isempty(wdidtoid)                                    %wdid To: listed in divrecs but cant find To:wdid in network list of wdids
     wdidtoid=wdidfromid;
-    disp(['WARNING: not routing (either exchange or missing) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ]);
+    logm=['WARNING: not routing (either exchange or missing) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ];
+    domessage(logm,logfilename,displaymessage,writemessage)
 else
-    if ~isfield(SR.(ds).WCloc,ws)
-        SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
-        SR.(ds).WCloc.(ws)=[];
+    if ~isfield(SR.(ds).WC,ws)
+        SR.(ds).WC.wslist=[SR.(ds).WC.wslist,{ws}];
+        SR.(ds).WC.(ws)=[];
     end
     dswdidids=find(wdidtoid>=wdidfromid);
     if ~isempty(dswdidids)                              %DS RELEASE TO ROUTE (could include US Exchange that is first routed to end of WD)
@@ -752,8 +793,9 @@ else
             parkwdidid=find(strcmp(SR.(ds).WDID(:,1),SR.(ds).WDID(wdidtoid,1)));
             parkwdidid=setdiff(parkwdidid,wdinwdidlist);
             parktype=1;  %1 push DS to end of reach
-            disp(['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To:' wdidto ' external to WD reach, routing to end of WD reach']);
-        end  
+            logm=['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To:' wdidto ' external to WD reach, routing to end of WD reach'];
+            domessage(logm,logfilename,displaymessage,writemessage)
+        end
     elseif isempty(dswdidids)                             %US EXCHANGE RELEASE - ONLY ROUTING HERE IF FIRST DOWN TO MID-WD BRANCH
         wdidtoidnotwd=setdiff(wdidtoid,wdinwdidlist);
         branchid=find(SR.(ds).(wds).branch{:,1}==SR.D2.WDID{wdidtoidnotwd,3});
@@ -770,9 +812,11 @@ else
             SR.(ds).EXCH.(ws).wdidfromid=parkwdidid;
             SR.(ds).EXCH.(ws).WDfrom=SR.(ds).WDID{parkwdidid,3};
             SR.(ds).EXCH.(ws).exchtype=3;            
-            disp(['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To Confluence:' wdidbranch ' US exchange first routing with TL to internal confluence point within WD reach']);
-            disp(['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ]);    
-            
+            logm=['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To Confluence:' wdidbranch ' US exchange first routing with TL to internal confluence point within WD reach'];
+            domessage(logm,logfilename,displaymessage,writemessage)
+            logm=['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ];
+            domessage(logm,logfilename,displaymessage,writemessage)
+         
         elseif ~isempty(wdidtoidwd)                    %us exchange within WD (exchtype=1)
             exchtype=1;
             SR.(ds).EXCH.(ws).wdidtoid=wdidtoidwd(end);  %last in list in case multiple reach listing (will go to lowest) - remember that wdid is listed "above" subreach so sr will be next one after
@@ -781,7 +825,8 @@ else
             SR.(ds).EXCH.(ws).WDto=wd;
             SR.(ds).EXCH.(ws).exchtype=1;
             wdidtoid=wdidfromid;  %leaving it there
-            disp(['Exchange: (internal to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ]);
+            logm=['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ];
+            domessage(logm,logfilename,displaymessage,writemessage)
         else                                           %us exchange in different WD (exchtype=2)
             exchtype=2;
             SR.(ds).EXCH.(ws).wdidtoid=wdidtoid(end);
@@ -791,7 +836,8 @@ else
             SR.(ds).EXCH.(ws).exchtype=2;
             wdidtoid=wdidfromid;
 %            wdidtoid=wdinwdidlist(end);
-            disp(['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ]);    
+            logm=['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ];
+            domessage(logm,logfilename,displaymessage,writemessage)
         end
 
     end       
@@ -808,7 +854,7 @@ SRbr=SR.(ds).WDID{wdidtoid,5};
 
 if wdidtoid==wdidfromid   %EXCHANGES (or missing releases)
     if exchtype>0
-        SR.(ds).WCloc.Rloc=[SR.(ds).WCloc.Rloc;[{ws},{ds},{wds},{['R' num2str(Rtr)]},{SRtr},{SRbr},{Rtr},{Rbr},{SRtr},{SRbr},{wdidfrom},{wdidto},{wdidfromid},{wdidtoid}]];
+        SR.(ds).WC.Rloc=[SR.(ds).WC.Rloc;[{ws},{ds},{wds},{['R' num2str(Rtr)]},{SRtr},{SRbr},{Rtr},{Rbr},{SRtr},{SRbr},{wdidfrom},{wdidto},{wdidfromid},{wdidtoid}]];
     end
 else
     
@@ -826,12 +872,12 @@ wd=WDtr;
         else
             srb=SR.(ds).(wds).(rs).SR(end);
         end
-        SR.(ds).WCloc.Rloc=[SR.(ds).WCloc.Rloc;[{ws},{ds},{wds},{rs},{srt},{srb},{Rtr},{Rbr},{SRtr},{SRbr},{wdidfrom},{wdidto},{wdidfromid},{wdidtoid}]];
+        SR.(ds).WC.Rloc=[SR.(ds).WC.Rloc;[{ws},{ds},{wds},{rs},{srt},{srb},{Rtr},{Rbr},{SRtr},{SRbr},{wdidfrom},{wdidto},{wdidfromid},{wdidtoid}]];
 
 for sr=srt:srb
-    % WCloc.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/2-exch) is num)
+    % WC.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/2-exch) is num)
     lsr=SR.(ds).(wds).(rs).subreachid(sr);
-    SR.(ds).WCloc.(ws)=[SR.(ds).WCloc.(ws);[{ds},{wds},{rs},{sr},{lsr},{1},{SR.(ds).(wds).(rs).wdid{sr}},{SR.(ds).(wds).(rs).dswdid{sr}}]];
+    SR.(ds).WC.(ws)=[SR.(ds).WC.(ws);[{ds},{wds},{rs},{sr},{lsr},{1},{SR.(ds).(wds).(rs).wdid{sr}},{SR.(ds).(wds).(rs).dswdid{sr}}]];
     
 end %sr
 
@@ -889,7 +935,9 @@ for wd=WDlist
     
     for r=SR.(ds).(wds).R
         rs=['R' num2str(r)];
-        disp(['running gageflow loop on D:' ds ' WD:' wds ' R:' rs]) 
+        logm=['running gageflow loop on D:' ds ' WD:' wds ' R:' rs];
+        domessage(logm,logfilename,displaymessage,writemessage)
+
             
 %         if r==Rt   %used for code work limiting reaches
 %             srt=SRt;
@@ -908,19 +956,28 @@ for wd=WDlist
 %to build loc listing that is used in output and related to total river and wc flows
 for sr=SR.(ds).(wds).(rs).SR
     SR.(ds).Rivloc.loc=[SR.(ds).Rivloc.loc;[{ds} {wds} {rs} {sr} SR.(ds).(wds).(rs).wdid{sr} SR.(ds).(wds).(rs).dswdid{sr}]];
+    SR.(ds).Rivloc.length=[SR.(ds).Rivloc.length SR.(ds).(wds).(rs).channellength(sr)];
     SR.(ds).(wds).(rs).locid(sr)=length(SR.(ds).Rivloc.loc(:,1));      %this will be used for flowriv and flowwc
     SR.(ds).Rivloc.flowwc.us(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to sum total wc release amounts within river - note that dimensions reversed
     SR.(ds).Rivloc.flowwc.ds(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to sum total wc release amounts within river
     SR.(ds).(wds).(rs).Qusnodewc(:,sr)=zeros(rsteps,1);  %also variable to sum total wc release amounts
     SR.(ds).(wds).(rs).Quswc(:,sr)=zeros(rsteps,1);
     SR.(ds).(wds).(rs).Qdswc(:,sr)=zeros(rsteps,1);
+    SR.(ds).(wds).(rs).wcreduceamt(:,sr)=zeros(rsteps,1);
+    if SR.(ds).(wds).(rs).type(sr)==0
+        SR.(ds).Gageloc.loc=[SR.(ds).Gageloc.loc;[{ds} {wds} {rs} {sr} SR.(ds).(wds).(rs).wdid{sr} SR.(ds).(wds).(rs).station{sr}]];
+        SR.(ds).(wds).(rs).gagelocid=length(SR.(ds).Gageloc.loc(:,1));  %currently having rule that only 1 gage per reach - typically at top but not bottom
+        SR.(ds).Gageloc.flowgage(:,SR.(ds).(wds).(rs).gagelocid)=SR.(ds).(wds).(rs).Qnode(:,sr);
+    end
 end
+
+SR.(ds).(wds).(rs).wcreduceamtlast=zeros(rsteps,1);
         
 
-gagediff=zeros(rsteps,1);
-SR.(ds).(wds).(rs).gagediffportion=zeros(rsteps,length(SR.(ds).(wds).(rs).SR));
-SR.(ds).(wds).(rs).gagedifflast=zeros(rsteps,1);
-SR.(ds).(wds).(rs).Quswc=zeros(rsteps,length(SR.(ds).(wds).(rs).SR)); %will be zero before iteration loops
+SR.(ds).(wds).(rs).wcreducelist=[];
+negnativeussumsumprevious=0;
+nids1=[datestid:nhrs:rsteps];
+nids2=nids1+nhrs-1;
 gagediffavg=10;
 
 gain=SR.(ds).(wds).(rs).gaininitial(1);
@@ -934,9 +991,16 @@ SR.(ds).(wds).(rs).gain=gain;
 
 %while abs(gagediffavg)>gainchangelimit
 
-change=1;
+change=1;changecount=0;
 while change==1
     change=0;
+
+gagediff=zeros(rsteps,1);
+SR.(ds).(wds).(rs).gagediffportion=zeros(rsteps,length(SR.(ds).(wds).(rs).SR)); %guess need to restart when doing reoperation
+SR.(ds).(wds).(rs).gagedifflast=zeros(rsteps,1);
+SR.(ds).(wds).(rs).sraddamt=zeros(rsteps,length(SR.(ds).(wds).(rs).SR));  %this is debatable if needs to be restarted for every reoperation
+SR.(ds).(wds).(rs).sraddamtus=zeros(rsteps,length(SR.(ds).(wds).(rs).SR));  %this is debatable if needs to be restarted for every reoperation
+SR.(ds).(wds).(rs).sraddamtds=zeros(rsteps,length(SR.(ds).(wds).(rs).SR));  %this is debatable if needs to be restarted for every reoperation
 
 for ii=1:iternum.(srmethod)
     
@@ -987,40 +1051,60 @@ for sr=SR.(ds).(wds).(rs).SR
     Qnode=SR.(ds).(wds).(rs).Qnode(:,sr);  %if branchid above this will be coming from branch
     %new setup - going from Qusnode to Qus (after usnodes) then to Qds
     Qus=Qusnode+type*Qnode;
-    Qus=max(0,Qus);
-    
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%
-    % INADVERTANT DIVERSIONS - ACTION 3
+    % INADVERTANT DIVERSIONS - ACTION 3a
     % after know what totalwcreleases are and have potentially reduced those where indicated by gage
     % then if native (river-totalwcreleases) negative at internal then increase river flow at that node
-    % thinking that internal portion isnt as the same or as pure as length based ratio
-    
-    %native as river minus total of all wc releases
+    % thinking that internal portion isnt as pure as length based ratio
+    if inadv3a_increaseint == 1
     Qusnative=Qus-SR.(ds).(wds).(rs).Quswc(:,sr);
     negnativeus=-1*min(0,Qusnative);
-    negnativeussum=sum(negnativeus(datest:end,:));
-    if negnativeussum>0 && inadv3_increaseint == 1
-        
-        
-        
-        
+    negnativeussum=sum(negnativeus(datestid:end,1));
+    if sr>1 && negnativeussum>0
+        if strcmp(wds,'WD17') & strcmp(rs,'R3') & sr==3
+            error('stop')
+        end
+        addamt=zeros(rsteps,1);
+        for i=1:length(nids1)
+            negnatussumi=sum(negnativeus(nids1(i):nids2(i),1));
+            if negnatussumi>0
+               addamt(nids1(i):nids2(i),1)=negnatussumi/nhrs*ones(nhrs,1);
+            end
+        end
+        SR.(ds).(wds).(rs).sraddamt(:,sr-1)=SR.(ds).(wds).(rs).sraddamt(:,sr-1)+addamt; %looking at Qus - adding to sraddamt/Qds of previous sr
+        SR.(ds).(wds).(rs).Qds(:,sr-1)=SR.(ds).(wds).(rs).Qds(:,sr-1)+addamt;
+        Qusnode=Qusnode+addamt;
+        Qus=Qus+addamt;
+        SR.(ds).(wds).(rs).gagediffportion(:,sr)=SR.(ds).(wds).(rs).gagediffportion(:,sr)-addamt; %this is needed only because gagediff isn't changed on last iteration loop..pushes adjustment from previous sr to current
     end
+    end
+    
+    if ii>1 && inadv3b_increaseint == 1
+        Qus4=max(Qus,SR.(ds).(wds).(rs).Quswc(:,sr));
+        addamt=Qus4-Qus;
+        addamtsum=sum(addamt(datestid:end,1));
+        if addamtsum>0
+            logm=['To avoid internal negative native flow, added US: ' num2str(addamtsum) ' for wd:' wds ' r:' rs ' sr:' num2str(sr)];
+            domessage(logm,logfilename,displaymessage,writemessage)
+            SR.(ds).(wds).(rs).sraddamtus(:,sr)=addamt;
+            Qus=Qus4;
+        end        
+    end
+    
+    Qus=max(0,Qus);
+    
 
-    
-       
-    
     
     
     if gain==-999   %gain=-999 to not run transittime but can have loss percent 
         losspercent=SR.(ds).(wds).(rs).losspercent(sr);
         Qds=Qus*(1-losspercent/100);
-        celeritya=SR.(ds).(wds).(rs).celeritya(sr);
-        celerityb=SR.(ds).(wds).(rs).celerityb(sr);
-        celerity=celeritya*(max(minc,(Qus+Qds)/2)).^celerityb;
-        dispersiona=SR.(ds).(wds).(rs).dispersiona(sr);
-        dispersionb=SR.(ds).(wds).(rs).dispersionb(sr);
-        dispersion=dispersiona*(max(minc,(Qus+Qds)/2)).^dispersionb;    
+        celerity=SR.(ds).(wds).(rs).celeritya(sr)*max(minc,(Qus+Qds)/2).^SR.(ds).(wds).(rs).celerityb(sr);
+        dispersion=SR.(ds).(wds).(rs).dispersiona(sr)*max(minc,(Qus+Qds)/2).^SR.(ds).(wds).(rs).dispersionb(sr);
     else
+%         celerity=SR.(ds).(wds).(rs).celeritya(sr)*max(minc,Qus).^SR.(ds).(wds).(rs).celerityb(sr);
+%         dispersion=SR.(ds).(wds).(rs).dispersiona(sr)*max(minc,Qus).^SR.(ds).(wds).(rs).dispersionb(sr);
         if strcmp(srmethod,'j349')
             gainportion=gain*SR.(ds).(wds).(rs).reachportion(sr);
             Qus1=max(minj349,Qus);
@@ -1036,8 +1120,45 @@ for sr=SR.(ds).(wds).(rs).SR
     Qavg=(max(Qus,minc)+max(Qds,minc))/2;
     width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
     evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr); %EvapFactor = 0 to not have evap 
-    Qds=Qds-evap+SR.(ds).(wds).(rs).gagediffportion(:,sr);
+    Qds=Qds-evap+SR.(ds).(wds).(rs).gagediffportion(:,sr)+SR.(ds).(wds).(rs).sraddamt(:,sr);
 %    Qds=Qds-evap+gagediff*SR.(ds).(wds).(rs).reachportion(sr);
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%
+    % INADVERTANT DIVERSIONS - ACTION 3b
+    % also checking at Qds - shouldnt happen here much if at all but I guess just in case
+    if inadv3a_increaseint == 1
+    Qdsnative=Qds-SR.(ds).(wds).(rs).Qdswc(:,sr);
+    negnativeds=-1*min(0,Qdsnative);
+    negnativedssum=sum(negnativeds(datestid:end,1));
+    if sr<srb && negnativedssum>0
+        if strcmp(wds,'WD17') & strcmp(rs,'R3') & sr==3
+            error('stop')
+        end
+        addamt=zeros(rsteps,1);
+        for i=1:length(nids1)
+            negnatdssumi=sum(negnativeds(nids1(i):nids2(i),1));
+            if negnatdssumi>0
+               addamt(nids1(i):nids2(i),1)=negnatdssumi/nhrs*ones(nhrs,1);
+            end
+        end
+        SR.(ds).(wds).(rs).sraddamt(:,sr)=SR.(ds).(wds).(rs).sraddamt(:,sr)+addamt; %looking at Qds - adding to same sr
+        Qds=Qds+addamt;
+        SR.(ds).(wds).(rs).gagediffportion(:,sr+1)=SR.(ds).(wds).(rs).gagediffportion(:,sr+1)-addamt; %this is needed only because gagediff isn't changed on last iteration loop..pushes adjustment from current sr to next
+    end
+    end
+    
+    if ii>1 && inadv3b_increaseint == 1
+        Qds4=max(Qds,SR.(ds).(wds).(rs).Qdswc(:,sr));
+        addamt=Qds4-Qds;
+        addamtsum=sum(addamt(datestid:end,1));
+        if addamtsum>0
+            logm=['To avoid internal negative native flow, added DS: ' num2str(addamtsum) ' for wd:' wds ' r:' rs ' sr:' num2str(sr)];
+            domessage(logm,logfilename,displaymessage,writemessage)
+            SR.(ds).(wds).(rs).sraddamtds(:,sr)=addamt;
+            Qds=Qds4;
+        end
+    end
+
     Qds=max(0,Qds);
     
 %    SR.(ds).(wds).(rs).gagediffportion(:,sr)=gagediff*SR.(ds).(wds).(rs).reachportion(sr);
@@ -1049,6 +1170,12 @@ for sr=SR.(ds).(wds).(rs).SR
     SR.(ds).(wds).(rs).dispersion(:,sr)=dispersion;    
     SR.(ds).Rivloc.flowriv.us(:,SR.(ds).(wds).(rs).locid(sr))=Qus;
     SR.(ds).Rivloc.flowriv.ds(:,SR.(ds).(wds).(rs).locid(sr))=Qds;
+    SR.(ds).Rivloc.celerity(:,SR.(ds).(wds).(rs).locid(sr))=celerity;   
+
+    if SR.(ds).(wds).(rs).type(sr)==0
+        SR.(ds).Gageloc.flowriv(:,SR.(ds).(wds).(rs).gagelocid)=Qusnode; %or Qus
+    end
+
     Qusnode=Qds;
 end %sr
 
@@ -1064,30 +1191,30 @@ else
         Qdsgage=SR.(ds).(wds).(['R' num2str(r+1)]).Qnode(:,1);
         gagediffnew=Qdsgage-Qds;
         gagediffchange=gagediffnew-gagediff;
-        gagediffavg=gagediffchange(rdatesstartid-1,1);
+        gagediffavg=gagediffchange(datestid-1,1);
         gagediff=gagediffnew+gagediff;
-        
+
         if ii<iternum.(srmethod)
-%            SR.(ds).(wds).(rs).gagediffportion=gagediff*SR.(ds).(wds).(rs).reachportion;
-            %reverse gagediff with evaporation to determine portion to apply within each reach
-            gagediffds=gagediff;
-            exchtimerem=0;
-            for sr=srb:-1:srt
-                gagediffportion=gagediffds*SR.(ds).(wds).(rs).reachportion(sr)/sum(SR.(ds).(wds).(rs).reachportion(1:sr));
-                SR.(ds).(wds).(rs).gagediffportion(:,sr)=gagediffportion;
-                celerity=SR.(ds).(wds).(rs).celerity(:,sr);
-                if or(strcmp(srmethod,'j349'),strcmp(srmethod,'muskingum'))
-                    [gagediffus,exchtimerem,celerity]=reversecelerity(ds,wds,rs,sr,gagediffds,exchtimerem,rhours,rsteps,celerity); %using river celerity
-                else
-                    gagediffus=gagediffds;
-                end
-                gagediffus=gagediffus-gagediffportion;
-                Qavg=(max(0,gagediffus)+max(0,gagediffds))/2;  %hopefully this doesn't smeer timing
-                width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
-                evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
-                gagediffus=gagediffus+evap;
-                gagediffds=gagediffus;
-            end
+            SR.(ds).(wds).(rs).gagediffportion=gagediff*SR.(ds).(wds).(rs).reachportion;
+%             %reverse gagediff with evaporation to determine portion to apply within each reach
+%             gagediffds=gagediff;
+%             exchtimerem=0;
+%             for sr=srb:-1:srt
+%                 gagediffportion=gagediffds*SR.(ds).(wds).(rs).reachportion(sr)/sum(SR.(ds).(wds).(rs).reachportion(1:sr));
+%                 SR.(ds).(wds).(rs).gagediffportion(:,sr)=gagediffportion;
+%                 celerity=SR.(ds).(wds).(rs).celerity(:,sr);
+%                 if or(strcmp(srmethod,'j349'),strcmp(srmethod,'muskingum'))
+%                     [gagediffus,exchtimerem,revcelerity]=reversecelerity(ds,wds,rs,sr,gagediffds,exchtimerem,rhours,rsteps,celerity); %using river celerity
+%                 else
+%                     gagediffus=gagediffds;
+%                 end
+%                 gagediffus=gagediffus-gagediffportion;
+%                 Qavg=(max(0,gagediffus)+max(0,gagediffds))/2;  %hopefully this doesn't smeer timing
+%                 width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
+%                 evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
+%                 gagediffus=gagediffus+evap;
+%                 gagediffds=gagediffus;
+%             end
         elseif adjustlastsrtogage==1
             SR.(ds).(wds).(rs).gagedifflast=gagediffnew;
             SR.(ds).(wds).(rs).Qds(:,end)=Qdsgage;
@@ -1108,17 +1235,26 @@ end %ii iteration on gainchange
 %   this is so that can re-run gage loop if calculated native flows go negative
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+% for i=1:length(SR.(ds).(wds).(rs).wcreducelist)
+%     ws=SR.(ds).(wds).(rs).wcreducelist{i};
+%     SR.(ds).(wds).(rs).(ws).wcreduce=zeros(1,length(SR.(ds).(wds).(rs).SR));
+%     SR.(ds).(wds).(rs).(ws).wcreduceamt=zeros(rsteps,length(SR.(ds).(wds).(rs).SR));
+% end
+
 changewc=1;changewccount=0;
 while changewc==1
+    changewccount=changewccount+1;
     changewc=0;
     if changewccount==0
-        disp(['running admin loop on D:' ds ' WD:' wds ' R:' rs])
+        logm=['running admin loop on D:' ds ' WD:' wds ' R:' rs];
+        domessage(logm,logfilename,displaymessage,writemessage)
     else
-        disp(['Reoperating admin loop, count: ' num2str(changewccount) ' on D:' ds ' WD:' wds ' R:' rs])
+        logm=['Reoperating admin loop, count: ' num2str(changewccount) ' on D:' ds ' WD:' wds ' R:' rs];
+        domessage(logm,logfilename,displaymessage,writemessage)
     end
 
-wwcnumids=intersect(find(strcmp(SR.(ds).WCloc.Rloc(:,3),wds)),find(strcmp(SR.(ds).WCloc.Rloc(:,4),rs)));
-wwcnums=SR.(ds).WCloc.Rloc(wwcnumids,1);
+wwcnumids=intersect(find(strcmp(SR.(ds).WC.Rloc(:,3),wds)),find(strcmp(SR.(ds).WC.Rloc(:,4),rs)));
+wwcnums=SR.(ds).WC.Rloc(wwcnumids,1);
 
 %will refresh to zero every time reoperate
 for sr=SR.(ds).(wds).(rs).SR
@@ -1131,19 +1267,20 @@ SR.(ds).Rivloc.flowwc.ds(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to
 end
 
 for w=1:length(wwcnumids)
-ws=SR.(ds).WCloc.Rloc{wwcnumids(w),1};
-srt=SR.(ds).WCloc.Rloc{wwcnumids(w),5};
-srb=SR.(ds).WCloc.Rloc{wwcnumids(w),6};
-Rtr=SR.(ds).WCloc.Rloc{wwcnumids(w),7};
-Rtb=SR.(ds).WCloc.Rloc{wwcnumids(w),8};
-SRtr=SR.(ds).WCloc.Rloc{wwcnumids(w),9};
-SRtb=SR.(ds).WCloc.Rloc{wwcnumids(w),10};
-wdidfrom=SR.(ds).WCloc.Rloc{wwcnumids(w),11};
-wdidto=SR.(ds).WCloc.Rloc{wwcnumids(w),12};
-wdidfromid=SR.(ds).WCloc.Rloc{wwcnumids(w),13};
-wdidtoid=SR.(ds).WCloc.Rloc{wwcnumids(w),14};
+ws=SR.(ds).WC.Rloc{wwcnumids(w),1};
+srtt=SR.(ds).WC.Rloc{wwcnumids(w),5};
+srtb=SR.(ds).WC.Rloc{wwcnumids(w),6};
+Rtr=SR.(ds).WC.Rloc{wwcnumids(w),7};
+Rtb=SR.(ds).WC.Rloc{wwcnumids(w),8};
+SRtr=SR.(ds).WC.Rloc{wwcnumids(w),9};
+SRtb=SR.(ds).WC.Rloc{wwcnumids(w),10};
+wdidfrom=SR.(ds).WC.Rloc{wwcnumids(w),11};
+wdidto=SR.(ds).WC.Rloc{wwcnumids(w),12};
+wdidfromid=SR.(ds).WC.Rloc{wwcnumids(w),13};
+wdidtoid=SR.(ds).WC.Rloc{wwcnumids(w),14};
 
-disp(['running admin loop on waterclass:' ws])
+logm=['running admin loop on waterclass:' ws ' ' WC.D2.WC.(ws).wc];
+domessage(logm,logfilename,displaymessage,writemessage)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % If r is top reach within WD get original or parked release
@@ -1192,14 +1329,14 @@ if wdidtoid==wdidfromid   %EXCHANGES
         SR.(ds).(wdsnew).(ws).Qusnoderelease(:,lsr)=zeros(rsteps,1);
         SR.(ds).(wdsnew).(ws).Qusrelease(:,lsr)=zeros(rsteps,1);
         SR.(ds).(wdsnew).(ws).Qdsrelease(:,lsr)=-1*release;
-%        SR.(ds).WCloc.(ws)=[SR.(ds).WCloc.(ws);[{ds},{wdsnew},{rs},{sr},{lsr},{2}]];  %type=1release,2exchange - instead putting this in in exchange loop
+%        SR.(ds).WC.(ws)=[SR.(ds).WC.(ws);[{ds},{wdsnew},{rs},{sr},{lsr},{2}]];  %type=1release,2exchange - instead putting this in in exchange loop
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %if want to do something with missing releases (ie put into Qusrelease) put an else here
         
     end
     
 else
-for sr=srt:srb
+for sr=srtt:srtb
     if and(sr==SRtr,r==Rtr)
         Qusnodepartial=SR.(ds).(wds).(rs).Qus(:,sr); %this makes Qusnoderelease=0
         if pred==1 %predictive case
@@ -1210,17 +1347,19 @@ for sr=srt:srb
     else
         type=SR.(ds).(wds).(rs).type(1,sr);
         Qnode=SR.(ds).(wds).(rs).Qnode(:,sr);
-        Quspartial=Qusnodepartial+type*Qnode;
+        Quspartial=Qusnodepartial+type*Qnode+SR.(ds).(wds).(rs).sraddamtus(:,sr);
     end
     %reduce WC based on negative native at gage
-    if isfield(SR.(ds).(wds).(rs),ws) && isfield(SR.(ds).(wds).(rs).(ws),'wcreduce') && SR.(ds).(wds).(rs).(ws).wcreduce(sr)==1
+%    if isfield(SR.(ds).(wds).(rs),ws) && isfield(SR.(ds).(wds).(rs).(ws),'wcreduce') && SR.(ds).(wds).(rs).(ws).wcreduce(sr)==1
+    if sum(strcmp(SR.(ds).(wds).(rs).wcreducelist,ws))>0 && inadv2_reducewcpushUS==1
         Quspartial=Quspartial+SR.(ds).(wds).(rs).(ws).wcreduceamt(:,sr);
         release=release-SR.(ds).(wds).(rs).(ws).wcreduceamt(:,sr);        
     end
     
     gain=SR.(ds).(wds).(rs).gain(end);
     if pred==1
-        celerity=-999;dispersion=-999;
+        celerity=SR.(ds).(wds).(rs).celeritya(sr)*max(minc,Quspartial).^SR.(ds).(wds).(rs).celerityb(sr);
+        dispersion=SR.(ds).(wds).(rs).dispersiona(sr)*max(minc,Quspartial).^SR.(ds).(wds).(rs).dispersionb(sr);
     else
         celerity=SR.(ds).(wds).(rs).celerity(:,sr);
         dispersion=SR.(ds).(wds).(rs).dispersion(:,sr);
@@ -1245,12 +1384,18 @@ for sr=srt:srb
     Qavg=(max(Quspartial,minc)+max(Qdspartial,minc))/2;
     width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
     evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
-    Qdspartial=Qdspartial-evap+SR.(ds).(wds).(rs).gagediffportion(:,sr);
+    Qdspartial=Qdspartial-evap+SR.(ds).(wds).(rs).gagediffportion(:,sr)+SR.(ds).(wds).(rs).sraddamt(:,sr)+SR.(ds).(wds).(rs).sraddamtds(:,sr);
     if adjustlastsrtogage==1 && sr==srb
         Qdspartial=Qdspartial+SR.(ds).(wds).(rs).gagedifflast;
     end
     
-    Qdspartial=max(0,Qdspartial);
+    
+    if sum(strcmp(SR.(ds).(wds).(rs).wcreducelist,ws))>0 && inadv2_reducewcpushUS==1 && sr==SR.(ds).(wds).(rs).SR(end)
+        Qdspartial=Qdspartial+SR.(ds).(wds).(rs).(ws).wcreduceamtlast;
+    end
+
+    
+    Qdspartial=max(0,Qdspartial);    
 
     SR.(ds).(wds).(rs).(ws).Qusnodepartial(:,sr)=Qusnodepartial;
     SR.(ds).(wds).(rs).(ws).Quspartial(:,sr)=Quspartial;
@@ -1283,7 +1428,7 @@ for sr=srt:srb
     % as could be that we just arent estimating interior node amount correctly given return flows etc
     SR.(ds).(wds).(rs).QSRadd(:,sr)=SR.(ds).(wds).(rs).QSRadd(:,sr)+QSRadd;  %currently just for output file - this is going to get overwritten by subsequent water classes (??)
 %    SR.(ds).(wds).(rs).QSRaddcum(:,1:sr)=cumsum(SR.(ds).(wds).(rs).QSRadd(:,1:sr),2);  %this is what might get added back in as effect would go downstream   
-    QSRaddsum=sum(QSRadd(datest:end));
+    QSRaddsum=sum(QSRadd(datestid:end));
     if QSRaddsum>0 && inadv1_letwaterby==1 %if internal correction so native doesnt go negate
         release=max(0,release);
         if gain==-999
@@ -1310,12 +1455,20 @@ for sr=srt:srb
         Qusrelease=max(release,Qusrelease);  %Qusrelease/Qdsrelease max of partial/cut method and just running release by itself
         Qdsrelease=max(dsrelease,Qdsrelease);
         Qdspartial=SR.(ds).(wds).(rs).Qds(:,sr)-Qdsrelease;
-        disp(['To avoid cutting wc: ' ws ' total wcamount exceeding river: ' num2str(QSRaddsum) ' added US:' num2str(sum(QSRaddus(datest:end))) ' added DS:' num2str(sum(QSRaddds(datest:end))) ' wd:' wds ' r:' rs ' sr:' num2str(sr)])
+        logm=['To avoid cutting wc: ' ws ' total wcamount exceeding river: ' num2str(QSRaddsum) ' added US:' num2str(sum(QSRaddus(datestid:end))) ' added DS:' num2str(sum(QSRaddds(datestid:end))) ' wd:' wds ' r:' rs ' sr:' num2str(sr)];
+        domessage(logm,logfilename,displaymessage,writemessage)
     else
         SR.(ds).(wds).(rs).(ws).QSRadded(:,sr)=0;
         SR.(ds).(wds).(rs).(ws).QSRaddus(:,sr)=zeros(rsteps,1);
         SR.(ds).(wds).(rs).(ws).QSRaddds(:,sr)=zeros(rsteps,1);
     end
+    
+    if sum(strcmp(SR.(ds).(wds).(rs).wcreducelist,ws))>0 && inadv2_reducewcpushUS==1 && sr==SR.(ds).(wds).(rs).SR(end)
+        Qdspartial=Qdspartial+SR.(ds).(wds).(rs).(ws).wcreduceamtlast;
+        Qdsrelease=Qdsrelease-SR.(ds).(wds).(rs).(ws).wcreduceamtlast;
+        Qdsrelease=max(0,Qdsrelease);
+    end    
+    
     
     % wc listed within R at sr position
     SR.(ds).(wds).(rs).(ws).Qusnoderelease(:,sr)=Qusnoderelease;
@@ -1333,11 +1486,11 @@ for sr=srt:srb
     SR.(ds).(wds).(ws).Qusrelease(:,lsr)=Qusrelease;
     SR.(ds).(wds).(ws).Qdsrelease(:,lsr)=Qdsrelease;
 
-    % WCloc.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/2-exch) is num)
+    % WC.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/2-exch) is num)
     SR.(ds).Rivloc.flowwc.us(:,SR.(ds).(wds).(rs).locid(sr))=SR.(ds).Rivloc.flowwc.us(:,SR.(ds).(wds).(rs).locid(sr))+Qusrelease;
     SR.(ds).Rivloc.flowwc.ds(:,SR.(ds).(wds).(rs).locid(sr))=SR.(ds).Rivloc.flowwc.ds(:,SR.(ds).(wds).(rs).locid(sr))+Qdsrelease;
-    %this has Rivloc column, wc-id, line within WCloc.ws to get SR nodes
-    SR.(ds).Rivloc.flowwc.wcloc=[SR.(ds).Rivloc.flowwc.wcloc;{SR.(ds).(wds).(rs).locid(sr)} {ws} {length(SR.(ds).WCloc.(ws)(:,1))}];
+    %this has Rivloc column, wc-id, line within WC.ws to get SR nodes
+    SR.(ds).Rivloc.flowwc.wcloc=[SR.(ds).Rivloc.flowwc.wcloc;{SR.(ds).(wds).(rs).locid(sr)} {ws} {length(SR.(ds).WC.(ws)(:,1))}];
     
     Qusnodepartial=Qdspartial;
     release=Qdsrelease;
@@ -1384,88 +1537,138 @@ SR.(ds).(wds).(rs).Qdsnative=SR.(ds).(wds).(rs).Qds-SR.(ds).(wds).(rs).Qdswc;
 % if native (river-totalwcreleases) negative at gage then seems there was an actual inadvertant diversion
 % so try to reduce wc releases where they are going negative at internal node upstream
     
-negnativeds=-1*min(0,SR.(ds).(wds).(rs).Qdsnative);
-negnativedssum=sum(negnativeds(datest:end,:));
+negnativeds=-1*min(0,SR.(ds).(wds).(rs).Qdsnative(:,end));
+negnativedssum=sum(negnativeds(datestid:end,:));
 
-if r~=Rb & negnativedssum(1,end)>0 & inadv2_reducewc==1
-    %trying to find best upstream spots to reduce wcs
-    disp(['Negative Native Flow at end of wd:' wds ' r:' rs ' total amount:' num2str(negnativedssum(1,end))]);
-    negnativeus=-1*min(0,SR.(ds).(wds).(rs).Qusnative);
-    negnativeussum=sum(negnativeus(datest:end,:));
-    negnativeussumoutflows=-1*min(0,negnativeussum.*SR.(ds).(wds).(rs).type); %just at outflow nodes
-    clear negnativeussumdiff
-    negnativeussumdiff(1)=negnativeussumoutflows(1);  %thinking increase from previous node is potentially attributable to inadvertant at us node
-    if length(negnativeussum)>1
-        for i=length(negnativeussum):-1:2
-            negnativeussumdiff(i)=max(0,negnativeussumoutflows(i)-sum(negnativeussumoutflows(1:i-1)));
-        end
-    end
-    if sum(negnativeussumdiff)==0
-        wcreduceperc=ones(1,length(negnativeussumdiff))/length(negnativeussumdiff);
-    else
-        wcreduceperc=negnativeussumdiff/sum(negnativeussumdiff);
-    end
-    wcreducepercids=find(wcreduceperc>0);
+if r~=Rb && negnativedssum>wcreduceamtlimit
 
-    srb=length(wcreduceperc);
-    for i=1:length(wcreducepercids)
-        exchtimerem=0;
-        srt=wcreducepercids(i);
-        wcreducepercent=wcreduceperc(wcreducepercids(i));
-        Qnegds=negnativeds(:,end)*wcreducepercent;
+    if inadv2_reducewcpushUS==1 && changewccount<iternative
+        %fthis option pushes wc reduction upstream to most likely upstream spots to reduce wcs
+        %would not push upstream on last iteration but just apply last/end correction
+        changewc=1;
+        logm=['Negative Native Flow at end of wd:' wds ' r:' rs ' total amount:' num2str(negnativedssum) ' will reoperate admin loop'];
+        domessage(logm,logfilename,displaymessage,writemessage)
         
-        for sr=srb:-1:srt
-            celerity=SR.(ds).(wds).(rs).celerity(:,sr);
-            if or(strcmp(srmethod,'j349'),strcmp(srmethod,'muskingum'))
-                [Qnegus,exchtimerem,celerity]=reversecelerity(ds,wds,rs,sr,Qnegds,exchtimerem,rhours,rsteps,celerity); %using river celerity
-            else
-                Qnegus=Qnegds;
+        %finding water classes that are running in stream both at end where gage
+        srnb=SR.(ds).(wds).(rs).SR(end);
+        wwcnumids=intersect(find(strcmp(SR.(ds).WC.Rloc(:,3),wds)),find(strcmp(SR.(ds).WC.Rloc(:,4),rs)));
+        wwcnumids=intersect(find([SR.(ds).WC.Rloc{:,6}]==srnb),wwcnumids);
+        
+        %trying to find best upstream spots to reduce wcs
+        negnativeus=-1*min(0,SR.(ds).(wds).(rs).Qusnative);
+        negnativeussum=sum(negnativeus(datestid:end,:));
+        negnativeussumoutflows=-1*min(0,negnativeussum.*SR.(ds).(wds).(rs).type); %just at outflow nodes
+        clear negnativeussumdifRf
+        negnativeussumdiff(1)=negnativeussumoutflows(1);  %thinking increase from previous node is potentially attributable to inadvertant at us node
+        if length(negnativeussum)>1
+            for i=length(negnativeussum):-1:2
+                negnativeussumdiff(i)=max(0,negnativeussumoutflows(i)-sum(negnativeussumoutflows(1:i-1)));
             end
-            Qavg=Qnegus;  %us and ds should be same amounts but using us to not smeer timing
-            width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
-            evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
-            Qnegus=Qnegus+evap;
-            Qnegds=Qnegus;
+        end
+        if sum(negnativeussumdiff)==0
+            wcreduceperc=ones(1,length(negnativeussumdiff))/length(negnativeussumdiff);
+        else
+            wcreduceperc=negnativeussumdiff/sum(negnativeussumdiff);
+        end
+        wcreducepercids=find(wcreduceperc>0);
+        
+        for i=1:length(wcreducepercids)
+            exchtimerem=0;
+            srnt=wcreducepercids(i);
+            wcreducepercent=wcreduceperc(wcreducepercids(i));
+            Qnegds=negnativeds*wcreducepercent;
+            
+            for sr=srnb:-1:srnt
+                celerity=SR.(ds).(wds).(rs).celerity(:,sr);
+                if or(strcmp(srmethod,'j349'),strcmp(srmethod,'muskingum'))
+                    [Qnegus,exchtimerem,celerity]=reversecelerity(ds,wds,rs,sr,Qnegds,exchtimerem,rhours,rsteps,celerity); %using river celerity
+                else
+                    Qnegus=Qnegds;
+                end
+                Qavg=Qnegus;  %us and ds should be same amounts but using us to not smeer timing
+                width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
+                evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
+                Qnegus=Qnegus+evap;
+                Qnegds=Qnegus;
+            end
+            
+            %finding water classes that are also running in stream at given (top) node for reduction
+            wwcnumidst=intersect(find([SR.(ds).WC.Rloc{:,5}]<=srnt),wwcnumids);
+            
+            SR.(ds).(wds).(rs).wcreduceamt(:,srnt)=SR.(ds).(wds).(rs).wcreduceamt(:,srnt)+Qnegus;
+            
+            for w=1:length(wwcnumidst)
+                ws=SR.(ds).WC.Rloc{wwcnumidst(w),1};
+                if ~isfield(SR.(ds).(wds).(rs).(ws),'wcreduce')
+                    SR.(ds).(wds).(rs).wcreducelist=[SR.(ds).(wds).(rs).wcreducelist {ws}];
+                    SR.(ds).(wds).(rs).(ws).wcreduce=zeros(1,length(SR.(ds).(wds).(rs).SR));
+                    SR.(ds).(wds).(rs).(ws).wcreduceamt=zeros(rsteps,length(SR.(ds).(wds).(rs).SR));
+                    SR.(ds).(wds).(rs).(ws).wcreduceamtlast=zeros(rsteps,1);
+                end
+                wcportion=wcreducepercent*SR.(ds).(wds).(rs).(ws).Qusrelease(:,sr)./SR.(ds).(wds).(rs).Quswc(:,sr);
+                wcreduceamt=Qnegus.*wcportion;
+                nanids=find(isnan(wcreduceamt));
+                wcreduceamt(nanids)=0;
+                SR.(ds).(wds).(rs).(ws).wcreduce(:,srnt)=1;
+                SR.(ds).(wds).(rs).(ws).wcreduceamt(:,srnt)=SR.(ds).(wds).(rs).(ws).wcreduceamt(:,srnt)+wcreduceamt;
+                logm=['Reducing WC:' ws ' by additional:' num2str(sum(wcreduceamt)) ' total:' num2str(sum(SR.(ds).(wds).(rs).(ws).wcreduceamt(:,srnt))) ' wd:' wds ' r:' rs ' sr: ' num2str(srnt) ' iteration: ' num2str(changewccount)];
+                domessage(logm,logfilename,displaymessage,writemessage)
+
+            end
         end
         
-        %finding water classes that are running in stream both at given node for reduction and at end where gage 
-        wwcnumids=intersect(find(strcmp(SR.(ds).WCloc.Rloc(:,3),wds)),find(strcmp(SR.(ds).WCloc.Rloc(:,4),rs)));
-        wwcnumids=intersect(find([SR.(ds).WCloc.Rloc{:,5}]<=srt),wwcnumids);
-        wwcnumids=intersect(find([SR.(ds).WCloc.Rloc{:,6}]==srb),wwcnumids); %wc also has to be in stream at end where gage (?)
-%        wwcnumids=intersect(find([SR.(ds).WCloc.Rloc{:,6}]>=srb),wwcnumids);
-             
+        
+    elseif inadv2_reducewclastatgage==1 | (inadv2_reducewcpushUS==1 && changewccount==iternative)
+        %eiter with this option only or on last iteration of previous option - find final adjustment just to apply at very end rather than working it back up
+        logm=['Negative Native Flow at end of wd:' wds ' r:' rs ' total amount:' num2str(negnativedssum) ' will just reduce wc at end of R-reach and not reoperate admin loop'];
+        domessage(logm,logfilename,displaymessage,writemessage)
+        %finding water classes that are running in stream both at end where gage
+        srnb=SR.(ds).(wds).(rs).SR(end);
+        wwcnumids=intersect(find(strcmp(SR.(ds).WC.Rloc(:,3),wds)),find(strcmp(SR.(ds).WC.Rloc(:,4),rs)));
+        wwcnumids=intersect(find([SR.(ds).WC.Rloc{:,6}]==srnb),wwcnumids);
+        SR.(ds).(wds).(rs).wcreduceamtlast=negnativeds;
         for w=1:length(wwcnumids)
-            ws=SR.(ds).WCloc.Rloc{wwcnumids(w),1};
-            if ~isfield(SR.(ds).(wds).(rs).(ws),'wcreduce')
-                numsrs=length(SR.(ds).(wds).(rs).SR);
-                SR.(ds).(wds).(rs).(ws).wcreduce(1,numsrs)=0;
-                SR.(ds).(wds).(rs).(ws).wcreduceamt(:,numsrs)=zeros(rsteps,1);
-            end
-                
-            wcportion=wcreducepercent*SR.(ds).(wds).(rs).(ws).Qusrelease(:,sr)./SR.(ds).(wds).(rs).Quswc(:,sr);
-            wcreduceamt=Qnegus.*wcportion;
+            ws=SR.(ds).WC.Rloc{wwcnumids(w),1};
+            wcportion=SR.(ds).(wds).(rs).(ws).Qdsrelease(:,end)./SR.(ds).(wds).(rs).Qdswc(:,end);
+            wcreduceamt=negnativeds.*wcportion;
             nanids=find(isnan(wcreduceamt));
             wcreduceamt(nanids)=0;
-            SR.(ds).(wds).(rs).(ws).wcreduce(:,srt)=1; 
-            SR.(ds).(wds).(rs).(ws).wcreduceamt(:,srt)=SR.(ds).(wds).(rs).(ws).wcreduceamt(:,srt)+wcreduceamt;
-            if sum(wcreduceamt)>wcreduceamtlimit  %WATCH... limit based on how close have to get
-                changewc=1;  %WATCH - is this OK limit and/or need to cap iterations?
-                disp(['Reducing WC:' ws ' by additional:' num2str(sum(wcreduceamt)) ' total:' num2str(sum(SR.(ds).(wds).(rs).(ws).wcreduceamt(:,srt))) ' wd:' wds ' r:' rs ' sr: ' num2str(srt) ' will reoperate admin loop']);
-            end
+            SR.(ds).(wds).(rs).(ws).wcreduceamtlast(:,1)=wcreduceamt; 
+            logm=['Reducing WC:' ws ' by additional:' num2str(sum(wcreduceamt)) ' wd:' wds ' r:' rs ' at DS end of last sr'];
+            domessage(logm,logfilename,displaymessage,writemessage)
         end
-    end 
-end
-if changewc==1 & changewccount < iternative  %WATCH - is this OK cap on iterations?
-    changewccount=changewccount+1;
-elseif changewc==1
-    disp(['Stopping reoperation to reduce wcs as hit iterations: ' num2str(changewccount)]);
-    changewc=0;
-end
+        
+    end
+    if inadv2_reducewcpushUS==1 && changewccount==iternative
+        logm=['Stopping reoperation to reduce water classes as hit iteration limit: ' num2str(changewccount)];
+        domessage(logm,logfilename,displaymessage,writemessage)
+    end
 end
 
+end  %change wc
 
-if inadv3_increaseint==1 
-%    negnativeussum=sum(negnativeus(datest:end,:));
+if inadv3a_increaseint==1 
+    negnativeus=-1*min(0,SR.(ds).(wds).(rs).Qusnative);
+    negnativeussumsum=sum(sum(negnativeus(datestid:end,:)));
+    if negnativeussumsum-negnativeussumsumprevious>sraddamtlimit
+        change=1;
+        changecount=changecount+1;
+        negnativeussumsumprevious=negnativeussumsum;
+        logm=['Reoperating both gage and admin loops count:' num2str(changecount) ' to reduce internal negative flow amounts totaling:' num2str(sum(negnativeussumsum)) ' wd:' wds ' r:' rs];
+        domessage(logm,logfilename,displaymessage,writemessage)
+    end    
+end
+
+if inadv3b_increaseint==1 
+    negnativeus=-1*min(0,SR.(ds).(wds).(rs).Qusnative);
+    negnativeussumsum=sum(sum(negnativeus(datestid:end,:)));
+    if negnativeussumsum-negnativeussumsumprevious>sraddamtlimit
+        change=1;
+        changecount=changecount+1;
+        negnativeussumsumprevious=negnativeussumsum;
+        logm=['Reoperating both gage and admin loops count:' num2str(changecount) ' to reduce internal negative flow amounts totaling:' num2str(sum(negnativeussumsum)) ' wd:' wds ' r:' rs];
+        domessage(logm,logfilename,displaymessage,writemessage)
+    end    
 end
 
 end %change
@@ -1496,9 +1699,9 @@ if 1==2 %will cut this out
 % 
 % for w=1:length(wwcnums)
 % ws=wwcnums{w};
-% % if ~isfield(SR.(ds).WCloc,ws)  %if here will include missing WCs as empty
-% %     SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
-% %     SR.(ds).WCloc.(ws)=[];
+% % if ~isfield(SR.(ds).WC,ws)  %if here will include missing WCs as empty
+% %     SR.(ds).WC.wslist=[SR.(ds).WC.wslist,{ws}];
+% %     SR.(ds).WC.(ws)=[];
 % % end
 % 
 % %disp(['running admin loop for D:' ds ' WD:' wds ' wc:' ws]) 
@@ -1540,9 +1743,9 @@ if 1==2 %will cut this out
 %     wdidtoid=wdidfromid;
 %     disp(['WARNING: not routing (either exchange or missing) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ' sum: ' num2str(sum(release)) ]);
 % else
-%     if ~isfield(SR.(ds).WCloc,ws)
-%         SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
-%         SR.(ds).WCloc.(ws)=[];
+%     if ~isfield(SR.(ds).WC,ws)
+%         SR.(ds).WC.wslist=[SR.(ds).WC.wslist,{ws}];
+%         SR.(ds).WC.(ws)=[];
 %     end
 %     dswdidids=find(wdidtoid>=wdidfromid);
 %     if ~isempty(dswdidids)                              %DS RELEASE TO ROUTE (could include US Exchange that is first routed to end of WD)
@@ -1628,7 +1831,7 @@ if 1==2 %will cut this out
 %         SR.(ds).(wdsnew).(ws).Qusnoderelease(:,lsr)=zeros(length(rdates),1);
 %         SR.(ds).(wdsnew).(ws).Qusrelease(:,lsr)=zeros(length(rdates),1);
 %         SR.(ds).(wdsnew).(ws).Qdsrelease(:,lsr)=-1*release;
-% %        SR.(ds).WCloc.(ws)=[SR.(ds).WCloc.(ws);[{ds},{wdsnew},{rs},{sr},{lsr},{2}]];  %type=1release,2exchange - instead putting this in in exchange loop
+% %        SR.(ds).WC.(ws)=[SR.(ds).WC.(ws);[{ds},{wdsnew},{rs},{sr},{lsr},{2}]];  %type=1release,2exchange - instead putting this in in exchange loop
 %         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %         %if want to do something with missing releases (ie put into Qusrelease) put an else here
 %         
@@ -1754,12 +1957,12 @@ if 1==2 %will cut this out
 %     SR.(ds).(wds).(ws).Qusrelease(:,lsr)=Qusrelease;
 %     SR.(ds).(wds).(ws).Qdsrelease(:,lsr)=Qdsrelease;
 % 
-%     % WCloc.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/2-exch) is num)
-%     SR.(ds).WCloc.(ws)=[SR.(ds).WCloc.(ws);[{ds},{wds},{rs},{sr},{lsr},{1},{SR.(ds).(wds).(rs).wdid{sr}},{SR.(ds).(wds).(rs).dswdid{sr}}]];
+%     % WC.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/2-exch) is num)
+%     SR.(ds).WC.(ws)=[SR.(ds).WC.(ws);[{ds},{wds},{rs},{sr},{lsr},{1},{SR.(ds).(wds).(rs).wdid{sr}},{SR.(ds).(wds).(rs).dswdid{sr}}]];
 %     SR.(ds).Rivloc.flowwc.us(:,SR.(ds).(wds).(rs).locid(sr))=SR.(ds).Rivloc.flowwc.us(:,SR.(ds).(wds).(rs).locid(sr))+Qusrelease;
 %     SR.(ds).Rivloc.flowwc.ds(:,SR.(ds).(wds).(rs).locid(sr))=SR.(ds).Rivloc.flowwc.ds(:,SR.(ds).(wds).(rs).locid(sr))+Qdsrelease;
-%     %this has Rivloc column, wc-id, line within WCloc.ws to get SR nodes
-%     SR.(ds).Rivloc.flowwc.wcloc=[SR.(ds).Rivloc.flowwc.wcloc;{SR.(ds).(wds).(rs).locid(sr)} {ws} {length(SR.(ds).WCloc.(ws)(:,1))}];
+%     %this has Rivloc column, wc-id, line within WC.ws to get SR nodes
+%     SR.(ds).Rivloc.flowwc.wcloc=[SR.(ds).Rivloc.flowwc.wcloc;{SR.(ds).(wds).(rs).locid(sr)} {ws} {length(SR.(ds).WC.(ws)(:,1))}];
 %     
 %     Qusnodepartial=Qdspartial;
 %     
@@ -1827,9 +2030,9 @@ wwcnums=fieldnames(SR.(ds).EXCH);
 
 for w=1:length(wwcnums)
     ws=wwcnums{w};
-%     if ~isfield(SR.(ds).WCloc,ws)
-%         SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
-%         SR.(ds).WCloc.(ws)=[];
+%     if ~isfield(SR.(ds).WC,ws)
+%         SR.(ds).WC.wslist=[SR.(ds).WC.wslist,{ws}];
+%         SR.(ds).WC.(ws)=[];
 %     end
     wdidfromid=SR.(ds).EXCH.(ws).wdidfromid;
     wdidtoid=SR.(ds).EXCH.(ws).wdidtoid;
@@ -1879,13 +2082,9 @@ for w=1:length(wwcnums)
             end
             
             for sr=srb:-1:srt
-%                 celerity=SR.(ds).(wds).(rs).celerity(:,sr);
-%                 channellength=SR.(ds).(wds).(rs).channellength(:,sr);    
-%                QEus=QEds;  %NEED EXCHANGE METHOD/FUNCION HERE - wont alter amounts but will alter timing
-                
+                celerity=SR.(ds).(wds).(rs).celerity(:,sr);                
                 if or(strcmp(srmethod,'j349'),strcmp(srmethod,'muskingum'))
-%                    [QEus]=reversecelerity(QEds);
-                     [QEus,exchtimerem,celerity]=reversecelerity(ds,wds,rs,sr,QEds,exchtimerem,rhours,rsteps,-999);
+                     [QEus,exchtimerem,celerityex]=reversecelerity(ds,wds,rs,sr,QEds,exchtimerem,rhours,rsteps,-999);
                 else
                     QEus=QEds;
                 end
@@ -1901,8 +2100,8 @@ for w=1:length(wwcnums)
                 SR.(ds).(wds).(ws).Qusrelease(:,lsr)=QEus;
                 SR.(ds).(wds).(ws).Qdsrelease(:,lsr)=QEds;
                 
-                % WCloc.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/2-exch) is num)
-                SR.(ds).WCloc.(ws)=[SR.(ds).WCloc.(ws);[{ds},{wds},{rs},{sr},{lsr},{2},{SR.(ds).(wds).(rs).wdid{sr}},{SR.(ds).(wds).(rs).dswdid{sr}}]];
+                % WC.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/2-exch) is num)
+                SR.(ds).WC.(ws)=[SR.(ds).WC.(ws);[{ds},{wds},{rs},{sr},{lsr},{2},{SR.(ds).(wds).(rs).wdid{sr}},{SR.(ds).(wds).(rs).dswdid{sr}}]];
   
             end
         end
@@ -1911,6 +2110,288 @@ for w=1:length(wwcnums)
 
 end
 end
+
+save([basedir 'StateTL_SR' srmethod '.mat'],'SR');
+elseif runadminloop==2
+    load([basedir 'StateTL_SR' srmethod '.mat']);  
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% CAPTURE LOOP TO CHARACTERIZE AVAILABLE/CAPTURE AMT
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+if runcaptureloop==1
+    dt=rhours * 60 * 60; %sec
+    
+%for j=1:length(SR.(ds).Rivloc.loc(:,1))
+for m=1:length(SR.(ds).WDID(:,1))  %WDID list (as opposed to SR.(ds).Rivloc.loc{:,6}) has dups but will get all us nodes in case exchange to one
+
+%    towdid=SR.(ds).Rivloc.loc{j,6};
+    towdid=SR.(ds).WDID{m,1};
+    wcrlocids=find(strcmp(SR.(ds).WC.Rloc(:,12),towdid));
+    wwcnums=unique(SR.(ds).WC.Rloc(wcrlocids,1),'stable');
+    
+    if ~isempty(wwcnums)
+    for w=1:length(wwcnums)
+        ws=wwcnums{w};
+        releaseamt=SR.(ds).(SR.(ds).WC.(ws){1,2}).(SR.(ds).WC.(ws){1,3}).(ws).Qusrelease(datestid:end,(SR.(ds).WC.(ws){1,4}));
+        availableamt=SR.(ds).(SR.(ds).WC.(ws){end,2}).(SR.(ds).WC.(ws){end,3}).(ws).Qusrelease(datestid:end,(SR.(ds).WC.(ws){end,4}));        
+        captureamt=availableamt;
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % identifying when to lop off capture amt
+        %the following is as long as it is in case there are multiple releases (ie with zero release in between) in period
+        ispos=releaseamt>0;
+        isposchange=[ispos(1);ispos(2:end)-ispos(1:end-1)];
+        relstartids=find(isposchange==1);
+        relendids=find(isposchange==-1);
+        if length(relendids)<length(relstartids)
+            relendids=[relendids;length(releaseamt)+1];
+        end
+        relendids=relendids-1;
+        
+        if relstartids(1)>1
+            captureamt(1:relstartids(1),1)=0;  %sometimes some little noise before release even starts
+        end
+        
+        clear triggerid triggerupid
+        for i=1:length(relstartids)
+            if relendids(i)==length(releaseamt)  %release didnt end at end of period
+                triggerid(i)=length(releaseamt);    %put trigger id at end
+                srtimehrs=0;
+            else
+                avgrelease=mean(releaseamt(relstartids(i):relendids(i),1));  %will need to revise by periods if evaluating multiple releases
+                triggeramt=percrule*avgrelease;
+                
+                %first try - route/time end of release to location of towdid to start look for trigger amt on receeding limb
+                srtime=0;
+                for j=1:length(SR.(ds).WC.(ws)(:,1))
+                    channellength=SR.(ds).(SR.(ds).WC.(ws){j,2}).(SR.(ds).WC.(ws){j,3}).channellength(SR.(ds).WC.(ws){j,4});
+                    celerity=SR.(ds).(SR.(ds).WC.(ws){j,2}).(SR.(ds).WC.(ws){j,3}).celerity(SR.(ds).WC.(ws){j,4});
+                    if length(celerity)>1
+                        celerity=mean(celerity(datestid+relstartids(i)-1:datestid+relendids(i)-1,1));
+                    end
+                    srtime=srtime+(channellength*5280)/celerity/dt; %in hours
+                end
+                srtimehrs=floor(srtime*.8); %to be conservative on test seemed like j349 was about 15% quicker that celerity value .. humn.. 
+                if relendids(i)+srtimehrs > length(releaseamt)  %if estimated time exceeds end; back up to where can just in case..
+                    srtimehrs=length(releaseamt)-relendids(i);
+                end
+                belowtriggerids=find(availableamt(relendids(i)+srtimehrs:end,:)<=triggeramt);
+                if isempty(belowtriggerids)
+                    triggerid(i)=length(releaseamt);  %put trigger id at end
+                else
+                    triggerid(i)=belowtriggerids(1)+relendids(i)+srtimehrs-1;
+                end
+            end
+            if triggerid(i)<length(releaseamt)
+                if i==length(relstartids)
+                    triggerupid(i)=length(releaseamt);
+                else
+                    abovezeroids=find(availableamt(relstartids(i+1):end,:)>0);
+                    triggerupid(i)=abovezeroids(1);
+                    if triggerupid(i)==1
+                        abovetriggerids=find(availableamt(relstartids(i+1):end,:)>=triggeramt);
+                        triggerupid(i)=abovetriggerids(1);
+                    end
+                    triggerupid(i)=triggerupid(i)+relstartids(i+1)-1;
+                end
+                captureamt(triggerid(i):triggerupid(i))=0;
+            else
+                triggerupid(i)=length(releaseamt);
+            end            
+        end
+
+    end
+    end
+
+end    
+    
+    
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% CALIBRATION LOOP TO COMPARE PREDICTED GAGE HYDROGRAPHS TO ACTUAL
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+if runcalibloop==1
+    %averages of gagediff etc taken with calibration period that is potentially within larger run period
+    calibstid=find(rdates==calibdatestart);
+    calibendid=find(rdates==calibdateend);
+    if isempty(calibstid)
+        calibstid=datestid;
+        logm=['for calibration loop, calibdatestart:' datestr(calibdatestart) ' not within current data period, so starting calibration period at:' datestr(rdates(calibstid))];
+        domessage(logm,logfilename,displaymessage,writemessage)
+    end
+    if isempty(calibstid)
+        calibendid=rsteps;
+        logm=['for calibration loop, calibdateend:' datestr(calibdateend) ' not within current data period, so ending calibration period at:' datestr(rdates(calibendid))];
+        domessage(logm,logfilename,displaymessage,writemessage)
+    end
+    if ~(strcmp(calibmeth,'mean') | strcmp(calibmeth,'linreg'))
+        logm=['for calibration loop, could not figure out how to average gagediff etc given listed option:' calibmeth ' (looking for mean or linreg)'];
+        domessage(logm,logfilename,displaymessage,writemessage)
+        error(logm)
+    end
+
+for wd=WDcaliblist
+    wds=['WD' num2str(wd)];
+    logm=['running calibration loop on D:' ds ' WD:' wds ' from ' datestr(rdates(calibstid)) ' to ' datestr(rdates(calibendid))];
+    domessage(logm,logfilename,displaymessage,writemessage)
+
+    Rt=SR.(ds).(wds).R(1);
+    Rb=SR.(ds).(wds).R(end);
+    
+    for r=SR.(ds).(wds).R
+        rs=['R' num2str(r)];
+        srt=SR.(ds).(wds).(rs).SR(1);
+        srb=SR.(ds).(wds).(rs).SR(end);
+
+        gain=SR.(ds).(wds).(rs).gaininitial(1);
+        
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        %for calibration loop - take average or linear regression of gagediffportion and sraddamt and other gain/loss/error terms over defined period
+        x=(1:(calibendid-calibstid+1))';
+        
+        gagediffportion=SR.(ds).(wds).(rs).gagediffportion;
+        y=gagediffportion(calibstid:calibendid,:);
+        [yfit,m,b,R2,SEE]=regr(x,y,calibmeth);
+        gagediffportion(calibstid:calibendid,:)=yfit;
+        SR.(ds).(wds).(rs).gagediffportioncal=gagediffportion;SR.(ds).(wds).(rs).gagediffportionm=m;SR.(ds).(wds).(rs).gagediffportionb=b;SR.(ds).(wds).(rs).gagediffportionR2=R2;
+        
+        if inadv3a_increaseint == 1
+            sraddamt=SR.(ds).(wds).(rs).sraddamt;
+            y=sraddamt(calibstid:calibendid,:);
+            [yfit,m,b,R2,SEE]=regr(x,y,calibmeth);
+            sraddamt(calibstid:calibendid,:)=yfit;
+            SR.(ds).(wds).(rs).sraddamtcal=sraddamt;SR.(ds).(wds).(rs).sraddamtm=m;SR.(ds).(wds).(rs).sraddamtb=b;SR.(ds).(wds).(rs).sraddamtR2=R2;
+        elseif inadv3b_increaseint == 1
+            sraddamtds=SR.(ds).(wds).(rs).sraddamtds;
+            sraddamtus=SR.(ds).(wds).(rs).sraddamtus;
+            y=sraddamtds(calibstid:calibendid,:);
+            [yfit,m,b,R2,SEE]=regr(x,y,calibmeth);
+            sraddamtds(calibstid:calibendid,:)=yfit;
+            SR.(ds).(wds).(rs).sraddamtdscal=sraddamtds;SR.(ds).(wds).(rs).sraddamtdsm=m;SR.(ds).(wds).(rs).sraddamtdsb=b;SR.(ds).(wds).(rs).sraddamtdsR2=R2;
+            y=sraddamtus(calibstid:calibendid,:);
+            [yfit,m,b,R2,SEE]=regr(x,y,calibmeth);
+            sraddamtus(calibstid:calibendid,:)=yfit;
+            SR.(ds).(wds).(rs).sraddamtuscal=sraddamtus;SR.(ds).(wds).(rs).sraddamtusm=m;SR.(ds).(wds).(rs).sraddamtusb=b;SR.(ds).(wds).(rs).sraddamtusR2=R2;
+        end
+        if adjustlastsrtogage==1
+            gagedifflast=SR.(ds).(wds).(rs).gagedifflast;
+            y=gagedifflast(calibstid:calibendid,1);
+            [yfit,m,b,R2,SEE]=regr(x,y,calibmeth);
+            gagedifflast(calibstid:calibendid,1)=yfit;
+            SR.(ds).(wds).(rs).gagedifflastcal=gagedifflast;SR.(ds).(wds).(rs).gagedifflastm=m;SR.(ds).(wds).(rs).gagedifflastb=b;SR.(ds).(wds).(rs).gagedifflastR2=R2;
+        end
+        
+        
+       
+for sr=SR.(ds).(wds).(rs).SR
+    gain=SR.(ds).(wds).(rs).gaininitial(sr);
+    
+    if and(sr==1,r==Rt)  %initialize at top given if gage or reservoir etc
+        if SR.(ds).(wds).(rs).type(1)==0                                        %if wd zone starts with gage indicated by type = 0
+            Qusnode=SR.(ds).(wds).(rs).Qnode(:,1);   
+        else                                                                     %otherwise will look for gage somewhere else in top reach or at top of next reach
+            gageid=find(SR.(ds).(wds).(rs).type==0);
+            if ~isempty(gageid)
+                Qds=SR.(ds).(wds).(rs).Qnode(:,gageid(1));
+                srbb=gageid(1)-1;
+            else
+                if r==Rb | SR.(ds).(wds).(['R' num2str(r+1)]).type~=0  %r assuming numerical reach order here
+                    error(['STOP - for WD:' wds ' didnt find gage to initialize flow either in top reach or start of second reach'])
+                end
+                Qds=SR.(ds).(wds).(['R' num2str(r+1)]).Qnode(:,1);
+                srbb=srb;
+            end
+            for sri=srbb:-1:srt                             %adding back in any intermediate diversions; but currently NOT CONSIDERING EVAPORATION or transittime or gain/losscorrection!!! currently need evapfactor=0 and gain=-999 in these (fix/expand?)
+                type=SR.(ds).(wds).(rs).type(1,sri);
+                losspercent=SR.(ds).(wds).(rs).losspercent(sri);
+                Qus=Qds*(1+losspercent/100);
+                Qnode=SR.(ds).(wds).(rs).Qnode(:,sri);
+                Qusnode=Qus-type*Qnode;
+                Qds=Qusnode;
+            end
+            
+        end
+    end
+    
+    %type -1=outflow/1=inflow/0=gage etc
+    type=SR.(ds).(wds).(rs).type(1,sr);
+    
+    %this block seeing if inflow should be defined from by a modeled branch flow at a wdid connection point
+%     if type==1 && strcmp(SR.(ds).(wds).(rs).station{sr},'NaN')  && ~isempty(lastwdid)
+%         branchid=find(strcmp(lastwdid(:,1),SR.(ds).(wds).(rs).wdid(sr)));
+%         if ~isempty(branchid)
+%             SR.(ds).(wds).(rs).Qnode(:,sr)=SR.(ds).(lastwdid{branchid,3}).(lastwdid{branchid,4}).Qds(:,lastwdid{branchid,5});
+%         end
+%     else
+%         branchid=[];
+%     end
+    
+    Qnode=SR.(ds).(wds).(rs).Qnode(:,sr);  %if branchid above this will be coming from branch
+    %new setup - going from Qusnode to Qus (after usnodes) then to Qds
+    Qus=Qusnode+type*Qnode;
+    if inadv3b_increaseint == 1
+        Qus=Qus+sraddamtus(:,sr);
+    end
+    Qus=max(0,Qus);
+    
+    if gain==-999   %gain=-999 to not run transittime but can have loss percent 
+        losspercent=SR.(ds).(wds).(rs).losspercent(sr);
+        Qds=Qus*(1-losspercent/100);
+        celerity=SR.(ds).(wds).(rs).celeritya(sr)*max(minc,(Qus+Qds)/2).^SR.(ds).(wds).(rs).celerityb(sr);
+        dispersion=SR.(ds).(wds).(rs).dispersiona(sr)*max(minc,(Qus+Qds)/2).^SR.(ds).(wds).(rs).dispersionb(sr);
+    else
+%         celerity=SR.(ds).(wds).(rs).celeritya(sr)*max(minc,Qus).^SR.(ds).(wds).(rs).celerityb(sr);
+%         dispersion=SR.(ds).(wds).(rs).dispersiona(sr)*max(minc,Qus).^SR.(ds).(wds).(rs).dispersionb(sr);
+        if strcmp(srmethod,'j349')
+            gainportion=gain*SR.(ds).(wds).(rs).reachportion(sr);
+            Qus1=max(minj349,Qus);
+            [Qds,celerity,dispersion]=runj349f(ds,wds,rs,sr,Qus1,gainportion,rdays,rhours,rsteps,j349dir,-999,-999);
+            Qds=Qds-(Qus1-Qus); %timing won't be perfect for this but keeps celerity exactly calculated above (may want to do as just pure addition/subtraction)
+        elseif strcmp(srmethod,'muskingum')
+            [Qds,celerity,dispersion]=runmuskingum(ds,wds,rs,sr,Qus,rhours,rsteps,-999,-999);
+        end
+        
+    end
+    Qds=max(0,Qds);
+        
+    Qavg=(max(Qus,minc)+max(Qds,minc))/2;
+    width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
+    evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr); %EvapFactor = 0 to not have evap
+    
+    Qds=Qds-evap+gagediffportion(:,sr);
+    if inadv3a_increaseint == 1
+        Qds=Qds+sraddamt(:,sr);
+    elseif inadv3b_increaseint == 1
+        Qds=Qds+sraddamtds(:,sr);
+    end    
+    if adjustlastsrtogage==1 && sr==srb
+        Qds=Qds+gagedifflast;
+    end
+    Qds=max(0,Qds);
+    
+    SR.(ds).(wds).(rs).Qusnodecal(:,sr)=Qusnode;    
+    SR.(ds).(wds).(rs).Quscal(:,sr)=Qus;
+    SR.(ds).(wds).(rs).Qdscal(:,sr)=Qds;    
+    SR.(ds).Rivloc.flowriv.uscal(:,SR.(ds).(wds).(rs).locid(sr))=Qus;
+    SR.(ds).Rivloc.flowriv.dscal(:,SR.(ds).(wds).(rs).locid(sr))=Qds;
+    if SR.(ds).(wds).(rs).type(sr)==0
+        SR.(ds).Gageloc.flowcal(:,SR.(ds).(wds).(rs).gagelocid)=Qusnode; %or Qus
+    end
+
+    Qusnode=Qds;           
+end %sr
+    end %r
+end %wd
+    
+end  %runcalibloop
+
+
 
 
 
@@ -1921,58 +2402,74 @@ end
 if outputgage==1
     titlelocline=[{'atWDID'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-USWDID/2-DSWDID'}];
     if outputgagehr==1
-        titledates=cellstr(datestr(rdates(datest:end),'mm/dd/yy HH:'));
+        titledates=cellstr(datestr(rdates(datestid:end),'mm/dd/yy HH:'));
         writecell([titlelocline,titledates'],[outputfilename srmethod '_riverhr.csv']);
         writecell([titlelocline,titledates'],[outputfilename srmethod '_nativehr.csv']);
         writecell([titlelocline,titledates'],[outputfilename srmethod '_gagediffhr.csv']);
-        writecell([titlelocline,titledates'],[outputfilename srmethod '_gagediffhr.csv']);
-        writecell([titlelocline,titledates'],[outputfilename srmethod '_SRaddhr.csv']);
+        writecell([titlelocline,titledates'],[outputfilename srmethod '_sraddhr.csv']);
+        writecell([titlelocline,titledates'],[outputfilename srmethod '_totwcreducehr.csv']);
     end
     if outputgageday==1
-        [yr,mh,dy,hr,mi,sec] = datevec(rdates(datest:end));
+        [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:end));
         daymat=unique([yr,mh,dy],'rows','stable');
         titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
         writecell([titlelocline,titledatesday'],[outputfilename srmethod '_riverday.csv']);
         writecell([titlelocline,titledatesday'],[outputfilename srmethod '_nativeday.csv']);
         writecell([titlelocline,titledatesday'],[outputfilename srmethod '_gagediffday.csv']);
-        writecell([titlelocline,titledatesday'],[outputfilename srmethod '_SRaddday.csv']);
+        writecell([titlelocline,titledatesday'],[outputfilename srmethod '_sraddday.csv']);
+        writecell([titlelocline,titledatesday'],[outputfilename srmethod '_totwcreduceday.csv']);
     end
     for i=1:length(SR.(ds).Rivloc.loc(:,1))
         loclineriver(2*i-1,:)=[SR.(ds).Rivloc.loc(i,5),SR.(ds).Rivloc.loc(i,1:4),{2}];  %includes both ds/us sides of wdids and reaches - us of reach is ds of uswdid
         loclineriver(2*i,:)=  [SR.(ds).Rivloc.loc(i,6),SR.(ds).Rivloc.loc(i,1:4),{1}];
 %        outputlineriver(2*i-1,:)=SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).Qus(datest:end,SR.(ds).Rivloc.loc{i,4})';
 %        outputlineriver(2*i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).Qds(datest:end,SR.(ds).Rivloc.loc{i,4})';
-        outputlineriver(2*i-1,:)=SR.(ds).Rivloc.flowriv.us(datest:end,i)';
-        outputlinenative(2*i-1,:)=SR.(ds).Rivloc.flownative.us(datest:end,i)';
-        outputlineriver(2*i,:)=SR.(ds).Rivloc.flowriv.ds(datest:end,i)';
-        outputlinenative(2*i,:)=SR.(ds).Rivloc.flownative.ds(datest:end,i)';
+        outputlineriver(2*i-1,:)=SR.(ds).Rivloc.flowriv.us(datestid:end,i)';
+        outputlinenative(2*i-1,:)=SR.(ds).Rivloc.flownative.us(datestid:end,i)';
+        outputlineriver(2*i,:)=SR.(ds).Rivloc.flowriv.ds(datestid:end,i)';
+        outputlinenative(2*i,:)=SR.(ds).Rivloc.flownative.ds(datestid:end,i)';
+        outputlinesradd(2*i-1,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).sraddamtus(datestid:end,SR.(ds).Rivloc.loc{i,4})';
+        outputlinesradd(2*i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).sraddamtds(datestid:end,SR.(ds).Rivloc.loc{i,4})';
+
+        outputlinetotwcreduce(2*i-1,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).wcreduceamt(datestid:end,SR.(ds).Rivloc.loc{i,4})';
+        if SR.(ds).Rivloc.loc{i,4}==SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).SR(end)
+            outputlinetotwcreduce(2*i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).wcreduceamtlast(datestid:end,1)';
+        else
+          outputlinetotwcreduce(2*i,:)=zeros(length(yr),1);
+        end
 
 %        loclinereach(i,:)=  [SR.(ds).Rivloc.loc(i,6),SR.(ds).Rivloc.loc(i,1:4),{1}];  %this will list the dswdid with a 1 to say upstream of wdid 
         loclinereach(i,:)=  [SR.(ds).Rivloc.loc(i,5),SR.(ds).Rivloc.loc(i,1:4),{2}];  %this will list the uswdid with a 2 to say downstream of wdid 
-        outputlinegagediff(i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).gagediffportion(datest:end,SR.(ds).Rivloc.loc{i,4})';
-        outputlineSRadd(i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).QSRadd(datest:end,SR.(ds).Rivloc.loc{i,4})';
+        outputlinegagediff(i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).gagediffportion(datestid:end,SR.(ds).Rivloc.loc{i,4})';
+%        outputlinetotwcreduce(i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).wcreduceamt(datest:end,SR.(ds).Rivloc.loc{i,4})';
+%        outputlineSRadd(i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).QSRadd(datest:end,SR.(ds).Rivloc.loc{i,4})';
 
     end
     if outputgagehr==1
-        disp('writing hourly output files for river/native amounts (hourly is a bit slow)')
+        logm=['writing hourly output files for river/native amounts (hourly is a bit slow)'];
+        domessage(logm,logfilename,displaymessage,writemessage)
         writecell([loclineriver,num2cell(outputlineriver)],[outputfilename srmethod '_riverhr.csv'],'WriteMode','append');
         writecell([loclineriver,num2cell(outputlinenative)],[outputfilename srmethod '_nativehr.csv'],'WriteMode','append');
         writecell([loclinereach,num2cell(outputlinegagediff)],[outputfilename srmethod '_gagediffhr.csv'],'WriteMode','append');
-        writecell([loclinereach,num2cell(outputlineSRadd)],[outputfilename srmethod '_SRaddhr.csv'],'WriteMode','append');
+        writecell([loclineriver,num2cell(outputlinesradd)],[outputfilename srmethod '_sraddhr.csv'],'WriteMode','append');
+        writecell([loclineriver,num2cell(outputlinetotwcreduce)],[outputfilename srmethod '_totwcreducehr.csv'],'WriteMode','append');
     end
     if outputgageday==1
-        disp('writing daily output files for river/native amounts')
+        logm=['writing daily output files for river/native amounts'];
+        domessage(logm,logfilename,displaymessage,writemessage)
         for i=1:length(daymat(:,1))
             dayids=find(yr==daymat(i,1) & mh==daymat(i,2) & dy==daymat(i,3));
             outputlinedayriver(:,i)=mean(outputlineriver(:,dayids),2);
             outputlinedaynative(:,i)=mean(outputlinenative(:,dayids),2);
             outputlinedaygagediff(:,i)=mean(outputlinegagediff(:,dayids),2);
-            outputlinedaySRadd(:,i)=mean(outputlineSRadd(:,dayids),2);
+            outputlinedaysradd(:,i)=mean(outputlinesradd(:,dayids),2);
+            outputlinedaytotwcreduce(:,i)=mean(outputlinetotwcreduce(:,dayids),2);
         end
         writecell([loclineriver,num2cell(outputlinedayriver)],[outputfilename srmethod '_riverday.csv'],'WriteMode','append');        
         writecell([loclineriver,num2cell(outputlinedaynative)],[outputfilename srmethod '_nativeday.csv'],'WriteMode','append');        
         writecell([loclinereach,num2cell(outputlinedaygagediff)],[outputfilename srmethod '_gagediffday.csv'],'WriteMode','append');        
-        writecell([loclinereach,num2cell(outputlinedaySRadd)],[outputfilename srmethod '_SRaddday.csv'],'WriteMode','append');        
+        writecell([loclineriver,num2cell(outputlinedaysradd)],[outputfilename srmethod '_sraddday.csv'],'WriteMode','append');        
+        writecell([loclineriver,num2cell(outputlinedaytotwcreduce)],[outputfilename srmethod '_totwcreduceday.csv'],'WriteMode','append');        
     end
 end
 
@@ -1981,22 +2478,24 @@ end
 % OUTPUT - water class amounts
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if outputwc==1 & isfield(SR.(ds),'WCloc')
+if outputwc==1 & isfield(SR.(ds),'WC')
 
-wwcnums=SR.(ds).WCloc.wslist;
+wwcnums=SR.(ds).WC.wslist;
 %titlelocline=[{'WCnum'},{'WC code'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'srid'},{'1-US/2-DS'},{'WDID'}];
 titlelocline=[{'WCnum'},{'WC code'},{'atWDID'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-USWDID/2-DSWDID'}];
 
 if outputwchr==1
-    disp('writing hourly output file by water class amounts (hourly is a bit slow)')
-    titledates=cellstr(datestr(rdates(datest:end),'mm/dd/yy HH:'));
+    logm=['writing hourly output file by water class amounts (hourly is a bit slow)'];
+    domessage(logm,logfilename,displaymessage,writemessage)
+    titledates=cellstr(datestr(rdates(datestid:end),'mm/dd/yy HH:'));
     writecell([titlelocline,titledates'],[outputfilename srmethod '_wchr.csv']);
     writecell([titlelocline,titledates'],[outputfilename srmethod '_wcsraddhr.csv']);
     writecell([titlelocline,titledates'],[outputfilename srmethod '_wcreducehr.csv']);
 end
 if outputwcday==1
-    disp('writing daily output file by water class amounts')
-    [yr,mh,dy,hr,mi,sec] = datevec(rdates(datest:end));
+    logm=['writing daily output file by water class amounts'];
+    domessage(logm,logfilename,displaymessage,writemessage)
+    [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:end));
     daymat=unique([yr,mh,dy],'rows','stable');
     titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
     writecell([titlelocline,titledatesday'],[outputfilename srmethod '_wcday.csv']);
@@ -2008,28 +2507,33 @@ for w=1:length(wwcnums)
     ws=wwcnums{w};
     clear loclinewc outputlinewc outputlinedaywc outputlinewcsradd outputlinedaywcsradd outputlinewcreduce outputlinedaywcreduce loclinewcreduce
     outwcreduce=0;k=0;
-    for i=1:length(SR.(ds).WCloc.(ws)(:,1))  %JVO said wanted both us and ds of WDID (??) - OK then
-        if SR.(ds).WCloc.(ws){i,6}==1 %release - list from us to ds
-           loclinewc(2*i-1,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WCloc.(ws)(i,7),SR.(ds).WCloc.(ws)(i,1:4),{2}];
-           outputlinewc(2*i-1,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).Qusrelease(datest:end,SR.(ds).WCloc.(ws){i,4})';
-           loclinewc(2*i,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WCloc.(ws)(i,8),SR.(ds).WCloc.(ws)(i,1:4),{1}];
-           outputlinewc(2*i,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).Qdsrelease(datest:end,SR.(ds).WCloc.(ws){i,4})';
-           outputlinewcsradd(2*i-1,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).QSRaddus(datest:end,SR.(ds).WCloc.(ws){i,4})';
-           outputlinewcsradd(2*i,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).QSRaddds(datest:end,SR.(ds).WCloc.(ws){i,4})';
+    for i=1:length(SR.(ds).WC.(ws)(:,1))  %JVO said wanted both us and ds of WDID (??) - OK then
+        if SR.(ds).WC.(ws){i,6}==1 %release - list from us to ds
+           loclinewc(2*i-1,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WC.(ws)(i,7),SR.(ds).WC.(ws)(i,1:4),{2}];
+           outputlinewc(2*i-1,:)=SR.(ds).(SR.(ds).WC.(ws){i,2}).(SR.(ds).WC.(ws){i,3}).(ws).Qusrelease(datestid:end,SR.(ds).WC.(ws){i,4})';
+           loclinewc(2*i,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WC.(ws)(i,8),SR.(ds).WC.(ws)(i,1:4),{1}];
+           outputlinewc(2*i,:)=SR.(ds).(SR.(ds).WC.(ws){i,2}).(SR.(ds).WC.(ws){i,3}).(ws).Qdsrelease(datestid:end,SR.(ds).WC.(ws){i,4})';
+           outputlinewcsradd(2*i-1,:)=SR.(ds).(SR.(ds).WC.(ws){i,2}).(SR.(ds).WC.(ws){i,3}).(ws).QSRaddus(datestid:end,SR.(ds).WC.(ws){i,4})';
+           outputlinewcsradd(2*i,:)=SR.(ds).(SR.(ds).WC.(ws){i,2}).(SR.(ds).WC.(ws){i,3}).(ws).QSRaddds(datestid:end,SR.(ds).WC.(ws){i,4})';
            
-           if isfield(SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws),'wcreduceamt')
+           if isfield(SR.(ds).(SR.(ds).WC.(ws){i,2}).(SR.(ds).WC.(ws){i,3}).(ws),'wcreduceamt')
                outwcreduce=1;k=k+1;
-                loclinewcreduce(k,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WCloc.(ws)(i,7),SR.(ds).WCloc.(ws)(i,1:4),{1}]; %lists us wdid
-                outputlinewcreduce(k,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).wcreduceamt(datest:end,SR.(ds).WCloc.(ws){i,4})';
+                loclinewcreduce(k,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WC.(ws)(i,7),SR.(ds).WC.(ws)(i,1:4),{2}]; %lists usreach/ds wdid
+                outputlinewcreduce(k,:)=SR.(ds).(SR.(ds).WC.(ws){i,2}).(SR.(ds).WC.(ws){i,3}).(ws).wcreduceamt(datestid:end,SR.(ds).WC.(ws){i,4})';
+                if R.(ds).WC.(ws){i,4}==SR.(ds).(SR.(ds).WC.(ws){i,2}).(SR.(ds).WC.(ws){i,3}).SR(end)
+                    k=k+1;
+                    loclinewcreduce(k,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WC.(ws)(i,7),SR.(ds).WC.(ws)(i,1:4),{1}]; %lists dsreach/us wdid
+                    outputlinewcreduce(k,:)=SR.(ds).(SR.(ds).WC.(ws){i,2}).(SR.(ds).WC.(ws){i,3}).(ws).wcreduceamtlast(datestid:end,1)';
+                end
            end
            
         else  %exchange - list from ds to us - if ok from us to ds could delete these
-           loclinewc(2*i-1,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WCloc.(ws)(i,8),SR.(ds).WCloc.(ws)(i,1:4),{1}];
-           outputlinewc(2*i-1,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).Qdsrelease(datest:end,SR.(ds).WCloc.(ws){i,4})';
-           loclinewc(2*i,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WCloc.(ws)(i,7),SR.(ds).WCloc.(ws)(i,1:4),{2}];
-           outputlinewc(2*i,:)=SR.(ds).(SR.(ds).WCloc.(ws){i,2}).(SR.(ds).WCloc.(ws){i,3}).(ws).Qusrelease(datest:end,SR.(ds).WCloc.(ws){i,4})';
-           outputlinewcsradd(2*i-1,:)=zeros(1,length(rdates(datest:end)));
-           outputlinewcsradd(2*i,:)=zeros(1,length(rdates(datest:end)));
+           loclinewc(2*i-1,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WC.(ws)(i,8),SR.(ds).WC.(ws)(i,1:4),{1}];
+           outputlinewc(2*i-1,:)=SR.(ds).(SR.(ds).WC.(ws){i,2}).(SR.(ds).WC.(ws){i,3}).(ws).Qdsrelease(datestid:end,SR.(ds).WC.(ws){i,4})';
+           loclinewc(2*i,:)=[{ws},{WC.(ds).WC.(ws).wc},SR.(ds).WC.(ws)(i,7),SR.(ds).WC.(ws)(i,1:4),{2}];
+           outputlinewc(2*i,:)=SR.(ds).(SR.(ds).WC.(ws){i,2}).(SR.(ds).WC.(ws){i,3}).(ws).Qusrelease(datestid:end,SR.(ds).WC.(ws){i,4})';
+           outputlinewcsradd(2*i-1,:)=zeros(1,length(rdates(datestid:end)));
+           outputlinewcsradd(2*i,:)=zeros(1,length(rdates(datestid:end)));
         end
     end 
     
@@ -2061,134 +2565,58 @@ end
 end
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% OUTPUT - comparison of gage and simulated amounts at gage
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% test plotting
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-if plotmovie==1
-    
-Rt=1;SRt=1;Rb=8;SRb=2;
-%Rt=1;SRt=1;Rb=6;SRb=4;
-
-
-figure('Renderer','zbuffer','Position',[349,93,1006.4,691.2]);
-% plot([0 35],[0 660]);
-%set(gca,'Ylim',[-200 1500],'Xlim',[0 100])
-%    set(gca,'Ylim',[-200 1500],'Xlim',[0 130])
-    set(gca,'Ylim',[0 figtop],'Xlim',[0 130])
-
- axis manual;
- set(gca,'NextPlot','replaceChildren');
- 
-releasestartid=25;
-ts1=1100;
-
-ds='D2';
-
-%for wd=WDlist(2)
-for wd=17
-    wds=['WD' num2str(wd)];
-    wwcnums=WC.(ds).(wds).wwcnums;
-%    for ts=rdatesstartid:rdatesstartid+100
-%    for ts=releasestartid-24:(1440-24)
-    for ts=ts1:1440
-        clear plotline*
-        plotline=[];
-        plotlinenative=[];
-        plotlinerelease=[];
-        plotlinex=[];
-        plotx=0;
-        k=0;
-    for r=Rt:Rb
-        rs=['R' num2str(r)];
-        if r==Rt
-            srt=SRt;
-        else
-            srt=1;
-        end
-        if r==Rb
-            srb=SRb;
-        else
-            srb=SR.(ds).(wds).(rs).SR(end);
-        end
-
-for sr=srt:srb
-%     plotx=[plotx (r-1)*20+(sr-1)*3 (r-1)*20+(sr-1)*3+1 (r-1)*20+(sr-1)*3+1];    
-     plotlinex=[plotlinex plotx plotx plotx+SR.(ds).(wds).(rs).channellength(sr)];
-     plotx=plotx+SR.(ds).(wds).(rs).channellength(sr);
-     
-     plotline(k+1:k+3,1)=[SR.(ds).(wds).(rs).Qusnode(ts,sr);SR.(ds).(wds).(rs).Qus(ts,sr);SR.(ds).(wds).(rs).Qds(ts,sr)];
-     lsr=SR.(ds).(wds).(rs).subreachid(sr);
-     kwr=0;kwe=1;
-     for w=1:length(wwcnums)
-         ws=wwcnums{w};
-         if isfield(SR.(ds).(wds),ws)
-         if WC.(ds).WC.(ws).type==1 %for exchanges add onto native line
-            kwe=kwe+1;
-            plotline(k+1:k+3,kwe)=[SR.(ds).(wds).(ws).Qusnoderelease(ts,lsr);SR.(ds).(wds).(ws).Qusrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsrelease(ts,lsr)];
-         else
-            kwr=kwr+1;
-            if length(SR.(ds).(wds).(ws).Qusrelease(ts,:))>=lsr
-                plotlinerelease(k+1:k+3,kwr)=[SR.(ds).(wds).(ws).Qusnoderelease(ts,lsr);SR.(ds).(wds).(ws).Qusrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsrelease(ts,lsr)];
-            else
-                plotlinerelease(k+1:k+3,kwr)=[0,0,0];
-            end
-                
-         end
-          
-%         plotlinerelease(k+1:k+3,w)=[SR.(ds).(wds).(ws).Qusrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsnodesrelease(ts,lsr)];
-         
-%         plotlinerelease.(ws)=[plotlinerelease.(ws) SR.(ds).(wds).(ws).Qusrelease(ts,lsr) SR.(ds).(wds).(ws).Qdsrelease(ts,lsr) SR.(ds).(wds).(ws).Qdsnodesrelease(ts,lsr)];
-        
-%          if (wd>=WDtr & r>=Rtr & sr>=SRtr) & (wd<=WDbr & r<=Rbr & sr<=SRbr)
-% %         plotlinenative.(ws)=[plotlinenative SR.(ds).(wds).(rs).(ws).Quspartial(ts,sr) SR.(ds).(wds).(rs).(ws).Qdspartial(ts,sr) SR.(ds).(wds).(rs).(ws).Qdsnodespartial(ts,sr)];
-%          plotlinerelease(k+1:k+3,w)=[SR.(ds).(wds).(rs).(ws).Qusrelease(ts,sr);SR.(ds).(wds).(rs).(ws).Qdsrelease(ts,sr);SR.(ds).(wds).(rs).(ws).Qdsnodesrelease(ts,sr)];
-%          else
-%             plotlinerelease(k+1:k+3,w)=[0;0;0];
-%          end
-         end
-     end
-     k=k+3;
-
-%     plotline=[plotline SR.(ds).(wds).(rs).Qdsnodes(ts,sr)];
-%     plotlinenative=[plotlinenative SR.(ds).(wds).(rs).(ws).Qdsnodespartial(ts,sr)];
-    
-end
+if outputcal==1 & runcalibloop==1
+    titlelocline=[{'WDID'},{'Abbrev'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-Gage/2-Sim'}];
+    if outputcalhr==1
+        titledates=cellstr(datestr(rdates(datestid:end),'mm/dd/yy HH:'));
+        writecell([titlelocline,titledates'],[outputfilename srmethod '_calhr.csv']);
     end
-%     plot(plotx,plotline); hold on
-%     plot(plotx,plotlinenative,'r'); 
-%     plot(plotx,plotlinerelease,'m'); 
-    area(plotlinex,plotline); hold on
-    area(plotlinex,plotlinerelease);
-
-    text(50,1400,datestr(rdates(ts),0))
-%    set(gca,'Ylim',[-200 1500],'Xlim',[0 130])
-    set(gca,'Ylim',[0 figtop],'Xlim',[0 130])
-ylabel('CFS','VerticalAlignment','Top')
-text(00.0,0,'Pueblo Res','Rotation',90,'HorizontalAlignment','Right')
-text(09.6,0,'FountainCk','Rotation',90,'HorizontalAlignment','Right')
-text(15.9,0,'Excelsior ','Rotation',90,'HorizontalAlignment','Right')
-text(29.5,0,'Colorado  ','Rotation',90,'HorizontalAlignment','Right')
-text(34.6,0,'RFHighline','Rotation',90,'HorizontalAlignment','Right')
-text(41.1,0,'Oxford    ','Rotation',90,'HorizontalAlignment','Right')
-text(53.6,0,'Otero     ','Rotation',90,'HorizontalAlignment','Right')
-text(59.4,0,'Catlin    ','Rotation',90,'HorizontalAlignment','Right')
-text(67.9,0,'Holbrook  ','Rotation',90,'HorizontalAlignment','Right')
-text(69.4,0,'Rocky Ford','Rotation',90,'HorizontalAlignment','Right')
-text(90.7,0,'Fort Lyon ','Rotation',90,'HorizontalAlignment','Right')
-text(110.2,0,'Las Animas','Rotation',90,'HorizontalAlignment','Right')
-text(127.5,0,'JohnMartin','Rotation',90,'HorizontalAlignment','Right')
-    hold off
-%    F(ts-(releasestartid-25)) = getframe;
-    F(ts-(ts1-1)) = getframe;
+    if outputcalday==1
+        [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:end));
+        daymat=unique([yr,mh,dy],'rows','stable');
+        titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
+        writecell([titlelocline,titledatesday'],[outputfilename srmethod '_calday.csv']);
+    end
+    for wd=WDcaliblist
+        wds=['WD' num2str(wd)];
+        wdsids=intersect(find(strcmp(SR.(ds).Gageloc.loc(:,1),ds)),find(strcmp(SR.(ds).Gageloc.loc(:,2),wds)));
+        for i=1:length(wdsids)
+            j=wdsids(i);
+            loclinegage(2*i-1,:)=[SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Rivloc.loc(j,1:4),{1}];  %includes both gage and simulated on subseqent lines
+            loclinegage(2*i,:)=  [SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Rivloc.loc(j,1:4),{2}];
+            outputlinegage(2*i-1,:)=SR.(ds).Gageloc.flowgage(datestid:end,j)';
+            outputlinegage(2*i,:)=SR.(ds).Gageloc.flowcal(datestid:end,j)';
+        end
+    end
+    if outputgagehr==1
+        logm=['writing hourly output files for gage and simulated (calibration) amounts (hourly is a bit slow)'];
+        domessage(logm,logfilename,displaymessage,writemessage)
+        writecell([loclinegage,num2cell(outputlinegage)],[outputfilename srmethod '_calhr.csv'],'WriteMode','append');
+    end
+    if outputgageday==1
+        logm=['writing daily output files for gage and simulated (calibration) amounts'];
+        domessage(logm,logfilename,displaymessage,writemessage)
+        for i=1:length(daymat(:,1))
+            dayids=find(yr==daymat(i,1) & mh==daymat(i,2) & dy==daymat(i,3));
+            outputlinedaygage(:,i)=mean(outputlinegage(:,dayids),2);
+        end
+        writecell([loclinegage,num2cell(outputlinedaygage)],[outputfilename srmethod '_calday.csv'],'WriteMode','append');        
     end
 end
-end
-        
-% reversecelerity(F,1,8)
 
-disp(datestr(now))
+%%%%%%%%%%%%%%%%%%%%%
+% END of mainline script
+
+logm=['Done Running StateTL endtime: ' datestr(now) ' elapsed (DD:HH:MM:SS): ' datestr(now-runstarttime,'DD:HH:MM:SS')];    %log message
+if displaymessage~=1;disp(logm);end
+domessage(logm,logfilename,displaymessage,writemessage)
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2216,7 +2644,7 @@ disp(datestr(now))
 function [Qds,celerity,dispersion]=runmuskingum(ds,wds,rs,sr,Qus,rhours,rsteps,celerity,dispersion)
 global SR
 
-cmin=1;
+minc=1;
 %posids=find(Qus>0);        %at least for wc releases this limits to release times; could potentially have celerity time series as time ser..
 %Qusavg=mean(Qus(posids));  %orig single celerity / as add to time series length - may need to do this on smaller time steps??
 
@@ -2229,13 +2657,13 @@ if celerity==-999
     celeritya=SR.(ds).(wds).(rs).celeritya(sr);
     celerityb=SR.(ds).(wds).(rs).celerityb(sr);
 %    celerity=celeritya*Qusavg^celerityb;
-    celerity=celeritya*max(cmin,Qus).^celerityb;
+    celerity=celeritya*max(minc,Qus).^celerityb;
 end
 if dispersion==-999
     dispersiona=SR.(ds).(wds).(rs).dispersiona(sr);
     dispersionb=SR.(ds).(wds).(rs).dispersionb(sr);
 %    dispersion=dispersiona*Qusavg^dispersionb;
-    dispersion=dispersiona*max(cmin,Qus).^dispersionb;
+    dispersion=dispersiona*max(minc,Qus).^dispersionb;
 end
 
 losspercent=SR.(ds).(wds).(rs).losspercent(sr);
@@ -2270,9 +2698,6 @@ end
 function [Qds,celerity,dispersion]=runj349f(ds,wds,rs,sr,Qus,gain,rdays,rhours,rsteps,j349dir,celerity,dispersion)
 global SR
 
-cmin=1;   
-Qusavg=max(cmin,mean(Qus));  %watch - this would be different than TLAP; but think basing on that subreach flow might be more correct
-%Qusavg=(667+ARKAVOCO)/2; %current in TLAP- based on average flow for entire reach
 
 channellength=SR.(ds).(wds).(rs).channellength(sr);
 alluviumlength=SR.(ds).(wds).(rs).alluviumlength(sr);
@@ -2280,7 +2705,14 @@ transmissivity=SR.(ds).(wds).(rs).transmissivity(sr);
 storagecoefficient=SR.(ds).(wds).(rs).storagecoefficient(sr);
 aquiferwidth=SR.(ds).(wds).(rs).aquiferwidth(sr);
 closure=SR.(ds).(wds).(rs).closure(sr);
-if celerity==-999
+if length(celerity)>1
+    posids=find(Qus>0);        %currently j349 only works with a single celerity (change??!!)
+    celerity=mean(celerity(posids));
+    dispersion=mean(dispersion(posids));
+elseif celerity==-999
+    minc=1;   
+    Qusavg=max(minc,mean(Qus));  %watch - this would be different than TLAP; but think basing on that subreach flow might be more correct
+    %Qusavg=(667+ARKAVOCO)/2; %current in TLAP- based on average flow for entire reach
     dispersiona=SR.(ds).(wds).(rs).dispersiona(sr);
     dispersionb=SR.(ds).(wds).(rs).dispersionb(sr);
     celeritya=SR.(ds).(wds).(rs).celeritya(sr);
@@ -2426,6 +2858,9 @@ if celerity==-999
     celeritya=SR.(ds).(wds).(rs).celeritya(sr);
     celerityb=SR.(ds).(wds).(rs).celerityb(sr);
     celerity=celeritya*Qdsavg^celerityb;
+elseif length(celerity)>1
+    posids=find(QEds<0);
+    celerity=mean(celerity(posids));
 end
 
 %believe celerity is in ft/s
@@ -2443,6 +2878,45 @@ QEus=zeros(rsteps,1);
 QEus(1:rsteps-srtimehrs,1)=QEds(1+srtimehrs:end,1);
 
 end
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% function to take messages and display to screen and/or write to logfile
+% currently closing file after writing in case error crashes
+% could eventually remove to potentially speed up
+
+function domessage(logm,logfilename,displaymessage,writemessage)
+if displaymessage==1
+    disp(logm);
+end
+if writemessage==1
+    fidlog=fopen(logfilename,'a');
+    fprintf(fidlog,'%s\r\n',logm);
+    fclose(fidlog);
+end
+
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% function just to find mean, linear regression, or least squares regression
+%
+function [yfit,m,b,R2,SEE]=regr(x,y,meth)
+
+if strcmp(meth,'linreg')
+   X=[ones(length(x),1) x];M=X\y;m=M(2,:);b=M(1,:);yfit=m.*x+b;R2=1-sum((y-yfit).^2)./sum((y-mean(y)).^2);SEE=(sum((x-y).^(2))./(length(x)-1)).^(0.5);
+elseif strcmp(meth,'leastsquares')
+   m=x\y;yfit=m.*x;R2 = 1 - sum((y - yfit).^2)./sum((y - mean(y)).^2);SEE=(sum((x-y).^(2))./(length(x)-1)).^(0.5);b=zeros(1,length(m));
+elseif strcmp(meth,'mean')
+    b=mean(y);yfit=b.*ones(size(y));m=zeros(1,length(b));R2=zeros(1,length(b));SEE=zeros(1,length(b));
+else
+    error(['could not figure out regression method given listed option:' meth ' (looking for mean, linreg, or leastsquares)'])    
+end
+
+end
+
+
 
 
 
