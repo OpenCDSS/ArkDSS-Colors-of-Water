@@ -108,7 +108,7 @@ C
      1ILMS, TTCUM                                                       00007500  TTCUM ADDED 2/85 PRJ
       COMMON /LOSS/ X,QLOSS,ISTRT,IEND,NLOSS                            00007600
       COMMON /RATING/ SRAT,QRAT,SHIFT,NUSRP,NDSRP                       00007700
-      COMMON /URPARM/ AC0,AXK,QMIN,QMAX,C0RAT,C0QRAT,XKRAT,XKQRAT       00007800
+      COMMON /URPARM/ AC0,AXK,QMIN,QMAX,C0RAT,C0QRAT,XKRAT,XKQRAT,NURSF 00007800  kt added NURSF - number of URFs to Force
       COMMON /VOL/ QILOST, WELCUM, QLSCUM, USREL1                       00007900   WELCUM, QLSCUM, and USREL1 added 2/10/85 PRJ
       COMMON /WARN/ IWARN,IW0,IW1,IW2                                   00008000
       COMMON /UNITS/ C,P,PU,US,DS,NDIM,MDIM                             00008100
@@ -221,13 +221,13 @@ C             INPUT DOWNSTREAM HYDROGRAPH FOR BANK STORAGE ONLY PROBLEM 00017000
    90 IF (ZCARDS) GO TO 100                                             00017100
 C                DISK OPTION                                            00017200
       WRITE (10,360) OPFILE,IAV(JOUT)                                   00017300
-      CALL QINPUT (OPFILE,IAV(JOUT),ITEMZ,DSQ,KYEAR,KMON,KDAY)          00017400
+      CALL QINPUTB (OPFILE,IAV(JOUT),ITEMZ,DSQ,KYEAR,KMON,KDAY)         00017400  kt changed to larger dim B function
       WRITE (10,370) ITEMZ,KMON,KDAY,KYEAR                              00017500
       IF (KYEAR.NE.JYEAR) GO TO 260                                     00017600
       GO TO 110                                                         00017700
 C                CARD OPTION                                            00017800
-  100 CALL READQ (DSQ)
-  110 CALL MOVE (DSQ,DSQ1,N1ST,NLST,0,0)                                00018000
+  100 CALL READQB (DSQ)                                                           kt changed to larger dim B function
+  110 CALL MOVEB (DSQ,DSQ1,N1ST,NLST,0,0)                               00018000  kt changed to mixed dim B function
   120 CONTINUE                                                          00018100
 C             SKIP BANK STORAGE COMPUTATIONS FOR IMPERMEABLE AQUIFER    00018200
       IF (ALPHA.GT.1.) GO TO 130                                        00018300
@@ -360,7 +360,7 @@ C       QOUTPT-PROGRAMMED BY J O SHEARMAN.  OUTPUTS HYDROGRAPH DATA ON  00030400
 C              DISK                                                     00030500
       IMPLICIT LOGICAL(Z)                                               00005100
       INTEGER OPFILE,C,P,PU,US,DS                                       00005200
-      DIMENSION A (3200)
+      DIMENSION A (1600), AB (3200)                                               kt changed A to smaller dim, AB to larger dim
       CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20)        00005300
       DIMENSION IAV(10), LREC(10)                                       00005400
       CHARACTER *4 IWARN (1600)
@@ -390,7 +390,7 @@ C              DISK                                                     00030500
      1ILMS, TTCUM                                                       00007500  TTCUM ADDED 2/85 PRJ
       COMMON /LOSS/ X,QLOSS,ISTRT,IEND,NLOSS                            00007600
       COMMON /RATING/ SRAT,QRAT,SHIFT,NUSRP,NDSRP                       00007700
-      COMMON /URPARM/ AC0,AXK,QMIN,QMAX,C0RAT,C0QRAT,XKRAT,XKQRAT       00007800
+      COMMON /URPARM/ AC0,AXK,QMIN,QMAX,C0RAT,C0QRAT,XKRAT,XKQRAT,NURSF 00007800  kt added NURSF
       COMMON /VOL/ QILOST, WELCUM, QLSCUM, USREL1                       00007900   WELCUM, QLSCUM, and USREL1 added 2/10/85 PRJ
       COMMON /WARN/ IWARN,IW0,IW1,IW2                                   00008000
       COMMON /UNITS/ C,P,PU,US,DS,NDIM,MDIM                             00008100
@@ -447,6 +447,7 @@ C          TOLRNC- ERROR CRITERIA FOR CLOSURE                           00038000
 C          XKA   - RETARDATION COEFFICIENT OF STREAM-AQUIFER BOUNDARY   00038100
 C          XL    - WIDTH OF AQUIFER (ONE SIDE)                          00038200
 C          QMIN & QMAX - EXPECTED LIMITS IN STREAM DISCHARGE            00038300
+C          NURSF - NUMBER OF ROUTING URFS TO FORCE (ZERO IF NOT FORCE)  00038301  kt added comment, note this is only for MULTIPLE LINEARIZATION
 C          C0RAT & C0QRAT - WAVE CELERITY - DISCHARGE TABLE             00038400
 C          XKRAT & XKQRAT - DISPERSION COEF - DISCHARGE TABLE           00038500
 C          NDSRP, ZDSHFT, DSQB, SRAT, QRAT, SHIFT- AS ABOVE EXCEPT      00038600
@@ -624,6 +625,11 @@ C           -----                                                       00051700
       READ (7,240) (A(NT),NT=N1ST,NLST)                                 00051800
       RETURN                                                            00051900
 C                                                                       00052000
+      ENTRY READQB (AB)                                                           kt added B function for larger dim
+C           -----                                                       00051700  kt added B function for larger dim
+      READ (7,240) (AB(NT),NT=N1ST,NLST)                                00051800  kt added B function for larger dim
+      RETURN                                                            00051900  kt added B function for larger dim
+C                                                                       00052000  kt added B function for larger dim
       ENTRY REACH                                                       00052100
 C           -----                                                       00052200
 C             READ DATA FROM CARDS                                      00052300
@@ -653,9 +659,9 @@ C--------
       READ (7,160) (SRAT(DS,K),QRAT(DS,K),K=1,NDSRP)                    00053100
       IF (ZCARDS.AND.ZDSHFT) READ (7,160) (SHIFT(DS,L),L=1,ITMAX)       00053200
       IF (.NOT.ZMULT) GO TO 121                                         00053300
-      READ (7,160) QMIN,QMAX                                            00053400
-      READ (7,160) (C0RAT(I),C0QRAT(I),I=1,8)                           00053500
-      READ (7,160) (XKRAT(I),XKQRAT(I),I=1,8)                           00053600
+      READ (7,167) QMIN,QMAX,NURSF                                      00053400  kt added NURSF
+      READ (7,160) (C0RAT(I),C0QRAT(I),I=1,10)                          00053500  kt increased from 8 to 10
+      READ (7,160) (XKRAT(I),XKQRAT(I),I=1,10)                          00053600  kt increased from 8 to 10
 C                                                                       00053700
 C   NEW STATEMENT TO READ OBSERVED DS DISCHARGE IF AVAIL. AND INCLUDE IN OUTPUT FOR COMPARISON TO MODELED DS Q.
 C   LOGICAL VARIABLE ZDSQO ( IN COLS. 61-70 OF CARD TYPE 12) TESTS FOR DS Q.  G. KUHN, 11-7-85.
@@ -695,7 +701,8 @@ C             PRINT DATA                                                00055100
       IF (ZROUTE) WRITE (10,360) (J,UR(1,J),J=1,N)                      00056600
       GO TO 128                                                         00056700
   124 WRITE (10,361) QMIN,QMAX                                          00056800
-      WRITE (10,362) (C0RAT(I),C0QRAT(I),XKRAT(I),XKQRAT(I),I=1,8)      00056900
+      IF (NURSF.GT.0) WRITE (10,363) NURSF                                        kt added to write NURSF 
+      WRITE (10,362) (C0RAT(I),C0QRAT(I),XKRAT(I),XKQRAT(I),I=1,10)     00056900  kt increased from 8 to 10
       WRITE (10,365)                                                    00057000
       DO 126 I=1,NURS                                                   00057100
       N=NRESP(I)                                                        00057200
@@ -717,6 +724,12 @@ C           ------                                                      00058600
       IAVI=IAVI+1                                                       00058800
       RETURN                                                            00058900
 C                                                                       00059000
+      ENTRY QINPUTB(IFILE,IAVI,ITEMS,AB,JYR,JMON,JDAY)                  00058500  kt added B function for larger dim
+C           ------                                                      00058600  kt added B function for larger dim
+      READ (IFILE,REC=IAVI) JMON,JDAY,JYR,ITEMS,(AB(I),I=1,ITEMS)       00058700  kt added B function for larger dim
+      IAVI=IAVI+1                                                       00058800  kt added B function for larger dim
+      RETURN                                                            00058900  kt added B function for larger dim
+C                                                                       00059000  kt added B function for larger dim
       ENTRY QOUTPT(IFILE,IAVO,ITEMS,A,JMON,JDAY,JYR)                    00059100
 C           ------                                                      00059200
       WRITE (IFILE,REC=IAVO) JMON,JDAY,JYR,ITEMS,(A(I),I=1,ITEMS)           00059300
@@ -735,6 +748,7 @@ C                                                                       00059900
   164 FORMAT (8I10)
   165 FORMAT (I10,5L10)
   166 FORMAT (I10,L10,F10.0)
+  167 FORMAT (G10.0,G10.0,I10)                                                    kt added
   170 FORMAT ('0','PROPERTIES AND CHARACTERISTICS OF MODEL RUN'/1X,43(1H00060300
      1-)/10X,'BEGINNING DATE',38X,I2,'/',I2,'/',I4/10X,'ENDING DATE',41X00060400
      2,I2,'/',I2,'/',I4)                                                00060500
@@ -781,6 +795,8 @@ C                                                                       00059900
   362 FORMAT (' ',9X,'CELERITY AND DISPERSION RATING TABLE      W. CELER00064500
      1ITY  DISCHARGE       DISP. COEF.  DISCHARGE'/                     00064600
      251X,F10.2,F11.1,F18.1,F11.1/(51X,F10.2,F11.1,F18.1,F11.1))        00064700
+  363 FORMAT (' ',9X,'NUM OF ROUTING UNIT-RESPONSE FUNCTIONS FORCED TO:'         kt added for NURSF
+     1,I9)                                                                       kt added for NURSF
   365 FORMAT (' ',9X,'FAMILY OF FLOW ROUTING UNIT-RESPONSE FUNCTIONS'/  00064800
      1            15X,'NO.  W. CELERITY  DISP.COEF  TRAVEL TIME  DISCHAR00064900
      2GE',25X,'ORDINATES'/21X,' FT/SEC     SQ FT/SEC   TIME STEPS  CU FT00065000
@@ -810,33 +826,15 @@ C                                                                       00066900
       REAL *8 UR
       DIMENSION Q(3200)                                                 00067400
       DIMENSION USS(1600), DSS(1600), DELS(1600), S(1600)                   00067500
-C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
-C     fixed an array size typo
-C-------------------------------------------------------------------------------
-C      DIMENSION USQ(1600), DSQ(13200), DSQ1(1600), SQLOSS(3200),QI(3200)00067600
-      DIMENSION USQ(1600), DSQ(3200), DSQ1(1600), SQLOSS(3200),QI(3200) 00067600
-C-------------------------------------------------------------------------------
-C     jhb fixed the following - 08/05/2017 - old fortran compilers let you get away with murder...
-C     copied lines to declare new variable DSQO in common block DISCHA as shown above
-C-------------------------------------------------------------------------------
-C     NEW VARIABLE DSQO, OBSERVED DS. DISCHARGE, CREATED TO KEEP UNCHANGED
-C     FOR OUTPUT AND PRINTED NEXT TO COMPUTED DS. DISCHARGE FOR COMPARISON.  G. KUHN, 9-26-85.
-C
-      DIMENSION DSQO(1600)
-C
-C-------------------------------------------------------------------------------
+      DIMENSION USQ(1600), DSQ(3200), DSQ1(1600), SQLOSS(3200),QI(3200) 00067600  kt fixed DSQ array size typo
+      DIMENSION DSQO(1600)                                              00067601  kt added DSQO dim
       COMMON /ZLOGIC/ ZBEGIN,ZEND,ZPLOT,ZROUTE,ZFLOW,ZLOSS,ZDISK,ZCARDS,00067700
      1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT             00067800
       COMMON /PLT/ INITMO,INITDY,INITYR,LASTMO,LASTDY,LASTYR,NRECDS,STAN00067900
      1O1,STANM1,STANO2,STANM2,INFO,JYEAR                                00068000
       COMMON /RESFCT/ UR,DUSRF,QLIN,NURS,NRO,NRESP,ITT,NUR1,            00068100
      1                NSTAIL,NATAIL                                     00068200
-C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
-C     added new variable DSQO to common block DISCHA as shown above
-C-------------------------------------------------------------------------------
-C      COMMON /DISCHA/ USQ,DSQ,DSQ1,QI,SQLOSS,USQB,DSQB,TOLRNC           00068300
-      COMMON /DISCHA/ USQ,DSQ,DSQ1,QI,SQLOSS,USQB,DSQB,TOLRNC,DSQO      00068300
-C-------------------------------------------------------------------------------
+      COMMON /DISCHA/ USQ,DSQ,DSQ1,QI,SQLOSS,USQB,DSQB,TOLRNC,DSQO      00068300  kt added DSQO
       COMMON /STAGES/ USS,DSS,DELS                                      00068400
       COMMON /TIMEPR/ TMAX,ITMAX,DT,NTS,KR,NDT24,NRCHS,NSR,KTSTRT,N1ST,N00068500
      12ND,NLST,IQBEG,IQEND,KCNT,IBEGR                                   00068600  KCNT and IBEGR added 2/12/85 PRJ
@@ -877,7 +875,7 @@ C             INITIALIZE                                                00069800
 C                                                                       00072100
 C             ITERATE                                                   00072200
       DO 120 I=1,ITER                                                   00072300
-      CALL FILL (DELS,N1ST,NLST,0.0)                                    00072400
+      CALL FILLB (DELS,N1ST,NLST,0.0)                                   00072400  kt changed to smaller dim B function
       CALL FILL (Q,N1ST,NLST+NUR1,0.0)                                  00072500
       TEST=0.0                                                          00072600
       SQI2=0.                                                           00072700
@@ -902,7 +900,7 @@ C        THIS AND '51' ADDED 12-13-85 IN ORDER TO RUN ON PRIMOS REV 9.4.4--GKUHN
       CALL CONVOL (Q,DELS,DUSRF,N1ST,NLST,NUR1,0)                       00074300
       LAST=NLST                                                         00074400
       IF (.NOT.ZEND) LAST=NLST+NATAIL                                   00074500
-      CALL MULT (Q,N1ST,LAST,TTEMP2)                                    00074600
+      CALL MULTB (Q,N1ST,LAST,TTEMP2)                                   00074600  kt changed to larger dim B function
 C                                                                       00074700
       IF (ZROUTE) GO TO 80                                              00074800
 C             ADJUST FOR WATER RETAINED BY SOIL                         00074900
@@ -1015,7 +1013,7 @@ C                                                                       00084700
      1ILMS, TTCUM                                                       00085500  TTCUM ADDED 2/85 PRJ
       COMMON /UNITS/ C,P,PU,US,DS,NDIM,MDIM                             00085600
 C                                                                       00085700
-      CALL FILL (DUSRF,1,NTS,0.0)                                       00085800
+      CALL FILLB (DUSRF,1,NTS,0.0)                                      00085800  kt changed to smaller dim B function
       IF (ALPHA.LT.1.) RETURN                                           00085900
       WRITE (10,190)                                                    00086000
       IF (ICASE.EQ.1) GO TO 10                                          00086100
@@ -1166,20 +1164,13 @@ C                                                                       00099600
       REAL *8 REDUCE
       REAL *8 SUM, POWER
       REAL K                                                            00099900
-C     jhb added the following - 08/05/2017 - old fortran compilers let you get away with murder...
-C-------------------------------------------------------------------------------
-      DIMENSION DUMMY(10)
-C-------------------------------------------------------------------------------
-C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
-C-------------------------------------------------------------------------------
-C      DIMENSION CC(20), BPC(10), CBP(10), Q2T(5), BPW(10), WBP(10),     00100000
-      DIMENSION CC(20), BPC(10), CBP(10), Q2T(10), BPW(10), WBP(10),    00100000
-C-------------------------------------------------------------------------------
+      DIMENSION CC(20), BPC(10), CBP(10), Q2T(10), BPW(10), WBP(10),    00100000  kt dim Q2T 5 to 10
      1Q1T(20)                                                           00100100
       DIMENSION USQ(1600), DSQ(3200), DSQ1(1600), SQLOSS(3200), QI(3200)00100200
       DIMENSION AC0(20), AXK(20), C0RAT(10), C0QRAT(10),                00100300
      1XKRAT(10), XKQRAT(10)                                             00100400
-      COMMON /URPARM/ AC0,AXK,QMIN,QMAX,C0RAT,C0QRAT,XKRAT,XKQRAT       00100500
+      DIMENSION DUMMY(10)                                               00100401  kt added dummy arg
+      COMMON /URPARM/ AC0,AXK,QMIN,QMAX,C0RAT,C0QRAT,XKRAT,XKQRAT,NURSF 00100500  kt added NURSF
       DIMENSION UR(20,100), DUSRF(1600), QLIN(20), NRESP(20), ITT(20)    00100600
       REAL *8 UR
       COMMON /RESFCT/ UR,DUSRF,QLIN,NURS,NRO,NRESP,ITT,NUR1,            00100700
@@ -1213,24 +1204,17 @@ C     NRO=NUMBER OF ORDINATES IN RESPONSE FUNCTION.                     00102700
       GO TO 160                                                         00103000
    40 ZORDER=.FALSE.                                                    00103100
       NQ=1                                                              00103200
-C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
-C-------------------------------------------------------------------------------
-C      CALL TABL (QMIN,CMIN,BPC,CBP,NQ)                                  00103300
-      CALL TABL (QMIN,DUMMY,BPC,CBP,NQ)                                 00103300
-      CMIN=DUMMY(1)
-C-------------------------------------------------------------------------------
+      CALL TABL (QMIN,DUMMY,BPC,CBP,NQ)                                 00103300  kt dummy arg
+      CMIN=DUMMY(1)                                                               kt dummy arg
       NQ=1                                                              00103400
-C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
-C-------------------------------------------------------------------------------
-C      CALL TABL (QMAX,CMAX,BPC,CBP,NQ)                                  00103500
-      CALL TABL (QMAX,DUMMY,BPC,CBP,NQ)                                 00103500
-      CMAX=DUMMY(1)
-C-------------------------------------------------------------------------------
+      CALL TABL (QMAX,DUMMY,BPC,CBP,NQ)                                 00103500  kt dummy arg
+      CMAX=DUMMY(1)                                                               kt dummy arg
       TMIN0=((5280.*X)/CMAX)/3600.                                      00103600
       TMAX0=((5280.*X)/CMIN)/3600.                                      00103700
       NURS=(TMAX0-TMIN0)/RI+0.501                                       00103800
-      IF (NURS.EQ.1) NURS=2                                             G. KUHN, 5-1-86
+      IF (NURS.LE.1) NURS=2                                             G. KUHN, 5-1-86  kt changed from EQ to LE
       IF (RI.EQ.24.) NURS=20                                            00103900
+      IF (NURSF.GT.0) NURS=NURSF                                                 kt added to force number of URFs, max 20
    50 IF (NURS.GT.20) NURS=20                                           00104000
       TCHK=(TMAX0-TMIN0)/(NURS-1)                                       00104100
       IF (NURS.LT.20) TCHK=RI                                           00104200
@@ -1277,12 +1261,8 @@ C        GENERATE FLAGGING TABLE, QLIN=LINEARIZATION DISCHARGE OF Q.    00107800
       NRF=1                                                             00108300
   150 Q3T=Q1T(NRF)                                                      00108400
 C        FIND DISPERSION COEFFICIENT.                                   00108500
-C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
-C-------------------------------------------------------------------------------
-C      CALL TABL (Q3T,K,BPW,WBP,NQ)                                      00108600
-      CALL TABL (Q3T,DUMMY,BPW,WBP,NQ)                                  00108600
-      K=DUMMY(1)
-C-------------------------------------------------------------------------------
+      CALL TABL (Q3T,DUMMY,BPW,WBP,NQ)                                  00108600  kt dummy arg 
+      K=DUMMY(1)                                                                  kt dummy arg
       CZERO=CC(NRF)                                                     00108700
       AC0(NRF)=CZERO                                                    00108800
       AXK(NRF)=K                                                        00108900
@@ -1384,16 +1364,24 @@ C        RESPONSE FUNCTION) AND ACCUMULATES THE RESULT IN ARRAY A       00118100
 C        (THE OUTPUT FUNCTION),WHICH MAY BE LAGGED BY LAG TIME          00118200
 C        INTERVALS.                                                     00118300
 C                                                                       00118400
-      DIMENSION A (3200), B(3200), CUTIL (3200)
+      DIMENSION A (1600), B(1600), CUTIL(1600)                                   kt added smaller dim
+      DIMENSION AB (3200), BB(3200), CUTILB (3200)                               kt changed larger dim vars to name B
       DIMENSION CCC(20,100), QLIN(20), LAG(20), NRESP(20)
       REAL *8 CCC
-      ENTRY FILL(A,I1,I2,VALU)                                          00118700
+      ENTRY FILL(AB,I1,I2,VALU)                                         00118700  kt changed FILL function for larger dims
 C           ----                                                        00118800
       DO 10 I=I1,I2                                                     00118900
-      A(I)=VALU                                                         00119000
+      AB(I)=VALU                                                        00119000  kt changed FILL function for larger dims
    10 CONTINUE                                                          00119100
       RETURN                                                            00119200
 C                                                                       00119300
+      ENTRY FILLB(A,I1,I2,VALU)                                         00118700  kt added B function for smaller dims
+C           ----                                                        00118800  kt added B function for smaller dims
+      DO 15 I=I1,I2                                                     00118900  kt added B function for smaller dims
+      A(I)=VALU                                                         00119000  kt added B function for smaller dims
+   15 CONTINUE                                                          00119100  kt added B function for smaller dims
+      RETURN                                                            00119200  kt added B function for smaller dims
+C                                                                       00119300  kt added B function for smaller dims
       ENTRY MULT(A,I1,I2,VALU)                                          00119400
 C           ----                                                        00119500
       DO 20 I=I1,I2                                                     00119600
@@ -1401,13 +1389,27 @@ C           ----                                                        00119500
    20 CONTINUE                                                          00119800
       RETURN                                                            00119900
 C                                                                       00120000
-      ENTRY MOVE(B,A,I1,I2,ISHFTA,ISHFTB)                               00120100
-C           ----                                                        00120200
+      ENTRY MULTB(AB,I1,I2,VALU)                                        00119400  kt added B function for larger dims
+C           ----                                                        00119500  kt added B function for larger dims
+      DO 25 I=I1,I2                                                     00119600  kt added B function for larger dims
+      AB(I)=AB(I)*VALU                                                  00119700  kt added B function for larger dims
+   25 CONTINUE                                                          00119800  kt added B function for larger dims
+      RETURN                                                            00119900  kt added B function for larger dims
+C                                                                       00120000  kt added B function for larger dims
+      ENTRY MOVE(BB,AB,I1,I2,ISHFTA,ISHFTB)                             00120100  kt changed MOVE function to larger dims
+C           ----                                                        00120200 
       DO 30 I=I1,I2                                                     00120300
-      A(I+ISHFTA)=B(I+ISHFTB)                                           00120400
+      AB(I+ISHFTA)=BB(I+ISHFTB)                                         00120400  kt changed MOVE function to larger dims
    30 CONTINUE                                                          00120500
       RETURN                                                            00120600
 C                                                                       00120700
+      ENTRY MOVEB(BB,A,I1,I2,ISHFTA,ISHFTB)                             00120100  kt added B function for mix of dims
+C           ----                                                        00120200  kt added B function for mix of dims
+      DO 35 I=I1,I2                                                     00120300  kt added B function for mix of dims
+      A(I+ISHFTA)=BB(I+ISHFTB)                                          00120400  kt added B function for mix of dims
+   35 CONTINUE                                                          00120500  kt added B function for mix of dims
+      RETURN                                                            00120600  kt added B function for mix of dims
+C                                                                       00120700  kt added B function for mix of dims
       ENTRY ADD (CUTIL,B,A,I1,I2)
 C           ---                                                         00120900
       DO 40 I=I1,I2                                                     00121000
@@ -1415,12 +1417,12 @@ C           ---                                                         00120900
    40 CONTINUE                                                          00121200
       RETURN                                                            00121300
 C                                                                       00121400
-      ENTRY CONVOL(A,B,CUTIL,I1,I2,NRO,LAG0)
+      ENTRY CONVOL(AB,B,CUTIL,I1,I2,NRO,LAG0)                                     kt changed CONVOL function to mix of dims
 C           ------                                                      00121600
       DO 50 I=I1,I2                                                     00121700
       DO 50 J=1,NRO                                                     00121800
       K=I+J-1+LAG0                                                      00121900
-      A(K) = A(K) + B(I)*CUTIL(J)
+      AB(K) = AB(K) + B(I)*CUTIL(J)                                               kt changed CONVOL function to mix of dims
    50 CONTINUE                                                          00122100
       RETURN                                                            00122200
 C                                                                       00122300
@@ -1442,14 +1444,14 @@ C           ---                                                         00122500
       XMX=0.                                                            00123900
       RETURN                                                            00124000
 C                                                                       00124100
-      ENTRY CVOLUT(A,B,CCC,I1,I2,NRO,NURS,QLIN,LAG,NRESP)
+      ENTRY CVOLUT(AB,B,CCC,I1,I2,NRO,NURS,QLIN,LAG,NRESP)                         kt changed CVOLUT function to mix of dims
 C           ------                                                      00124300
       IF (NURS.GT.1) GO TO 100                                          00124400
       L=1                                                               00124500
       DO 90 I=I1,I2                                                     00124600
       DO 90 J=1,NRO                                                     00124700
       K=I+J-1+LAG(L)                                                    00124800
-      A(K)=A(K) + B(I) * CCC(L,J)
+      AB(K)=AB(K) + B(I) * CCC(L,J)                                               kt changed CVOLUT function to mix of dims
    90 CONTINUE                                                          00125000
       RETURN                                                            00125100
   100 DO 160 I=I1,I2                                                    00125200
@@ -1465,7 +1467,7 @@ C           ------                                                      00124300
   140 NRO=NRESP(L)                                                      00126200
       DO 150 J=1,NRO                                                    00126300
       K=I+J-1+LAG(L)                                                    00126400
-      A(K) = A(K) + QB * CCC(L,J)
+      AB(K) = AB(K) + QB * CCC(L,J)                                               kt changed CVOLUT function to mix of dims
   150 CONTINUE                                                          00126600
       IF (L.EQ.1) GO TO 160                                             00126700
       QB=QLIN(L-1)                                                      00126800
@@ -1587,28 +1589,16 @@ C             LINE PRINTER PLOT OF TIME ARRAY DATA.  ALSO SUPPORTS      00139600
 C             SUBPROGRAM PLOTIT.                                        00139700
 C                                                                       00139800
       IMPLICIT LOGICAL (K,W)
-C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
-C-------------------------------------------------------------------------------
-C      INTEGER *2 GRID (56000), CH
-      CHARACTER*1 GRID (56000), CH
-C-------------------------------------------------------------------------------
+      CHARACTER*1 GRID (56000), CH                                               kt changed INTEGER *2 to CHARACTER*1
       DIMENSION NSCALE(5), ABNOS(26), X(1), Y(1)                        00140000
       CHARACTER*1 NOS (10)
-C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
-C-------------------------------------------------------------------------------
-C      INTEGER *2 WL
-      CHARACTER*1 WL
-C-------------------------------------------------------------------------------
+      CHARACTER*1 WL                                                             kt changed INTEGER *2 to CHARACTER*1
       CHARACTER *36 LABEL
-      INTEGER *2 ILABEL
+      CHARACTER*1 ILABEL                                                         kt changed INTEGER *2 to CHARACTER*1
       CHARACTER *36 ALABEL
       DIMENSION ILABEL (36)
       LOGICAL ERR1, ERR3, ERR5
-C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
-C-------------------------------------------------------------------------------
-c      INTEGER *2 VC,HC,FOR1(19),FOR2(15),FOR3(19),NC,BL,HF,HF1
-      CHARACTER*1 VC,HC,FOR1(19),FOR2(15),FOR3(19),NC,BL,HF,HF1
-C-------------------------------------------------------------------------------
+      CHARACTER*1 VC,HC,FOR1(19),FOR2(15),FOR3(19),NC,BL,HF,HF1                  kt changed INTEGER *2 to CHARACTER*1
       CHARACTER *24 FOX1, FOX3
       CHARACTER *16 FOX2
       INTEGER *2 VCR
@@ -1699,13 +1689,8 @@ C                                                                       00141600
    80 IF (KPLOT1) RETURN                                                00148800
       KPLOT1=.TRUE.                                                     00148900
 C                                                                       00149000
-C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
-C-------------------------------------------------------------------------------
-C      ENTRY PLOT2 (XMAX,XMIN,YMAX,YMIN,P)
-C      IFL=P
-      ENTRY PLOT2 (XMAX,XMIN,YMAX,YMIN,INTP)
-      IFL=INTP
-C-------------------------------------------------------------------------------
+      ENTRY PLOT2 (XMAX,XMIN,YMAX,YMIN,INTP)                                     kt changed P to INTP
+      IFL=INTP                                                                   kt changed P to INTP
       KPLOT2=.TRUE.                                                     00149300
       IF (KPLOT1) GO TO 90                                              00149400
       NSCL=0                                                            00149500
@@ -1784,11 +1769,8 @@ C                                                                       00156100
       DO 280 I=1,NDHP                                                   00156600
       IF (I.EQ.NDHP.AND.KBOTGL) GO TO 280                               00156700
       WL=BL                                                             00156800
-C     jhb changed the following - 08/05/2017 - old fortran compilers let you get away with murder...
-C-------------------------------------------------------------------------------
-C      IF (I.LE.NL)WL=ILABEL(I)
-      IF (I.LE.NL)WL=CHAR(ILABEL(I))
-C-------------------------------------------------------------------------------
+C      IF (I.LE.NL)WL=CHAR(ILABEL(I))                                              kt added CHAR()
+      IF (I.LE.NL)WL=ILABEL(I)
       I2=I*NDVP                                                         00157000
       I1=I2-NDV                                                         00157100
       IF (MOD(I-1,NSH).EQ.0.AND..NOT.KORD) GO TO 270                    00157200
@@ -1900,7 +1882,7 @@ C      CALL PLOT3 ('I',Q3LOG(IQF),XI(IQF),NPTS)                          0016630
 C      CALL PLOT3 ('U',Q1LOG(IQF),XI(IQF),NPTS)                          00166400
 C      CALL PLOT3 ('D',Q2LOG(IQF),XI(IQF),NPTS)                          00166500
       CALL OMIT (3)                                                     00166600
-      CALL PLOT4 (5,' DATE')                                            00166700
+      CALL PLOT4 (5,' DATE                               ')             00166700  kt added end padding so matches function dim
       WRITE (10,90) MINQA
       WRITE (10,80)
       NSCALE (1) = 0
@@ -2391,7 +2373,7 @@ C                                                                       00203200
       COMMON / DAYSMO / MODAYS
       COMMON /WARN/ IWARN,IW0,IW1,IW2                                   00203600
       COMMON /UNITS/ C,P,PU,US,DS,NDIM,MDIM                             00203700
-      DATA NDIM/400/,MDIM/800/                                          00203800
+      DATA NDIM/1600/,MDIM/3200/                                        00203800  %kt changed for 400 800 to 1600 3200
       DATA C/7/,P/10/,PU/7/,US/1/,DS/2/
 C--------------- "C" changed to 7 to reflect Pr1me file system.    jbs  6/83
 C--------------- "P" changed to 10                    jbs  6/83
