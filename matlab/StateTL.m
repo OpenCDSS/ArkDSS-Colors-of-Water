@@ -18,27 +18,53 @@ j349dir=basedir;
 % runoptions
 % - most of this will be put into text file to drive run
 
-readinfofile=2;  %1 reads from excel and saves mat file; 2 reads mat file;
-readgageinfo=2;  %if using real gage data, 1 reads from REST, 2 reads from file - watch out currently saves into SR file
-infofilename='StateTL_inputdata.xlsx';
-pullnewdivrecs=2;  %0 if want to repull all from REST, 1 if only pull new/modified from REST for same period, 2 load from saved mat file
-runadminloop=1;  %1 runs loops that processing both river and water class amounts, doing routing, releases, and exchanges, for historical period; 2 reads mat file;
-doexchanges=1;
-pred=0;  %if pred=0 subtracts water class from existing flows, if 1 adds to existing gage flows
+%control options (on=1) fed through control file need to be in this list -
+%watch out - if change variable names in code also need to change them here!
+%currently - if leave out one of these from control file will assign it a zero value
+controlvars={'srmethod','infofilename','readinfofile','readevap','readstagedischarge','pullstationdata','pullreleaserecs','runriverloop','runwcloop','doexchanges','runcaptureloop','runcalibloop'};
+controlvars=[controlvars,{'outputfilename','outputgage','outputwc','outputcal','outputhr','outputday','calibavggainloss'}];
+controlfilename='StateTL_control.txt';
 
-runcaptureloop=1;  %loop to characterize potential capture vs available amt.
-    percrule=.10;  %percent rule - TLAP currently uses 10% of average release rate as trigger amount (Livingston 2011 says 10%; past Livingston 1978 detailed using 5% believe defined as 5% of max amount at headgate)
-
-runcalibloop=1;
-    WDcaliblist=[17];
-    calibdatestart=datenum(2018,4,02);
-    calibdateend=datenum(2018,4,15);
-    calibmeth='linreg'; %currently mean or linreg - method to establish gain/loss/error correction for period that might be like we will do future forecasting
-    calibmeth='mean';
 
 %Methods - these currently override method for all reaches, but planning default method by Reach that would run if not overrided  
 %srmethod='j349';       %dynamic j349/Livinston method
 srmethod='muskingum';   %percent loss TL plus muskingum-cunge for travel time
+
+% Date - will be reworked - j349 currently only works for 60 days at 1hour - may alter fortran to run full calendar year at 1 hour without spinup
+% also this needs to be integrated into SR structure
+datestart=datenum(2018,4,01);
+
+infofilename='StateTL_inputdata.xlsx';
+readinfofile=0;  %1 reads from excel and saves mat file; other reads mat file;
+    readevap=0;   %if reading info file, dont have to reread evap/SD (ie for calibration) 
+    readstagedischarge=0;
+pullstationdata=0;  %read gage and telemetry basd flow data; 1 reads from REST, other reads from file
+pullreleaserecs=0;  %0 load from saved mat file, 1 if want to repull all from REST, 2 if only pull new/modified from REST for same period
+runriverloop=1;  %1 runs / 0 etc not run
+runwcloop=1;
+   doexchanges=1;
+runcaptureloop=1;  %loop to characterize potential capture vs available amt.
+runcalibloop=1;
+
+outputfilename='StateTL_inadv1new_';  %will add srmethod + gage/wc/etc + hour/day + .csv
+outputgage=1;  %output river amounts by reach
+outputwc=1;  %output waterclass amounts by reach
+outputcal=1;  %output calibration amounts by gage location
+    outputhr=0;  %output on hour timestep
+    outputday=1;  %output on day timestep
+    
+WDcaliblist=[17];
+calibstartdate=datenum(2018,4,02);
+calibenddate=datenum(2018,4,15);
+calibavggainloss='linreg'; %currently mean or linreg - method to establish gain/loss/error correction for period that might be like we will do future forecasting
+calibavggainloss='mean';
+
+
+
+
+pred=0;  %if pred=0 subtracts water class from existing flows, if 1 adds to existing gage flows
+percrule=.10;  %percent rule - TLAP currently uses 10% of average release rate as trigger amount (Livingston 2011 says 10%; past Livingston 1978 detailed using 5% believe defined as 5% of max amount at headgate)
+
 flowcriteria=5; %to establish gage and node flows: 1 low, 2 avg, 3 high flow values from livingston; envision 4 for custom entry; 5 for actual flows; 6 average for xdays/yhours prior to now/date; 7 average between 2 dates
 iternum.j349=5;  %iterations of gageflow loop given method to iterate on gagediff (gain/loss/error correction for estimated vs actual gage flows) (had been using dynamic way to iterate but currently just number);
 iternum.muskingum=5;
@@ -57,17 +83,6 @@ minc=1;              %minimum flow applied to celerity, dispersion, and evaporat
 minj349=1;           %minimum flow for j349 application - TLAP uses 1.0
 gainchangelimit=0.1;
 
-outputfilename='StateTL_inadv1_';  %will add srmethod + gage/wc/etc + hour/day + .csv
-outputgage=1;  %output waterclass amounts by reach
-    outputgagehr=0;  %output on hour timestep
-    outputgageday=1;  %output on day timestep
-outputwc=1;  %output waterclass amounts by reach
-    outputwchr=0;  %output on hour timestep
-    outputwcday=1;  %output on day timestep
-outputcal=1;  %output calibration amounts by gage location
-    outputcalhr=0;  %output on hour timestep
-    outputcalday=1;  %output on day timestep
-
 logfilename='StateTL_runlog.txt';  %log filename
     displaymessage=1;  %1=display messages to screen
     writemessage=0; %1=write messages to logfile
@@ -79,9 +94,6 @@ if writemessage==1;fidlog=fopen(logfilename,'w');fprintf(fidlog,'%s\r\n',logm);f
 
 apikey='D2D7AF63-C286-40A8-9';  %this is KT1 personal - will want to get one for this tool or cdss etc
 
-% Date - will be reworked - j349 currently only works for 60 days at 1hour - may alter fortran to run full calendar year at 1 hour without spinup
-% also this needs to be integrated into SR structure
-datestart=datenum(2018,4,01);
 
 rdays=60; rhours=1;
 spinupdays=45;
@@ -95,44 +107,114 @@ rjulien=rdatesday-(datenum(ryear,1,1)-1);
 dateend=datestart+(rdays-spinupdays)-1;
 datedays=[datestart:dateend];
 
+%date.datestart=datestart;
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %READ INITIAL RUN INFO
 % initially have WDlist in xlsx that defines division and WDs to run in order (upper tribs first)
 %%%%%%%%%%%%%%%%%%%%%%%%%%
-logm=['reading WD run list from file: ' basedir infofilename];
-domessage(logm,logfilename,displaymessage,writemessage)
 
-inforaw=readcell([basedir infofilename],'Sheet','WDlist');
-[inforawrow inforawcol]=size(inforaw);
 
-infoheaderrow=1;
-for i=1:inforawcol
-    if 1==2
-    elseif strcmp(upper(inforaw{infoheaderrow,i}),'DIV'); infocol.div=i;
-    elseif strcmp(upper(inforaw{infoheaderrow,i}),'WD'); infocol.wd=i;
-    end
+fid=fopen(controlfilename);
+if fid==-1
+    logm=['Error: Could not find text file with run control options: ' basedir controlfilename];
+    domessage(logm,logfilename,displaymessage,writemessage)
+    error(logm);
+else
+    logm=['Reading text file with run control options: ' basedir controlfilename];
+    domessage(logm,logfilename,displaymessage,writemessage)    
 end
-k=0;
-for i=infoheaderrow+1:inforawrow
-    if ~isempty(inforaw{i,infocol.div}) & ~ismissing(inforaw{i,infocol.div})
-        k=k+1;
-        v.di=inforaw{i,infocol.div};if ischar(v.di); v.di=str2num(v.di); end
-        v.wd=inforaw{i,infocol.wd};if ischar(v.wd); v.wd=str2num(v.wd); end
-        
-        if k==1
-           d=v.di;
-           WDlist=v.wd;
-        else
-           if d~=v.di
-               error('Stopping - more than one Division listed in run options / currently not set to run multiple divisions at once (but very easily can be)')
-           end
-           WDlist=[WDlist,v.wd];
-        end
-    end
-end
-ds=['D' num2str(d)];
 
+for i=1:length(controlvars)  %initially set these to zero
+    eval([controlvars{i} '=0;']);
+end
+
+while 1
+   line = fgetl(fid);
+   if ~ischar(line), break, end
+   if ~isempty(line) && ~strcmp(line(1),'#') && ~strcmp(line(1),'%')   %starting # or % taken as comment line wont be executed
+   eids=find(line=='=');                             %an equal sign signals end of variable name
+   cids=find(line==',');                            %commas can seperate multiple values
+   sids=find(line==';');                             %if semi-colon take as end of data, so can put comments on line afterwards
+   if ~isempty(sids)                                 %if no semi-colon will take full line to end, so no spaces or comments after data value
+       cids=cids(find(cids<sids(1)));
+       tids=[eids(1),cids,sids(1)];
+   else
+       tids=[eids(1),cids,length(line)+1];
+   end
+   controlvarsid=find(strcmp(lower(line(1:tids(1)-1)),controlvars));
+   logtxt='Control file: ';
+   if 1==2
+   elseif ~isempty(controlvarsid)   %variables listed in controlvarsid with single value as input; text should be in single quotes
+       eval([controlvars{controlvarsid} '=' line(tids(1)+1:tids(2)-1) ';']);
+   elseif strcmp(lower(line(1:eids(1)-1)),'div')   %Division - currently only set to one at a time but with a bit of code revision could run multiple
+       d=str2double(line(tids(1)+1:tids(2)-1));
+       ds=['D' num2str(d)];
+       if length(tids)>2
+            logm=['Warning: more than one Division listed in run options / currently not set to run multiple divisions at once (but very easily can be) - just running first listed Div'];
+            domessage(logm,logfilename,displaymessage,writemessage)
+       end
+   elseif strcmp(lower(line(1:eids(1)-1)),'wdlist')   %WD run list in order; seperate by commas from upper tribs first to lower/mainstem
+       WDlist=[];
+       for i=1:length(tids)-1
+            wd=str2double(line(tids(i)+1:tids(i+1)-1));
+            WDlist=[WDlist,wd];
+       end
+   elseif strcmp(lower(line(1:eids(1)-1)),'wdcaliblist')   %WD to calibrate if running calibloop, if multiple seperate by commas
+       WDcaliblist=[];
+       for i=1:length(tids)-1
+            wd=str2double(line(tids(i)+1:tids(i+1)-1));
+            WDcaliblist=[WDcaliblist,wd];
+       end
+   elseif strcmp(lower(line(1:eids(1)-1)),'datestart')   %calib startdate year,month,day
+       datestart=datenum(str2double(line(tids(1)+1:tids(2)-1)),str2double(line(tids(2)+1:tids(3)-1)),str2double(line(tids(3)+1:tids(4)-1)));
+   elseif strcmp(lower(line(1:eids(1)-1)),'calibstartdate')   %calib startdate year,month,day
+       calibstartdate=datenum(str2double(line(tids(1)+1:tids(2)-1)),str2double(line(tids(2)+1:tids(3)-1)),str2double(line(tids(3)+1:tids(4)-1)));
+   elseif strcmp(lower(line(1:eids(1)-1)),'calibenddate')   %calib enddate year,month,day
+       calibenddate=datenum(str2double(line(tids(1)+1:tids(2)-1)),str2double(line(tids(2)+1:tids(3)-1)),str2double(line(tids(3)+1:tids(4)-1)));
+   else
+       logtxt='WARNING: control file line not executed: ';
+   end
+   logm=[logtxt line(1:tids(end)-1)];
+   domessage(logm,logfilename,displaymessage,writemessage)
+   end
+end
+fclose(fid);
+
+% logm=['reading WD run list from file: ' basedir infofilename];
+% domessage(logm,logfilename,displaymessage,writemessage)
+% 
+% inforaw=readcell([basedir infofilename],'Sheet','WDlist');
+% [inforawrow inforawcol]=size(inforaw);
+% 
+% infoheaderrow=1;
+% for i=1:inforawcol
+%     if 1==2
+%     elseif strcmp(upper(inforaw{infoheaderrow,i}),'DIV'); infocol.div=i;
+%     elseif strcmp(upper(inforaw{infoheaderrow,i}),'WD'); infocol.wd=i;
+%     end
+% end
+% k=0;
+% for i=infoheaderrow+1:inforawrow
+%     if ~isempty(inforaw{i,infocol.div}) & ~ismissing(inforaw{i,infocol.div})
+%         k=k+1;
+%         v.di=inforaw{i,infocol.div};if ischar(v.di); v.di=str2num(v.di); end
+%         v.wd=inforaw{i,infocol.wd};if ischar(v.wd); v.wd=str2num(v.wd); end
+%         
+%         if k==1
+%            d=v.di;
+%            WDlist=v.wd;
+%         else
+%            if d~=v.di
+%                error('Stopping - more than one Division listed in run options / currently not set to run multiple divisions at once (but very easily can be)')
+%            end
+%            WDlist=[WDlist,v.wd];
+%         end
+%     end
+% end
+% ds=['D' num2str(d)];
+% 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %READ SUBREACH INFORMATION
@@ -141,6 +223,11 @@ ds=['D' num2str(d)];
 global SR
 
 if readinfofile==1
+    if readevap~=1 | readstagedischarge~=1  %if not rereading - this should have seperate evap and stagedischarge structures
+        load([basedir 'StateTL_SRdataevapsd.mat']);
+    end
+    
+    
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%    
 % read subreach data    
@@ -395,32 +482,44 @@ SR.(ds).WDID=WDIDsortedbywdidlist;
 %%%%%%%%%%%%%%%%%%
 % Evaporation data
 % this will have to be refined as expand reaches into new areas or use better data
-
-[infonum,infotxt,inforaw]=xlsread([basedir infofilename],'evap');
-[infonumrow infonumcol]=size(infonum);
-[inforawrow inforawcol]=size(inforaw);
-
-for wd=WDlist
-    wds=['WD' num2str(wd)];
-    SR.(ds).(wds).evap=infonum(:,1);
+if readevap==1
+    [infonum,infotxt,inforaw]=xlsread([basedir infofilename],'evap');
+    [infonumrow infonumcol]=size(infonum);
+    [inforawrow inforawcol]=size(inforaw);
+    for wd=WDlist
+        wds=['WD' num2str(wd)];
+        SR.(ds).(wds).evap=infonum(:,1);
+        evap.(ds).(wds).evap=SR.(ds).(wds).evap;
+    end
+    
+else
+    for wd=WDlist
+        wds=['WD' num2str(wd)];
+        SR.(ds).(wds).evap=evap.(ds).(wds).evap;
+    end
+    
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 % stage discharge data
-
 % [infonum,infotxt,inforaw]=xlsread([basedir infofilename],'stagedischarge');
 % [infonumrow infonumcol]=size(infonum);
 % [inforawrow inforawcol]=size(inforaw);
 
-SDmat=readmatrix([basedir infofilename],'Sheet','stagedischarge');
-[SDmatnumrow SDmatnumcol]=size(SDmat);
-
-for i=1:SDmatnumrow
-    if ~isfield(SR.(ds),'stagedischarge') || ~isfield(SR.(ds).stagedischarge,['SD' num2str(SDmat(i,1))])
-        SR.(ds).stagedischarge.(['SD' num2str(SDmat(i,1))])=SDmat(i,2:3);
-    else
-        SR.(ds).stagedischarge.(['SD' num2str(SDmat(i,1))])=[SR.(ds).stagedischarge.(['SD' num2str(SDmat(i,1))]);SDmat(i,2:3)];
-    end    
+if readstagedischarge==1
+    SDmat=readmatrix([basedir infofilename],'Sheet','stagedischarge');
+    [SDmatnumrow SDmatnumcol]=size(SDmat);
+    
+    for i=1:SDmatnumrow
+        if ~isfield(SR.(ds),'stagedischarge') || ~isfield(SR.(ds).stagedischarge,['SD' num2str(SDmat(i,1))])
+            SR.(ds).stagedischarge.(['SD' num2str(SDmat(i,1))])=SDmat(i,2:3);
+        else
+            SR.(ds).stagedischarge.(['SD' num2str(SDmat(i,1))])=[SR.(ds).stagedischarge.(['SD' num2str(SDmat(i,1))]);SDmat(i,2:3)];
+        end
+    end
+    stagedischarge.(ds).stagedischarge=SR.(ds).stagedischarge;
+else
+    SR.(ds).stagedischarge=stagedischarge.(ds).stagedischarge;
 end
 
 % for wd=WDlist
@@ -431,6 +530,7 @@ end
 clear c v info*
 
 save([basedir 'StateTL_SRdata.mat'],'SR');
+save([basedir 'StateTL_SRdataevapsd.mat'],'evap','stagedischarge');
 
 else
     load([basedir 'StateTL_SRdata.mat']);
@@ -446,7 +546,7 @@ end
 flowtestloc=[2,17,8,1];
 
 
-if readgageinfo==1 | readinfofile==1  %unfortunately, currently if reload SR data also need to reload gage data... (fix at somepoint - load gage data into intermediate file)   
+if pullstationdata==1
 
 switch flowcriteria
     case 1
@@ -457,7 +557,7 @@ switch flowcriteria
         flow='high';
     otherwise
         reststarttime=now;
-        logm=['reading gage data from HB using REST services starting: ' datestr(reststarttime)];
+        logm=['reading station (gage/telemetry) data from HB using REST services starting: ' datestr(reststarttime)];
         domessage(logm,logfilename,displaymessage,writemessage)
 
         d=flowtestloc(1);wd=flowtestloc(2);r=flowtestloc(3);sr=flowtestloc(4);
@@ -530,13 +630,27 @@ for wd=SR.(ds).WD
             %                SR.(ds).(wds).(rs).Qnode(:,:,1)=repmat(SR.(ds).(wds).(rs).(flow)(1,:),rsteps,1).*ones(rsteps,length(SR.(ds).(wds).(rs).SR)); %repmat required for r2014a
             SR.(ds).(wds).(rs).Qnode(:,:,1)=SR.(ds).(wds).(rs).(flow)(1,:).*ones(rsteps,length(SR.(ds).(wds).(rs).SR));
         end
+        Stations.(ds).(wds).(rs).Qnode=SR.(ds).(wds).(rs).Qnode;  %to save seperately
     end
 end
 
 save([basedir 'StateTL_SRdata_withgage.mat'],'SR');
+save([basedir 'StateTL_Qnode.mat'],'Stations');
 
 else
-    load([basedir 'StateTL_SRdata_withgage.mat']);
+    load([basedir 'StateTL_Qnode.mat']);
+    if readinfofile==1  %if reload SR data need to reattach gage data...
+        for wd=SR.(ds).WD
+            wds=['WD' num2str(wd)];
+            for r=SR.(ds).(wds).R
+                rs=['R' num2str(r)];
+                SR.(ds).(wds).(rs).Qnode=Stations.(ds).(wds).(rs).Qnode;
+            end
+        end
+        save([basedir 'StateTL_SRdata_withgage.mat'],'SR');
+    else
+        load([basedir 'StateTL_SRdata_withgage.mat']);        
+    end    
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -545,7 +659,7 @@ end
 
 divrecdayurl='https://dwr.state.co.us/Rest/GET/api/v2/structures/divrec/divrecday/';
 
-if pullnewdivrecs==0
+if pullreleaserecs==1
     clear WC
     WC.date.datestart=datestart;
     WC.date.dateend=dateend;
@@ -559,7 +673,10 @@ end
 
 
 
-if pullnewdivrecs<2
+if pullreleaserecs>0
+     logm=['reading water class release data from HB using REST services option: ' num2str(pullreleaserecs) ' starting: ' datestr(now)];
+     domessage(logm,logfilename,displaymessage,writemessage)
+
     for wd=WDlist
         wds=['WD' num2str(wd)];
         modified=WC.date.(ds).(wds).modified;
@@ -637,7 +754,7 @@ for j=1:length(SR.(ds).(wds).releasestructures)
             
         end
     catch ME
-        logm=['WARNING: didnt find new records using REST for  ' reswdid ' with pullnewdivrecs: ' num2str(pullnewdivrecs) ' and modified: ' datestr(WC.date.(ds).(wds).modified) ];
+        logm=['WARNING: didnt find new records using REST for  ' reswdid ' with pullnewdivrecs: ' num2str(pullreleaserecs) ' and modified: ' datestr(WC.date.(ds).(wds).modified) ];
         domessage(logm,logfilename,displaymessage,writemessage)   
     end
     %end
@@ -663,7 +780,7 @@ WC.(ds).WD112.(wwcnum).datavalues=100*ones(1,15);
 WC.(ds).WD112.(wwcnum).datameasdate=(737151:737165);
 
 
-if readgageinfo==1 | readinfofile==1 | pullnewdivrecs<2
+if pullstationdata==1 | pullreleaserecs>0
     logm=['Done pulling data from HBREST at: ' datestr(now) ' elapsed (DD:HH:MM:SS): ' datestr(now-reststarttime,'DD:HH:MM:SS')];    %log message
     domessage(logm,logfilename,displaymessage,writemessage)  
 end
@@ -712,221 +829,15 @@ end
 % PROCESSING LOOPS
 %%%%%%%%%%%%%%%%%%
 
-if runadminloop==1
+
+    
+if runriverloop==1
 
 lastwdid=[];  %tracks last wdid/connection of processed wd reaches
 SR.(ds).Rivloc.loc=[]; %just tracks location listing of processed reaches
-SR.(ds).WCloc.wslist=[];
-SR.(ds).WCloc.Rloc=[];
 SR.(ds).Rivloc.flowwc.wcloc=[];
 SR.(ds).Gageloc.loc=[];
 SR.(ds).Rivloc.length=[];
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Routing of water classes
-%   new - put above other loops to build WCloc list first purely for inadvertant diversion correction
-%   so can do both gageflow and admin together on a R-reach by reach basis
-%
-%  WATCH!-currently requires WDID list to be in spatial order to know whats going upstream
-%         may want to change that to ordered lists 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-for wd=WDlist
-    wds=['WD' num2str(wd)];
-    if ~isfield(SR.(ds).(wds),'wwcnums')
-        logm=['no water classes identified (admin loop not run) for D:' ds ' WD:' wds];
-        domessage(logm,logfilename,displaymessage,writemessage)
-    else
-    wwcnums=SR.(ds).(wds).wwcnums;
-    Rt=SR.(ds).(wds).R(1);
-    Rb=SR.(ds).(wds).R(end);
-    logm=['running admin loop to pre-establish routing for D:' ds ' WD:' wds];
-    domessage(logm,logfilename,displaymessage,writemessage)
-
-
-for w=1:length(wwcnums)
-ws=wwcnums{w};
-% if ~isfield(SR.(ds).WCloc,ws)  %if here will include missing WCs as empty
-%     SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
-%     SR.(ds).WCloc.(ws)=[];
-% end
-
-wdinwdidlist=find([SR.(ds).WDID{:,3}]==wd);
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%   the next/first block is looking for water classes passed from another WDreach
-%   these could have been passed from an upstream release or
-%   from an exchange that was first routed down an upstream reach
-
-parkwcid=0;
-if isfield(SR.(ds).(wds),'park')
-    parkwcid=find(strcmp(SR.(ds).(wds).park(:,1),ws));
-end
-if parkwcid~=0
-    wdidfrom=SR.(ds).(wds).park{parkwcid,2};
-    wdidfromid=SR.(ds).(wds).park{parkwcid,3};
-    fromWDs=SR.(ds).(wds).park{parkwcid,4};
-    fromRs=SR.(ds).(wds).park{parkwcid,5};
-    fromsr=SR.(ds).(wds).park{parkwcid,6};
-else  %if not parked
-    wdidfrom=WC.(ds).WC.(ws).wdid;
-    wdidfromid=intersect(find(strcmp(SR.(ds).WDID(:,1),wdidfrom)),wdinwdidlist);
-end
-    
-wdidto=WC.(ds).WC.(ws).to;
-wdidtoid=find(strcmp(SR.(ds).WDID(:,1),wdidto));
-wdidtoidwd=intersect(wdidtoid,wdinwdidlist);
-
-parkwdidid=0;
-exchtype=0;
-if isempty(wdidtoid)                                    %wdid To: listed in divrecs but cant find To:wdid in network list of wdids
-    wdidtoid=wdidfromid;
-    logm=['WARNING: not routing (either exchange or missing) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ];
-    domessage(logm,logfilename,displaymessage,writemessage)
-else
-    if ~isfield(SR.(ds).WCloc,ws)
-        SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
-        SR.(ds).WCloc.(ws).wc=WC.(ds).WC.(ws).wc;
-        SR.(ds).WCloc.(ws).wdid=WC.(ds).WC.(ws).wdid;
-        SR.(ds).WCloc.(ws).type=WC.(ds).WC.(ws).type;
-        SR.(ds).WCloc.(ws).to=WC.(ds).WC.(ws).to;
-        SR.(ds).WCloc.(ws).loc=[];
-        SR.(ds).WCloc.(ws).srtime=0;        
-        
-    end
-    dswdidids=find(wdidtoid>=wdidfromid);
-    if ~isempty(dswdidids)                              %DS RELEASE TO ROUTE (could include US Exchange that is first routed to end of WD)
-        if SR.(ds).WDID{wdidtoid(dswdidids(1)),3} == wd %DS release located in same WD - so route to first node that is at or below release point
-            wdidtoid=wdidtoid(dswdidids(1));            %if multiple points (could be multiple reach defs or same wdid at top of next ds reach)
-        else                                            %DS release located in different WD - so route to bottom of WD and park into next WD
-            wdidtoid=wdinwdidlist(end);
-            parkwdidid=find(strcmp(SR.(ds).WDID(:,1),SR.(ds).WDID(wdidtoid,1)));
-            parkwdidid=setdiff(parkwdidid,wdinwdidlist);
-            parktype=1;  %1 push DS to end of reach
-            logm=['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To:' wdidto ' external to WD reach, routing to end of WD reach'];
-            domessage(logm,logfilename,displaymessage,writemessage)
-        end
-    elseif isempty(dswdidids)                             %US EXCHANGE RELEASE - ONLY ROUTING HERE IF FIRST DOWN TO MID-WD BRANCH
-        wdidtoidnotwd=setdiff(wdidtoid,wdinwdidlist);
-        branchid=find(SR.(ds).(wds).branch{:,1}==SR.D2.WDID{wdidtoidnotwd,3});
-
-        if ~isempty(branchid)      %us exchange from DS branch within WD (exchtype=3)
-            exchtype=3;
-            SR.(ds).EXCH.(ws).wdidtoid=wdidtoid;
-            SR.(ds).EXCH.(ws).WDto=SR.(ds).WDID{wdidtoid(1),3};
-            wdidbranch=SR.(ds).(wds).branch{branchid,2};
-            wdidtoids=find(strcmp(SR.(ds).WDID(:,1),wdidbranch));
-            parkwdidid=setdiff(wdidtoids,wdinwdidlist);
-            wdidtoid=intersect(wdidtoids,wdinwdidlist);
-            parktype=2;  %2 push DS releases to internal node
-            SR.(ds).EXCH.(ws).wdidfromid=parkwdidid;
-            SR.(ds).EXCH.(ws).WDfrom=SR.(ds).WDID{parkwdidid,3};
-            SR.(ds).EXCH.(ws).exchtype=3;            
-            logm=['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To Confluence:' wdidbranch ' US exchange first routing with TL to internal confluence point within WD reach'];
-            domessage(logm,logfilename,displaymessage,writemessage)
-            logm=['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ];
-            domessage(logm,logfilename,displaymessage,writemessage)
-         
-        elseif ~isempty(wdidtoidwd)                    %us exchange within WD (exchtype=1)
-            exchtype=1;
-            SR.(ds).EXCH.(ws).wdidtoid=wdidtoidwd(end);  %last in list in case multiple reach listing (will go to lowest) - remember that wdid is listed "above" subreach so sr will be next one after
-            SR.(ds).EXCH.(ws).wdidfromid=wdidfromid;
-            SR.(ds).EXCH.(ws).WDfrom=wd;
-            SR.(ds).EXCH.(ws).WDto=wd;
-            SR.(ds).EXCH.(ws).exchtype=1;
-            wdidtoid=wdidfromid;  %leaving it there
-            logm=['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ];
-            domessage(logm,logfilename,displaymessage,writemessage)
-        else                                           %us exchange in different WD (exchtype=2)
-            exchtype=2;
-            SR.(ds).EXCH.(ws).wdidtoid=wdidtoid(end);
-            SR.(ds).EXCH.(ws).wdidfromid=wdidfromid;
-            SR.(ds).EXCH.(ws).WDfrom=wd;
-            SR.(ds).EXCH.(ws).WDto=SR.(ds).WDID{wdidtoid(1),3};
-            SR.(ds).EXCH.(ws).exchtype=2;
-            wdidtoid=wdidfromid;
-%            wdidtoid=wdinwdidlist(end);
-            logm=['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ];
-            domessage(logm,logfilename,displaymessage,writemessage)
-        end
-
-    end       
-end
-
-
-WDtr=SR.(ds).WDID{wdidfromid,3};
-WDbr=SR.(ds).WDID{wdidtoid,3};
-Rtr=SR.(ds).WDID{wdidfromid,4};
-Rbr=SR.(ds).WDID{wdidtoid,4};
-SRtr=SR.(ds).WDID{wdidfromid,5}+SR.(ds).WDID{wdidfromid,6};  %new ordering - if col6=1 then sr=dswdid / col6=0 then sr=uswdid, so for from sr add 0 or 1 to move to top of next sr
-SRbr=SR.(ds).WDID{wdidtoid,5};
-
-
-if wdidtoid==wdidfromid   %EXCHANGES (or missing releases)
-    if exchtype>0
-        SR.(ds).WCloc.Rloc=[SR.(ds).WCloc.Rloc;[{ws},{ds},{wds},{['R' num2str(Rtr)]},{SRtr},{SRbr},{Rtr},{Rbr},{SRtr},{SRbr},{wdidfrom},{wdidto},{wdidfromid},{wdidtoid}]];
-    end
-else
-    
-wd=WDtr;
-    wds=['WD' num2str(wd)];
-    for r=Rtr:Rbr
-        rs=['R' num2str(r)];
-        if r==Rtr
-            srt=SRtr;
-        else
-            srt=1;
-        end
-        if r==Rbr
-            srb=SRbr;
-        else
-            srb=SR.(ds).(wds).(rs).SR(end);
-        end
-        SR.(ds).WCloc.Rloc=[SR.(ds).WCloc.Rloc;[{ws},{ds},{wds},{rs},{srt},{srb},{Rtr},{Rbr},{SRtr},{SRbr},{wdidfrom},{wdidto},{wdidfromid},{wdidtoid}]];
-
-for sr=srt:srb
-    % WCloc.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/-1 - exch) is num)
-    lsr=SR.(ds).(wds).(rs).subreachid(sr);
-    SR.(ds).WCloc.(ws).loc=[SR.(ds).WCloc.(ws).loc;[{ds},{wds},{rs},{sr},{lsr},{1},{SR.(ds).(wds).(rs).wdid{sr}},{SR.(ds).(wds).(rs).dswdid{sr}}]];
-    
-end %sr
-
-    end %r
-%end %wd
-end
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% parking - transfering waterclass from one WD to another
-%   for releases, ds WDreach should then pick up, for exchanges waits for exchange loop
-if parkwdidid ~= 0  %placing park - place wcnum and park parameters in downstream WDreach
-    SR.(ds).(wds).(ws).parkwdidid=parkwdidid; %this is needed for process/admin loop
-    parkwdid=SR.(ds).WDID{parkwdidid,1};
-    parkWD=SR.(ds).WDID{parkwdidid,3};
-    pwds=['WD' num2str(parkWD)];
-    parkR=SR.(ds).WDID{parkwdidid,4};
-    prs=['R' num2str(parkR)];
-    psr=SR.(ds).WDID{parkwdidid,5};
-    
-    lsr=SR.(ds).(wds).(rs).subreachid(sr);
-%    parklsr=SR.(ds).(['WD' num2str(SR.(ds).WDID{wdidtoid,3})]).(['R' num2str(SR.(ds).WDID{wdidtoid,4})]).subreachid(SR.(ds).WDID{wdidtoid,5}); %this should also work - keep in case above breaks down
-
-    if ~isfield(SR.(ds).(pwds),'wwcnums')
-        SR.(ds).(pwds).wwcnums={ws};
-    else
-        SR.(ds).(pwds).wwcnums=[SR.(ds).(pwds).wwcnums;{ws}];
-    end    
-    if ~isfield(SR.(ds).(pwds),'park')
-        SR.(ds).(pwds).park=[{ws},{parkwdid},{parkwdidid},{wds},{rs},{sr},{parktype},{lsr}];  %this is destination wdidid but source wds,rs,sr
-    else
-        SR.(ds).(pwds).park=[SR.(ds).(pwds).park;{ws},{parkwdid},{parkwdidid},{wds},{rs},{sr},{parktype},{lsr}];        
-    end
-  
-end
-
-end %j - waterclass
-end
-end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1242,11 +1153,238 @@ end
 
 end %ii iteration on gainchange
 
+end %change
+    end %r
+    lastwdid=[lastwdid;SR.(ds).(wds).(rs).dswdid{sr} {ds} {wds} {rs} {sr}];
+end %wd
+
+save([basedir 'StateTL_SR' srmethod '.mat'],'SR');
+elseif runwcloop==1 | runcalibloop==1
+    load([basedir 'StateTL_SR' srmethod '.mat']);  
+end %river/gage loop
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % (INTERNAL) ADMIN LOOP FOR WATERCLASSES
-%   now internal to process loop but just working on one reach at a time
-%   this is so that can re-run gage loop if calculated native flows go negative
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% ROUTING OF WATER CLASSES
+%   new - put above main wc loops build WCloc list first
+%   primarily for inadvertant diversion correction so if have to iterate don't have to iterate on this portion
+%
+%  WATCH!-currently requires WDID list to be in spatial order to know whats going upstream
+%         may want to change that to ordered lists 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+if runwcloop==1
+
+SR.(ds).WCloc.wslist=[];
+SR.(ds).WCloc.Rloc=[];
+
+for wd=WDlist
+    wds=['WD' num2str(wd)];
+    if ~isfield(SR.(ds).(wds),'wwcnums')
+        logm=['no water classes identified (admin loop not run) for D:' ds ' WD:' wds];
+        domessage(logm,logfilename,displaymessage,writemessage)
+    else
+    wwcnums=SR.(ds).(wds).wwcnums;
+    Rt=SR.(ds).(wds).R(1);
+    Rb=SR.(ds).(wds).R(end);
+    logm=['running admin loop to pre-establish routing for D:' ds ' WD:' wds];
+    domessage(logm,logfilename,displaymessage,writemessage)
+
+
+for w=1:length(wwcnums)
+ws=wwcnums{w};
+% if ~isfield(SR.(ds).WCloc,ws)  %if here will include missing WCs as empty
+%     SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
+%     SR.(ds).WCloc.(ws)=[];
+% end
+
+wdinwdidlist=find([SR.(ds).WDID{:,3}]==wd);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%   the next/first block is looking for water classes passed from another WDreach
+%   these could have been passed from an upstream release or
+%   from an exchange that was first routed down an upstream reach
+
+parkwcid=0;
+if isfield(SR.(ds).(wds),'park')
+    parkwcid=find(strcmp(SR.(ds).(wds).park(:,1),ws));
+end
+if parkwcid~=0
+    wdidfrom=SR.(ds).(wds).park{parkwcid,2};
+    wdidfromid=SR.(ds).(wds).park{parkwcid,3};
+    fromWDs=SR.(ds).(wds).park{parkwcid,4};
+    fromRs=SR.(ds).(wds).park{parkwcid,5};
+    fromsr=SR.(ds).(wds).park{parkwcid,6};
+else  %if not parked
+    wdidfrom=WC.(ds).WC.(ws).wdid;
+    wdidfromid=intersect(find(strcmp(SR.(ds).WDID(:,1),wdidfrom)),wdinwdidlist);
+end
+    
+wdidto=WC.(ds).WC.(ws).to;
+wdidtoid=find(strcmp(SR.(ds).WDID(:,1),wdidto));
+wdidtoidwd=intersect(wdidtoid,wdinwdidlist);
+
+parkwdidid=0;
+exchtype=0;
+if isempty(wdidtoid)                                    %wdid To: listed in divrecs but cant find To:wdid in network list of wdids
+    wdidtoid=wdidfromid;
+    logm=['WARNING: not routing (either exchange or missing) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ];
+    domessage(logm,logfilename,displaymessage,writemessage)
+else
+    if ~isfield(SR.(ds).WCloc,ws)
+        SR.(ds).WCloc.wslist=[SR.(ds).WCloc.wslist,{ws}];
+        SR.(ds).WCloc.(ws).wc=WC.(ds).WC.(ws).wc;
+        SR.(ds).WCloc.(ws).wdid=WC.(ds).WC.(ws).wdid;
+        SR.(ds).WCloc.(ws).type=WC.(ds).WC.(ws).type;
+        SR.(ds).WCloc.(ws).to=WC.(ds).WC.(ws).to;
+        SR.(ds).WCloc.(ws).loc=[];
+        SR.(ds).WCloc.(ws).srtime=0;        
+        
+    end
+    dswdidids=find(wdidtoid>=wdidfromid);
+    if ~isempty(dswdidids)                              %DS RELEASE TO ROUTE (could include US Exchange that is first routed to end of WD)
+        if SR.(ds).WDID{wdidtoid(dswdidids(1)),3} == wd %DS release located in same WD - so route to first node that is at or below release point
+            wdidtoid=wdidtoid(dswdidids(1));            %if multiple points (could be multiple reach defs or same wdid at top of next ds reach)
+        else                                            %DS release located in different WD - so route to bottom of WD and park into next WD
+            wdidtoid=wdinwdidlist(end);
+            parkwdidid=find(strcmp(SR.(ds).WDID(:,1),SR.(ds).WDID(wdidtoid,1)));
+            parkwdidid=setdiff(parkwdidid,wdinwdidlist);
+            parktype=1;  %1 push DS to end of reach
+            logm=['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To:' wdidto ' external to WD reach, routing to end of WD reach'];
+            domessage(logm,logfilename,displaymessage,writemessage)
+        end
+    elseif isempty(dswdidids)                             %US EXCHANGE RELEASE - ONLY ROUTING HERE IF FIRST DOWN TO MID-WD BRANCH
+        wdidtoidnotwd=setdiff(wdidtoid,wdinwdidlist);
+        branchid=find([SR.(ds).(wds).branch{:,1}]==SR.D2.WDID{wdidtoidnotwd,3});
+
+        if ~isempty(branchid)      %us exchange from DS branch within WD (exchtype=3)
+            exchtype=3;
+            SR.(ds).EXCH.(ws).wdidtoid=wdidtoid;
+            SR.(ds).EXCH.(ws).WDto=SR.(ds).WDID{wdidtoid(1),3};
+            wdidbranch=SR.(ds).(wds).branch{branchid,2};
+            wdidtoids=find(strcmp(SR.(ds).WDID(:,1),wdidbranch));
+            parkwdidid=setdiff(wdidtoids,wdinwdidlist);
+            wdidtoid=intersect(wdidtoids,wdinwdidlist);
+            parktype=2;  %2 push DS releases to internal node
+            SR.(ds).EXCH.(ws).wdidfromid=parkwdidid;
+            SR.(ds).EXCH.(ws).WDfrom=SR.(ds).WDID{parkwdidid,3};
+            SR.(ds).EXCH.(ws).exchtype=3;            
+            logm=['routing: ' ws ' ' WC.(ds).WC.(ws).wc ' To Confluence:' wdidbranch ' US exchange first routing with TL to internal confluence point within WD reach'];
+            domessage(logm,logfilename,displaymessage,writemessage)
+            logm=['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ];
+            domessage(logm,logfilename,displaymessage,writemessage)
+         
+        elseif ~isempty(wdidtoidwd)                    %us exchange within WD (exchtype=1)
+            exchtype=1;
+            SR.(ds).EXCH.(ws).wdidtoid=wdidtoidwd(end);  %last in list in case multiple reach listing (will go to lowest) - remember that wdid is listed "above" subreach so sr will be next one after
+            SR.(ds).EXCH.(ws).wdidfromid=wdidfromid;
+            SR.(ds).EXCH.(ws).WDfrom=wd;
+            SR.(ds).EXCH.(ws).WDto=wd;
+            SR.(ds).EXCH.(ws).exchtype=1;
+            wdidtoid=wdidfromid;  %leaving it there
+            logm=['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ];
+            domessage(logm,logfilename,displaymessage,writemessage)
+        else                                           %us exchange in different WD (exchtype=2)
+            exchtype=2;
+            SR.(ds).EXCH.(ws).wdidtoid=wdidtoid(end);
+            SR.(ds).EXCH.(ws).wdidfromid=wdidfromid;
+            SR.(ds).EXCH.(ws).WDfrom=wd;
+            SR.(ds).EXCH.(ws).WDto=SR.(ds).WDID{wdidtoid(1),3};
+            SR.(ds).EXCH.(ws).exchtype=2;
+            wdidtoid=wdidfromid;
+%            wdidtoid=wdinwdidlist(end);
+            logm=['Exchange: (external to WD) To: ' wdidto ' Ty: ' num2str(WC.(ds).WC.(ws).type) ' for  ' ws(2:end) ' ' WC.(ds).WC.(ws).wc ];
+            domessage(logm,logfilename,displaymessage,writemessage)
+        end
+
+    end       
+end
+
+
+WDtr=SR.(ds).WDID{wdidfromid,3};
+WDbr=SR.(ds).WDID{wdidtoid,3};
+Rtr=SR.(ds).WDID{wdidfromid,4};
+Rbr=SR.(ds).WDID{wdidtoid,4};
+SRtr=SR.(ds).WDID{wdidfromid,5}+SR.(ds).WDID{wdidfromid,6};  %new ordering - if col6=1 then sr=dswdid / col6=0 then sr=uswdid, so for from sr add 0 or 1 to move to top of next sr
+SRbr=SR.(ds).WDID{wdidtoid,5};
+
+
+if wdidtoid==wdidfromid   %EXCHANGES (or missing releases)
+    if exchtype>0
+        SR.(ds).WCloc.Rloc=[SR.(ds).WCloc.Rloc;[{ws},{ds},{wds},{['R' num2str(Rtr)]},{SRtr},{SRbr},{Rtr},{Rbr},{SRtr},{SRbr},{wdidfrom},{wdidto},{wdidfromid},{wdidtoid}]];
+    end
+else
+    
+wd=WDtr;
+    wds=['WD' num2str(wd)];
+    for r=Rtr:Rbr
+        rs=['R' num2str(r)];
+        if r==Rtr
+            srt=SRtr;
+        else
+            srt=1;
+        end
+        if r==Rbr
+            srb=SRbr;
+        else
+            srb=SR.(ds).(wds).(rs).SR(end);
+        end
+        SR.(ds).WCloc.Rloc=[SR.(ds).WCloc.Rloc;[{ws},{ds},{wds},{rs},{srt},{srb},{Rtr},{Rbr},{SRtr},{SRbr},{wdidfrom},{wdidto},{wdidfromid},{wdidtoid}]];
+
+for sr=srt:srb
+    % WCloc.ws listing locations of WC as cell/strings (sr/lsr/type(1-release/-1 - exch) is num)
+    lsr=SR.(ds).(wds).(rs).subreachid(sr);
+    SR.(ds).WCloc.(ws).loc=[SR.(ds).WCloc.(ws).loc;[{ds},{wds},{rs},{sr},{lsr},{1},{SR.(ds).(wds).(rs).wdid{sr}},{SR.(ds).(wds).(rs).dswdid{sr}}]];
+    
+end %sr
+
+    end %r
+%end %wd
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% parking - transfering waterclass from one WD to another
+%   for releases, ds WDreach should then pick up, for exchanges waits for exchange loop
+if parkwdidid ~= 0  %placing park - place wcnum and park parameters in downstream WDreach
+    SR.(ds).(wds).(ws).parkwdidid=parkwdidid; %this is needed for process/admin loop
+    parkwdid=SR.(ds).WDID{parkwdidid,1};
+    parkWD=SR.(ds).WDID{parkwdidid,3};
+    pwds=['WD' num2str(parkWD)];
+    parkR=SR.(ds).WDID{parkwdidid,4};
+    prs=['R' num2str(parkR)];
+    psr=SR.(ds).WDID{parkwdidid,5};
+    
+    lsr=SR.(ds).(wds).(rs).subreachid(sr);
+%    parklsr=SR.(ds).(['WD' num2str(SR.(ds).WDID{wdidtoid,3})]).(['R' num2str(SR.(ds).WDID{wdidtoid,4})]).subreachid(SR.(ds).WDID{wdidtoid,5}); %this should also work - keep in case above breaks down
+
+    if ~isfield(SR.(ds).(pwds),'wwcnums')
+        SR.(ds).(pwds).wwcnums={ws};
+    else
+        SR.(ds).(pwds).wwcnums=[SR.(ds).(pwds).wwcnums;{ws}];
+    end    
+    if ~isfield(SR.(ds).(pwds),'park')
+        SR.(ds).(pwds).park=[{ws},{parkwdid},{parkwdidid},{wds},{rs},{sr},{parktype},{lsr}];  %this is destination wdidid but source wds,rs,sr
+    else
+        SR.(ds).(pwds).park=[SR.(ds).(pwds).park;{ws},{parkwdid},{parkwdidid},{wds},{rs},{sr},{parktype},{lsr}];        
+    end
+  
+end
+
+end %j - waterclass
+end
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% PRIMARY WATER CLASS /  ADMIN LOOP
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 
 % for i=1:length(SR.(ds).(wds).(rs).wcreducelist)
 %     ws=SR.(ds).(wds).(rs).wcreducelist{i};
@@ -1254,11 +1392,24 @@ end %ii iteration on gainchange
 %     SR.(ds).(wds).(rs).(ws).wcreduceamt=zeros(rsteps,length(SR.(ds).(wds).(rs).SR));
 % end
 
+for wd=WDlist
+    wds=['WD' num2str(wd)];
+    Rt=SR.(ds).(wds).R(1);
+    Rb=SR.(ds).(wds).R(end);
+    logm=['running admin loop for D:' ds ' WD:' wds];
+    domessage(logm,logfilename,displaymessage,writemessage)
+
+    
+    for r=SR.(ds).(wds).R
+        rs=['R' num2str(r)];
+        logm=['running admin loop on D:' ds ' WD:' wds ' R:' rs];
+        domessage(logm,logfilename,displaymessage,writemessage)
+
 changewc=1;changewccount=0;
 while changewc==1
     changewccount=changewccount+1;
     changewc=0;
-    if changewccount==0
+    if changewccount==1
         logm=['running admin loop on D:' ds ' WD:' wds ' R:' rs];
         domessage(logm,logfilename,displaymessage,writemessage)
     else
@@ -1275,7 +1426,7 @@ SR.(ds).(wds).(rs).QSRadd(:,sr)=zeros(rsteps,1);
 SR.(ds).(wds).(rs).Qusnodewc(:,sr)=zeros(rsteps,1);  %also variable to sum total wc release amounts
 SR.(ds).(wds).(rs).Quswc(:,sr)=zeros(rsteps,1);
 SR.(ds).(wds).(rs).Qdswc(:,sr)=zeros(rsteps,1);
-SR.(ds).Rivloc.flowwc.us(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to sum total wc release amounts within river - note that dimensions reversed - not sure if need now with above
+SR.(ds).Rivloc.flowwc.us(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to sum total wc release amounts within river - not sure if need now with above
 SR.(ds).Rivloc.flowwc.ds(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to sum total wc release amounts within river
 end
 
@@ -1398,7 +1549,8 @@ for sr=srtt:srtb
     width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
     evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
     Qdspartial=Qdspartial-evap+SR.(ds).(wds).(rs).gagediffportion(:,sr)+SR.(ds).(wds).(rs).sraddamt(:,sr)+SR.(ds).(wds).(rs).sraddamtds(:,sr);
-    if adjustlastsrtogage==1 && sr==srb
+%    if adjustlastsrtogage==1 && sr==srtb
+    if adjustlastsrtogage==1 && sr==SR.(ds).(wds).(rs).SR(end)
         Qdspartial=Qdspartial+SR.(ds).(wds).(rs).gagedifflast;
     end
     
@@ -1439,7 +1591,7 @@ for sr=srtt:srtb
     % if individual Qusrelease (waterclass) exceeds Qus (gage-based) at interior node 
     % temporary measure to avoid cuting Qusrelease until reoperations deal with it
     % as could be that we just arent estimating interior node amount correctly given return flows etc
-    SR.(ds).(wds).(rs).QSRadd(:,sr)=SR.(ds).(wds).(rs).QSRadd(:,sr)+QSRadd;  %currently just for output file - this is going to get overwritten by subsequent water classes (??)
+    SR.(ds).(wds).(rs).QSRadd(:,sr)=SR.(ds).(wds).(rs).QSRadd(:,sr)+QSRadd;  %this is going to get overwritten by subsequent water classes (??)
 %    SR.(ds).(wds).(rs).QSRaddcum(:,1:sr)=cumsum(SR.(ds).(wds).(rs).QSRadd(:,1:sr),2);  %this is what might get added back in as effect would go downstream   
     QSRaddsum=sum(QSRadd(datestid:end));
     if QSRaddsum>0 && inadv1_letwaterby==1 %if internal correction so native doesnt go negate
@@ -1685,8 +1837,6 @@ if inadv3b_increaseint==1
         domessage(logm,logfilename,displaymessage,writemessage)
     end    
 end
-
-end %change
     end %r
     lastwdid=[lastwdid;SR.(ds).(wds).(rs).dswdid{sr} {ds} {wds} {rs} {sr}];
 end %wd
@@ -2136,10 +2286,10 @@ for w=1:length(wwcnums)
 end
 end
 
-save([basedir 'StateTL_SR' srmethod '.mat'],'SR');
-elseif runadminloop==2
-    load([basedir 'StateTL_SR' srmethod '.mat']);  
-end
+save([basedir 'StateTL_SR' srmethod 'wc.mat'],'SR');
+elseif runcaptureloop==1
+    load([basedir 'StateTL_SR' srmethod 'wc.mat']);  
+end %runwcloop
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2298,20 +2448,20 @@ end
 
 if runcalibloop==1
     %averages of gagediff etc taken with calibration period that is potentially within larger run period
-    calibstid=find(rdates==calibdatestart);
-    calibendid=find(rdates==calibdateend);
+    calibstid=find(rdates==calibstartdate);
+    calibendid=find(rdates==calibenddate);
     if isempty(calibstid)
         calibstid=datestid;
-        logm=['for calibration loop, calibdatestart:' datestr(calibdatestart) ' not within current data period, so starting calibration period at:' datestr(rdates(calibstid))];
+        logm=['for calibration loop, calibdatestart:' datestr(calibstartdate) ' not within current data period, so starting calibration period at:' datestr(rdates(calibstid))];
         domessage(logm,logfilename,displaymessage,writemessage)
     end
     if isempty(calibstid)
         calibendid=rsteps;
-        logm=['for calibration loop, calibdateend:' datestr(calibdateend) ' not within current data period, so ending calibration period at:' datestr(rdates(calibendid))];
+        logm=['for calibration loop, calibdateend:' datestr(calibenddate) ' not within current data period, so ending calibration period at:' datestr(rdates(calibendid))];
         domessage(logm,logfilename,displaymessage,writemessage)
     end
-    if ~(strcmp(calibmeth,'mean') | strcmp(calibmeth,'linreg'))
-        logm=['for calibration loop, could not figure out how to average gagediff etc given listed option:' calibmeth ' (looking for mean or linreg)'];
+    if ~(strcmp(calibavggainloss,'mean') | strcmp(calibavggainloss,'linreg'))
+        logm=['for calibration loop, could not figure out how to average gagediff etc given listed option:' calibavggainloss ' (looking for mean or linreg)'];
         domessage(logm,logfilename,displaymessage,writemessage)
         error(logm)
     end
@@ -2338,32 +2488,32 @@ for wd=WDcaliblist
         
         gagediffportion=SR.(ds).(wds).(rs).gagediffportion;
         y=gagediffportion(calibstid:calibendid,:);
-        [yfit,m,b,R2,SEE]=regr(x,y,calibmeth);
+        [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss);
         gagediffportion(calibstid:calibendid,:)=yfit;
         SR.(ds).(wds).(rs).gagediffportioncal=gagediffportion;SR.(ds).(wds).(rs).gagediffportionm=m;SR.(ds).(wds).(rs).gagediffportionb=b;SR.(ds).(wds).(rs).gagediffportionR2=R2;
         
         if inadv3a_increaseint == 1
             sraddamt=SR.(ds).(wds).(rs).sraddamt;
             y=sraddamt(calibstid:calibendid,:);
-            [yfit,m,b,R2,SEE]=regr(x,y,calibmeth);
+            [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss);
             sraddamt(calibstid:calibendid,:)=yfit;
             SR.(ds).(wds).(rs).sraddamtcal=sraddamt;SR.(ds).(wds).(rs).sraddamtm=m;SR.(ds).(wds).(rs).sraddamtb=b;SR.(ds).(wds).(rs).sraddamtR2=R2;
         elseif inadv3b_increaseint == 1
             sraddamtds=SR.(ds).(wds).(rs).sraddamtds;
             sraddamtus=SR.(ds).(wds).(rs).sraddamtus;
             y=sraddamtds(calibstid:calibendid,:);
-            [yfit,m,b,R2,SEE]=regr(x,y,calibmeth);
+            [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss);
             sraddamtds(calibstid:calibendid,:)=yfit;
             SR.(ds).(wds).(rs).sraddamtdscal=sraddamtds;SR.(ds).(wds).(rs).sraddamtdsm=m;SR.(ds).(wds).(rs).sraddamtdsb=b;SR.(ds).(wds).(rs).sraddamtdsR2=R2;
             y=sraddamtus(calibstid:calibendid,:);
-            [yfit,m,b,R2,SEE]=regr(x,y,calibmeth);
+            [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss);
             sraddamtus(calibstid:calibendid,:)=yfit;
             SR.(ds).(wds).(rs).sraddamtuscal=sraddamtus;SR.(ds).(wds).(rs).sraddamtusm=m;SR.(ds).(wds).(rs).sraddamtusb=b;SR.(ds).(wds).(rs).sraddamtusR2=R2;
         end
         if adjustlastsrtogage==1
             gagedifflast=SR.(ds).(wds).(rs).gagedifflast;
             y=gagedifflast(calibstid:calibendid,1);
-            [yfit,m,b,R2,SEE]=regr(x,y,calibmeth);
+            [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss);
             gagedifflast(calibstid:calibendid,1)=yfit;
             SR.(ds).(wds).(rs).gagedifflastcal=gagedifflast;SR.(ds).(wds).(rs).gagedifflastm=m;SR.(ds).(wds).(rs).gagedifflastb=b;SR.(ds).(wds).(rs).gagedifflastR2=R2;
         end
@@ -2481,7 +2631,7 @@ end  %runcalibloop
 
 if outputgage==1
     titlelocline=[{'atWDID'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-USWDID/2-DSWDID'}];
-    if outputgagehr==1
+    if outputhr==1
         titledates=cellstr(datestr(rdates(datestid:end),'mm/dd/yy HH:'));
         writecell([titlelocline,titledates'],[outputfilename srmethod '_riverhr.csv']);
         writecell([titlelocline,titledates'],[outputfilename srmethod '_nativehr.csv']);
@@ -2492,7 +2642,7 @@ if outputgage==1
         writecell([titlelocline,titledates'],[outputfilename srmethod '_nativecapturehr.csv']);
         end
     end
-    if outputgageday==1
+    if outputday==1
         [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:end));
         daymat=unique([yr,mh,dy],'rows','stable');
         titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
@@ -2535,7 +2685,7 @@ if outputgage==1
 %        outputlineSRadd(i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).QSRadd(datest:end,SR.(ds).Rivloc.loc{i,4})';
 
     end
-    if outputgagehr==1
+    if outputhr==1
         logm=['writing hourly output files for river/native amounts (hourly is a bit slow)'];
         domessage(logm,logfilename,displaymessage,writemessage)
         writecell([loclineriver,num2cell(outputlineriver)],[outputfilename srmethod '_riverhr.csv'],'WriteMode','append');
@@ -2547,7 +2697,7 @@ if outputgage==1
         writecell([loclineriver,num2cell(outputlinenativecapture)],[outputfilename srmethod '_nativecapturehr.csv'],'WriteMode','append');
         end
     end
-    if outputgageday==1
+    if outputday==1
         logm=['writing daily output files for river/native amounts'];
         domessage(logm,logfilename,displaymessage,writemessage)
         for i=1:length(daymat(:,1))
@@ -2583,7 +2733,7 @@ wwcnums=SR.(ds).WCloc.wslist;
 %titlelocline=[{'WCnum'},{'WC code'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'srid'},{'1-US/2-DS'},{'WDID'}];
 titlelocline=[{'WCnum'},{'WC code'},{'atWDID'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-USWDID/2-DSWDID'}];
 
-if outputwchr==1
+if outputhr==1
     logm=['writing hourly output file by water class amounts (hourly is a bit slow)'];
     domessage(logm,logfilename,displaymessage,writemessage)
     titledates=cellstr(datestr(rdates(datestid:end),'mm/dd/yy HH:'));
@@ -2594,7 +2744,7 @@ if outputwchr==1
     writecell([titlelocline,titledates'],[outputfilename srmethod '_wccapturehr.csv']);
     end
 end
-if outputwcday==1
+if outputday==1
     logm=['writing daily output file by water class amounts'];
     domessage(logm,logfilename,displaymessage,writemessage)
     [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:end));
@@ -2656,7 +2806,7 @@ for w=1:length(wwcnums)
         
     end 
     
-    if outputwchr==1
+    if outputhr==1
         writecell([loclinewc,num2cell(outputlinewc)],[outputfilename srmethod '_wchr.csv'],'WriteMode','append');
         writecell([loclinewc,num2cell(outputlinewcsradd)],[outputfilename srmethod '_wcsraddhr.csv'],'WriteMode','append');
         if runcaptureloop==1
@@ -2667,7 +2817,7 @@ for w=1:length(wwcnums)
            end
     end
 
-    if outputwcday==1
+    if outputday==1
         for i=1:length(daymat(:,1))
             dayids=find(yr==daymat(i,1) & mh==daymat(i,2) & dy==daymat(i,3));
             outputlinedaywc(:,i)=mean(outputlinewc(:,dayids),2);
@@ -2699,11 +2849,11 @@ end
 
 if outputcal==1 & runcalibloop==1
     titlelocline=[{'WDID'},{'Abbrev'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-Gage/2-Sim'}];
-    if outputcalhr==1
+    if outputhr==1
         titledates=cellstr(datestr(rdates(datestid:end),'mm/dd/yy HH:'));
         writecell([titlelocline,titledates'],[outputfilename srmethod '_calhr.csv']);
     end
-    if outputcalday==1
+    if outputday==1
         [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:end));
         daymat=unique([yr,mh,dy],'rows','stable');
         titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
@@ -2720,12 +2870,12 @@ if outputcal==1 & runcalibloop==1
             outputlinegage(2*i,:)=SR.(ds).Gageloc.flowcal(datestid:end,j)';
         end
     end
-    if outputgagehr==1
+    if outputhr==1
         logm=['writing hourly output files for gage and simulated (calibration) amounts (hourly is a bit slow)'];
         domessage(logm,logfilename,displaymessage,writemessage)
         writecell([loclinegage,num2cell(outputlinegage)],[outputfilename srmethod '_calhr.csv'],'WriteMode','append');
     end
-    if outputgageday==1
+    if outputday==1
         logm=['writing daily output files for gage and simulated (calibration) amounts'];
         domessage(logm,logfilename,displaymessage,writemessage)
         for i=1:length(daymat(:,1))
