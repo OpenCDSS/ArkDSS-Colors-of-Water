@@ -1,9 +1,9 @@
 
-% TLAPm
-% matlab deployment of TLAP tool
+% StateTLm
+% matlab preliminary Colors of Water Transit Loss and Timing engine
 
 % next steps
-% potentially reduce structure approach to line up of all R/SR within Z
+% potentially reduce structure approach to line up of all R/SR within WD
 %   think about if step in at midpoint if lineup would be better
 %   lineup would help with running through for a plot etc rather than having to run loops again to build a line of data
 % look at getting water class records out of Pueblo sheet
@@ -29,7 +29,7 @@
 % water" exceed total flow so that would be drying up the river even beyond
 % the slush thats the native flow part; if so cut them all back or back by
 % some sort of priority... that might lend to more thoughts about lining up
-% full river zone rather than by river reach .. but would need to run admin
+% full river wd zone rather than by river reach .. but would need to run admin
 % once then add up all colors and see if exceed full full (pred) flows and
 % if so then get into while loop where each color is cut back at no flow
 % locations and run while until no exceedance of full flows..
@@ -42,10 +42,10 @@ basedir=cd;basedir=[basedir '\'];
 % j349dir=[basedir 'j349dir\'];
 % j349dir=basedir;
 
-readinfofile=2;  %1 reads from excel and saves mat file; 2 reads mat file
-readgageinfo=1;  %if using real gage data, 1 reads from REST, 2 reads from file - watch out currently saves into SR file
-infofilename='TLAPm_inputdata.xlsx';
-pulldivrecrest=1;  %1 if pulling release value from HB REST; 2 reads from mat file
+readinfofile=2;  %1 reads from excel and saves mat file; 2 reads mat file;
+readgageinfo=2;  %if using real gage data, 1 reads from REST, 2 reads from file - watch out currently saves into SR file
+infofilename='StateTL_inputdata.xlsx';
+pulldivrecrest=2;  %1 if pulling release value from HB REST; 2 reads from mat file
 
 %rdays=155; rhours=4;
 %spinupdays=60;
@@ -55,7 +55,6 @@ rsteps=rdays*24/rhours;
 gainchangelimit=0.1;
 
 flowcriteria=5; %to establish gage and node flows: 1 low, 2 avg, 3 high flow values from livingston; envision 4 for custom entry; 5 for actual flows; 6 average for xdays/yhours prior to now/date; 7 average between 2 dates
-
 
 datestart=datenum(2017,8,20);
 waterclass=[{'1403526.147 S:2 F: U:Q T:7 G: To:1700554'},{1}];  %A:Holbrook Ag Proj S:Reservoir Storage Ty:Released To River To:Holbrook Canal
@@ -133,17 +132,17 @@ if readinfofile==1
     
 disp('reading subreach info from file')    
   
-SR.D2.Z=[2];           %Z2=pueblo gage to JMR  %may want to automate this from inputdata read
-SR.D2.Z2.R=[1:8];
-SR.D2.Z2.R0.SR=[1];
-SR.D2.Z2.R1.SR=[1:2];
-SR.D2.Z2.R2.SR=[1:8];
-SR.D2.Z2.R3.SR=[1:7];
-SR.D2.Z2.R4.SR=[1:3];
-SR.D2.Z2.R5.SR=[1:4];
-SR.D2.Z2.R6.SR=[1:4];
-SR.D2.Z2.R7.SR=[1:4];
-SR.D2.Z2.R8.SR=[1:2];
+SR.D2.WD=[17];           %WD17=pueblo gage to JMR  %may want to automate this from inputdata read
+SR.D2.WD17.R=[1:8];
+SR.D2.WD17.R0.SR=[1];
+SR.D2.WD17.R1.SR=[1:2];
+SR.D2.WD17.R2.SR=[1:8];
+SR.D2.WD17.R3.SR=[1:7];
+SR.D2.WD17.R4.SR=[1:3];
+SR.D2.WD17.R5.SR=[1:4];
+SR.D2.WD17.R6.SR=[1:4];
+SR.D2.WD17.R7.SR=[1:4];
+SR.D2.WD17.R8.SR=[1:2];
 
 
 [infonum,infotxt,inforaw]=xlsread([basedir infofilename],'SR');
@@ -161,7 +160,7 @@ infoheaderrow=1;
 for i=1:inforawcol
     if 1==2
     elseif strcmp(upper(inforaw{infoheaderrow,i}),'DIV'); infocol.div=i;
-    elseif strcmp(upper(inforaw{infoheaderrow,i}),'ZONE'); infocol.zone=i;
+    elseif strcmp(upper(inforaw{infoheaderrow,i}),'WD'); infocol.wd=i;
     elseif strcmp(upper(inforaw{infoheaderrow,i}),'REACH'); infocol.reach=i;
 %     elseif strcmp(upper(inforaw{infoheaderrow,i}),'LIVINGSTON SUBREACH'); infocol.livingstonsubreach=i; %delete when expanding model
     elseif strcmp(upper(inforaw{infoheaderrow,i}),'SUBREACH'); infocol.subreach=i;
@@ -181,6 +180,7 @@ for i=1:inforawcol
     elseif strcmp(upper(inforaw{infoheaderrow,i}),'WIDTH-A'); infocol.widtha=i;
     elseif strcmp(upper(inforaw{infoheaderrow,i}),'WIDTH-B'); infocol.widthb=i;
     elseif strcmp(upper(inforaw{infoheaderrow,i}),'EVAPFACTOR'); infocol.evapfactor=i;
+    elseif strcmp(upper(inforaw{infoheaderrow,i}),'LOSSPERCENT'); infocol.losspercent=i;
     elseif strcmp(upper(inforaw{infoheaderrow,i}),'DS NODES'); infocol.dsnodes=i;
     elseif strcmp(upper(inforaw{infoheaderrow,i}),'TYPE1'); infocol.type1=i;
     elseif strcmp(upper(inforaw{infoheaderrow,i}),'LOW1'); infocol.low1=i;
@@ -209,7 +209,7 @@ for i=infoheaderrow+1:inforawrow
     if ~isempty(inforaw{i,infocol.subreach}) & ~isnan(inforaw{i,infocol.subreach})
         k=k+1;
         v.di=inforaw{i,infocol.div};if ischar(v.di); v.di=str2num(v.di); end
-        v.zo=inforaw{i,infocol.zone};if ischar(v.zo); v.zo=str2num(v.zo); end
+        v.wd=inforaw{i,infocol.wd};if ischar(v.wd); v.wd=str2num(v.wd); end
         v.re=inforaw{i,infocol.reach};if ischar(v.re); v.re=str2num(v.re); end        
 %         v.ls=inforaw{i,infocol.livingstonsubreach};if ischar(v.ls); v.ls=str2num(v.ls); end  %delete when expanding model
         v.sr=inforaw{i,infocol.subreach};if ischar(v.sr); v.sr=str2num(v.sr); end
@@ -229,6 +229,7 @@ for i=infoheaderrow+1:inforawrow
         v.wa=inforaw{i,infocol.widtha};if ischar(v.wa); v.wa=str2num(v.wa); end
         v.wb=inforaw{i,infocol.widthb};if ischar(v.wb); v.wb=str2num(v.wb); end
         v.ef=inforaw{i,infocol.evapfactor};if ischar(v.ef); v.ef=str2num(v.ef); end
+        v.lp=inforaw{i,infocol.losspercent};if ischar(v.lp); v.lp=str2num(v.lp); end
         v.ds=inforaw{i,infocol.dsnodes};if ischar(v.ds); v.ds=str2num(v.ds); end
         v.t1=inforaw{i,infocol.type1};if ischar(v.t1); v.t1=str2num(v.t1); end
         v.l1=inforaw{i,infocol.low1};if ischar(v.l1); v.l1=str2num(v.l1); end
@@ -239,7 +240,7 @@ for i=infoheaderrow+1:inforawrow
         v.a2=inforaw{i,infocol.avg2};if ischar(v.a2); v.a2=str2num(v.a2); end
         v.h2=inforaw{i,infocol.high2};if ischar(v.h2); v.h2=str2num(v.h2); end
         c.di=num2str(inforaw{i,infocol.div});
-        c.zo=num2str(inforaw{i,infocol.zone});
+        c.wd=num2str(inforaw{i,infocol.wd});
         c.re=num2str(inforaw{i,infocol.reach});
         c.sr=num2str(inforaw{i,infocol.subreach});
         c.s1=num2str(inforaw{i,infocol.station1});
@@ -251,44 +252,45 @@ for i=infoheaderrow+1:inforawrow
         c.w2=num2str(inforaw{i,infocol.wdid2});
         c.n2=num2str(inforaw{i,infocol.name2});
         
-%         SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).livingstonsubreach(v.sr)=v.ls; %delete when expanding model
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).subreachid(v.sr)=v.si;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).channellength(v.sr)=v.cl;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).alluviumlength(v.sr)=v.al;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).transmissivity(v.sr)=v.tr;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).storagecoefficient(v.sr)=v.sc;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).aquiferwidth(v.sr)=v.aw;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).dispersiona(v.sr)=v.da;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).dispersionb(v.sr)=v.db;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).celeritya(v.sr)=v.ca;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).celerityb(v.sr)=v.cb;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).closure(v.sr)=v.cls;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).reachportion(v.sr)=v.rp;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).gaininitial(v.sr)=v.gi;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).widtha(v.sr)=v.wa;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).widthb(v.sr)=v.wb;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).evapfactor(v.sr)=v.ef;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).dsnodes(v.sr)=v.ds;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).type(1,v.sr)=v.t1;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).low(1,v.sr)=v.l1;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).avg(1,v.sr)=v.a1;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).high(1,v.sr)=v.h1;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).station{1,v.sr}=c.s1;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).parameter{1,v.sr}=c.p1;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).name{1,v.sr}=c.n1;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).type(2,v.sr)=v.t2;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).low(2,v.sr)=v.l2;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).avg(2,v.sr)=v.a2;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).high(2,v.sr)=v.h2;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).station{2,v.sr}=c.s2;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).parameter{2,v.sr}=c.p2;
-        SR.(['D' c.di]).(['Z' c.zo]).(['R' c.re]).name{2,v.sr}=c.n2;
+%         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).livingstonsubreach(v.sr)=v.ls; %delete when expanding model
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).subreachid(v.sr)=v.si;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).channellength(v.sr)=v.cl;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).alluviumlength(v.sr)=v.al;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).transmissivity(v.sr)=v.tr;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).storagecoefficient(v.sr)=v.sc;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).aquiferwidth(v.sr)=v.aw;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).dispersiona(v.sr)=v.da;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).dispersionb(v.sr)=v.db;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).celeritya(v.sr)=v.ca;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).celerityb(v.sr)=v.cb;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).closure(v.sr)=v.cls;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).reachportion(v.sr)=v.rp;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).gaininitial(v.sr)=v.gi;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).widtha(v.sr)=v.wa;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).widthb(v.sr)=v.wb;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).evapfactor(v.sr)=v.ef;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).losspercent(v.sr)=v.lp;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).dsnodes(v.sr)=v.ds;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).type(1,v.sr)=v.t1;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).low(1,v.sr)=v.l1;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).avg(1,v.sr)=v.a1;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).high(1,v.sr)=v.h1;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).station{1,v.sr}=c.s1;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).parameter{1,v.sr}=c.p1;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).name{1,v.sr}=c.n1;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).type(2,v.sr)=v.t2;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).low(2,v.sr)=v.l2;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).avg(2,v.sr)=v.a2;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).high(2,v.sr)=v.h2;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).station{2,v.sr}=c.s2;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).parameter{2,v.sr}=c.p2;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).name{2,v.sr}=c.n2;
         
         if ~strcmp(c.w1,'NaN')
             wdidk=wdidk+1;
             SR.(['D' c.di]).WDID{wdidk,1}=c.w1;
             SR.(['D' c.di]).WDID{wdidk,2}=v.di;
-            SR.(['D' c.di]).WDID{wdidk,3}=v.zo;
+            SR.(['D' c.di]).WDID{wdidk,3}=v.wd;
             SR.(['D' c.di]).WDID{wdidk,4}=v.re;
             SR.(['D' c.di]).WDID{wdidk,5}=v.sr;
             SR.(['D' c.di]).WDID{wdidk,6}=1;
@@ -297,7 +299,7 @@ for i=infoheaderrow+1:inforawrow
             wdidk=wdidk+1;
             SR.(['D' c.di]).WDID{wdidk,1}=c.w2;
             SR.(['D' c.di]).WDID{wdidk,2}=v.di;
-            SR.(['D' c.di]).WDID{wdidk,3}=v.zo;
+            SR.(['D' c.di]).WDID{wdidk,3}=v.wd;
             SR.(['D' c.di]).WDID{wdidk,4}=v.re;
             SR.(['D' c.di]).WDID{wdidk,5}=v.sr;
             SR.(['D' c.di]).WDID{wdidk,6}=2;
@@ -313,7 +315,7 @@ end
 [infonum,infotxt,inforaw]=xlsread([basedir infofilename],'evap');
 [infonumrow infonumcol]=size(infonum);
 [inforawrow inforawcol]=size(inforaw);
-SR.(['D' c.di]).(['Z' c.zo]).evap=infonum(:,1);
+SR.(['D' c.di]).(['WD' c.wd]).evap=infonum(:,1);
 
 %%%%%%%%%%%%%%%%%%
 % stage discharge data
@@ -322,14 +324,14 @@ SR.(['D' c.di]).(['Z' c.zo]).evap=infonum(:,1);
 [infonum,infotxt,inforaw]=xlsread([basedir infofilename],'stagedischarge');
 [infonumrow infonumcol]=size(infonum);
 [inforawrow inforawcol]=size(inforaw);
-SR.(['D' c.di]).(['Z' c.zo]).stagedischarge=infonum;
+SR.(['D' c.di]).(['WD' c.wd]).stagedischarge=infonum;
 
  clear c v info*
 
-save([basedir 'TLAPm_SRdata.mat'],'SR');
+save([basedir 'StateTL_SRdata.mat'],'SR');
 
 else
-    load([basedir 'TLAPm_SRdata.mat']);
+    load([basedir 'StateTL_SRdata.mat']);
 end
 
 
@@ -344,8 +346,11 @@ rdatesstartid=spinupdays*24/rhours+1;
 [ryear,rmonth,rday,rhour] = datevec(rdates);
 rdatesday=floor(rdates);
 rjulien=rdatesday-(datenum(ryear,1,1)-1);
+dateend=datestart+(rdays-spinupdays)-1;
+datedays=[datestart:dateend];
 
-flowtestloc=[2,2,7,4,1];
+
+flowtestloc=[2,17,7,4,1];
 
 if readgageinfo==1
 
@@ -358,9 +363,9 @@ switch flowcriteria
         flow='high';
     otherwise
         disp('reading gage data from HB using REST services')    
-        d=flowtestloc(1);z=flowtestloc(2);r=flowtestloc(3);sr=flowtestloc(4);n=flowtestloc(5);
-        station=SR.(['D' num2str(d)]).(['Z' num2str(z)]).(['R' num2str(r)]).station{n,sr};
-        parameter=SR.(['D' num2str(d)]).(['Z' num2str(z)]).(['R' num2str(r)]).parameter{n,sr};
+        d=flowtestloc(1);wd=flowtestloc(2);r=flowtestloc(3);sr=flowtestloc(4);n=flowtestloc(5);
+        station=SR.(['D' num2str(d)]).(['WD' num2str(wd)]).(['R' num2str(r)]).station{n,sr};
+        parameter=SR.(['D' num2str(d)]).(['WD' num2str(wd)]).(['R' num2str(r)]).parameter{n,sr};
         gageurl=['https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeseriesday/?format=json&abbrev=' station '&endDate=' num2str(rmonth(end),'%02.0f') '%2F' num2str(rday(end),'%02.0f') '%2F' num2str(ryear(end)) '_23%3A00&includeThirdParty=true&parameter=' parameter '&startDate=' num2str(rmonth(1),'%02.0f') '%2F' num2str(rday(1),'%02.0f') '%2F' num2str(ryear(1))  '_00%3A00'];
         
         [datastr,scheck]=urlread(gageurl,'Timeout',30);
@@ -373,9 +378,9 @@ switch flowcriteria
                testvalues(i)=str2num(datastr(measvalueids(i)+11:commaids(commaidsafter(1))-1));
             end
             testvalue=mean(testvalues);
-            test(1)=SR.(['D' num2str(d)]).(['Z' num2str(z)]).(['R' num2str(r)]).low(n,sr);
-            test(2)=SR.(['D' num2str(d)]).(['Z' num2str(z)]).(['R' num2str(r)]).avg(n,sr);
-            test(3)=SR.(['D' num2str(d)]).(['Z' num2str(z)]).(['R' num2str(r)]).high(n,sr);
+            test(1)=SR.(['D' num2str(d)]).(['WD' num2str(wd)]).(['R' num2str(r)]).low(n,sr);
+            test(2)=SR.(['D' num2str(d)]).(['WD' num2str(wd)]).(['R' num2str(r)]).avg(n,sr);
+            test(3)=SR.(['D' num2str(d)]).(['WD' num2str(wd)]).(['R' num2str(r)]).high(n,sr);
             testdiff=test-testvalue;
             [testdiffmin,testdiffminid]=min(abs(testdiff));
             switch testdiffminid
@@ -392,18 +397,18 @@ switch flowcriteria
 end
 
 d=2;ds='D2';
-for kz=1:length(SR.(ds).Z)
-    z=SR.(ds).Z(kz);zs=['Z' num2str(z)];
-    for r=0:SR.(ds).(zs).R(end)  %including top gage if put in reach 0
+for kwd=1:length(SR.(ds).WD)
+    wd=SR.(ds).WD(kwd);wds=['WD' num2str(wd)];
+    for r=0:SR.(ds).(wds).R(end)  %including top gage if put in reach 0
         rs=['R' num2str(r)];
         if flowcriteria>=4
-            for sr=1:SR.(ds).(zs).(rs).SR(end)
-                for n=1:SR.(ds).(zs).(rs).dsnodes(sr)
-                    if strcmp(SR.(ds).(zs).(rs).station{n,sr},'NaN') | strcmp(SR.(ds).(zs).(rs).station{n,sr},'none')  %if no telemetry station then uses low/avg/high number
-                        SR.(ds).(zs).(rs).Qnode(:,sr,n)=SR.(ds).(zs).(rs).(flow)(n,sr)*ones(rsteps,1);
+            for sr=1:SR.(ds).(wds).(rs).SR(end)
+                for n=1:SR.(ds).(wds).(rs).dsnodes(sr)
+                    if strcmp(SR.(ds).(wds).(rs).station{n,sr},'NaN') | strcmp(SR.(ds).(wds).(rs).station{n,sr},'none')  %if no telemetry station then uses low/avg/high number
+                        SR.(ds).(wds).(rs).Qnode(:,sr,n)=SR.(ds).(wds).(rs).(flow)(n,sr)*ones(rsteps,1);
                     else
-                        station=SR.(ds).(zs).(rs).station{n,sr};
-                        parameter=SR.(ds).(zs).(rs).parameter{n,sr};
+                        station=SR.(ds).(wds).(rs).station{n,sr};
+                        parameter=SR.(ds).(wds).(rs).parameter{n,sr};
                         telemetryhoururl='https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour/';
                         gagedata=webread(telemetryhoururl,'format','json','abbrev',station,'parameter',parameter,'startDate',datestr(rdates(1),21),'endDate',datestr(rdates(end),21),'includeThirdParty','true');
                         for i=1:gagedata.ResultCount
@@ -417,23 +422,23 @@ for kz=1:length(SR.(ds).Z)
                         %initial below assuming all data there and one hour timestep
                         Qnode(1:rdatesstartid-1,1)=measvalues(1);
                         Qnode(rdatesstartid:length(rdates),1)=measvalues;  
-                        SR.(ds).(zs).(rs).Qnode(:,sr,n)=Qnode;                       
+                        SR.(ds).(wds).(rs).Qnode(:,sr,n)=Qnode;                       
                     end
                end
             end
         else
-            for n=1:max(SR.(['D' num2str(d)]).(['Z' num2str(z)]).(['R' num2str(r)]).dsnodes)
-                % num2str(r)]).Qnode(:,:,n)=SR.(['D' num2str(d)]).(['Z' num2str(z)]).(['R' num2str(r)]).(flow)(n,:).*ones(rsteps,length(SR.(['D' num2str(d)]).(['Z' num2str(z)]).(['R' num2str(r)]).SR));
-                SR.(ds).(zs).(rs).Qnode(:,:,n)=repmat(SR.(ds).(zs).(rs).(flow)(n,:),rsteps,1).*ones(rsteps,length(SR.(ds).(zs).(rs).SR)); %repmat required for r2014a
+            for n=1:max(SR.(['D' num2str(d)]).(['WD' num2str(wd)]).(['R' num2str(r)]).dsnodes)
+                % num2str(r)]).Qnode(:,:,n)=SR.(['D' num2str(d)]).(['WD' num2str(wd)]).(['R' num2str(r)]).(flow)(n,:).*ones(rsteps,length(SR.(['D' num2str(d)]).(['WD' num2str(wd)]).(['R' num2str(r)]).SR));
+                SR.(ds).(wds).(rs).Qnode(:,:,n)=repmat(SR.(ds).(wds).(rs).(flow)(n,:),rsteps,1).*ones(rsteps,length(SR.(ds).(wds).(rs).SR)); %repmat required for r2014a
             end
         end
     end
 end
 
-save([basedir 'TLAPm_SRdata_withgage.mat'],'SR');
+save([basedir 'StateTL_SRdata_withgage.mat'],'SR');
 
 else
-    load([basedir 'TLAPm_SRdata_withgage.mat']);
+    load([basedir 'StateTL_SRdata_withgage.mat']);
 end
 
 
@@ -460,7 +465,7 @@ for w=1:length(waterclass(:,1))
         error(['water class ' waterclassstr ' doesnt have To:wdid(7) at end (or F: for exchanges), figure that out!'])
     end
     
-    %for z2 - this would mess up things on fountain creek
+    %for wd17 - this would mess up things on fountain creek
     switch waterclass{w,4}
         case '1720001'  %Meredith outfall to Arkansas Reach instead tracking to JMR
             waterclass{w,4}='6703512';
@@ -477,6 +482,68 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % RELEASE RECORDS FOR WATERCLASSES USING REST
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+divrecyearurl='https://dwr.state.co.us/Rest/GET/api/v2/structures/divrec/divrecyear/';
+divrecdatayr=webread(divrecyearurl,'format','json','min-dataValue',0,'dataMeasDate',datestr(rdates(end),10),'wdid','1403526',weboptions('Timeout',30));
+
+
+reswdidlist=[{'1403526'},{'1703525'}]; %release wdids pueblo, meredith, put into input data for wd17; Ftn Crk? Purg (To: reference?)?
+onlypullnew=0;
+
+
+divrecdayurl='https://dwr.state.co.us/Rest/GET/api/v2/structures/divrec/divrecday/';
+
+if onlypullnew==0
+    clear divrecsall
+    divrecsall.date.datestart=datestart;
+    divrecsall.date.dateend=dateend;
+    divrecsall.date.modified=0;
+end
+maxdatemodified=0;
+    
+
+for reswdidl=1:length(wdidlist)
+    reswdid=reswdidlist{reswdidl};
+for type=[7,4,8] %release, exchange, apd(?)
+
+divrecdata=webread(divrecdayurl,'format','json','min-dataMeasDate',datestr(datestart,23),'max-dataMeasDate',datestr(dateend,23),'min-dataValue',0.0001,'wdid',reswdid,'wcIdentifier',['*T:' num2str(type) '*'],'min-modified',datestr(divrecsall.date.modified,23),weboptions('Timeout',30));
+
+for i=1:divrecdata.ResultCount
+    wdid=divrecdata.ResultList(i).wdid;
+    wcnum=divrecdata.ResultList(i).waterClassNum;
+    wwdid=['W' wdid];
+    wwcnum=['W' num2str(wcnum)];
+
+    measdatestr=divrecdata.ResultList(i).dataMeasDate;
+    measdatestr(11)=' ';
+    measdatenum=datenum(measdatestr,31);    
+    dateid=find(datedays==measdatenum);
+    
+    measinterval=divrecdata.ResultList(i).measInterval;
+    measunits=divrecdata.ResultList(i).measUnits;
+    if ~strcmp(measinterval,'Daily') | ~strcmp(measunits,'CFS')
+        disp(['WARNING: skipping REST divrec ' wdid ' ' num2str(wcnum) ' with measinterval: ' measinterval ' with measunits: ' measunits]); 
+    elseif isempty(dateid)
+        disp(['WARNING: skipping REST divrec ' wdid ' ' num2str(wcnum) ' with measdatestr: ' measdatestr]);             
+    else
+        divrecsall.(wwdid).(wwcnum).wc=divrecdata.ResultList(i).wcIdentifier;  %will end up with last listed..
+        divrecsall.(wwdid).(wwcnum).type=type;
+        
+        divrecsall.(wwdid).(wwcnum).datavalues(dateid)=divrecdata.ResultList(i).dataValue;
+        divrecsall.(wwdid).(wwcnum).approvalstatus{dateid}=divrecdata.ResultList(i).approvalStatus; %check?
+
+        modifieddatestr=divrecdata.ResultList(i).modified;
+        modifieddatestr(11)=' ';
+        modifieddatenum=datenum(modifieddatestr,31);    
+        divrecsall.(wwdid).(wwcnum).modifieddatenum(dateid)=modifieddatenum;
+        maxdatemodified=max(maxdatemodified,modifieddatenum);
+    end
+    
+end
+end
+end
+divrecsall.date.modified=maxdatemodified;
+
 
 if pulldivrecrest==1
     disp('reading diversion data from HB using REST services')
@@ -518,9 +585,9 @@ if pulldivrecrest==1
         end
     end
     end
-    save([basedir 'TLAPm_SRdata_divs.mat'],'divrecs');
+    save([basedir 'StateTL_SRdata_divs.mat'],'divrecs');
 elseif pulldivrecrest==2
-    load([basedir 'TLAPm_SRdata_divs.mat']);
+    load([basedir 'StateTL_SRdata_divs.mat']);
 end
 
 %%%%%%%%%%%%%%%%%
@@ -528,9 +595,11 @@ end
 %%%%%%%%%%%%%%%%%
 
 d=2;ds='D2';
-Zt=2;Zb=2;
+WDt=17;WDb=17;
 Rt=1;SRt=1;Rb=8;SRb=2;
 %Rt=1;SRt=1;Rb=6;SRb=4;
+%srmethod='j349';
+srmethod='muskingum'; %percent loss TL plus muskingum-cunge for travel time
 
 %WATCH - currently hardwired - will need to automate in both baseflow and admin loops
 
@@ -543,8 +612,8 @@ Rt=1;SRt=1;Rb=8;SRb=2;
 % will change resulting gagediff added - but loop until settles down - then
 % this is the gagediff that will be added in the admin loop..
 
-for z=Zt:Zb
-    zs=['Z' num2str(z)];
+for wd=WDt:WDb
+    wds=['WD' num2str(wd)];
     for r=Rt:Rb
         rs=['R' num2str(r)]
         if r==Rt
@@ -555,20 +624,20 @@ for z=Zt:Zb
         if r==Rb
             srb=SRb;
         else
-            srb=SR.(ds).(zs).(rs).SR(end);
+            srb=SR.(ds).(wds).(rs).SR(end);
         end
 
 gagediff=zeros(rsteps,1);
 gagediffavg=10;
 
-gain=SR.(ds).(zs).(rs).gaininitial(1);
-% gaininitial=SR.(ds).(zs).(rs).gaininitial(1);
+gain=SR.(ds).(wds).(rs).gaininitial(1);
+% gaininirstial=SR.(ds).(wds).(rs).gaininitial(1);
 % if gaininitial==-999
-%     gain=SR.(ds).(zs).(['R' num2str(r-1)]).gain(end)*sum(SR.(ds).(zs).(rs).channellength)/sum(SR.(ds).(zs).(['R' num2str(r-1)]).channellength);
+%     gain=SR.(ds).(wds).(['R' num2str(r-1)]).gain(end)*sum(SR.(ds).(wds).(rs).channellength)/sum(SR.(ds).(wds).(['R' num2str(r-1)]).channellength);
 % else
 %     gain=gaininitial;
 % end
-SR.(ds).(zs).(rs).gain=gain;
+SR.(ds).(wds).(rs).gain=gain;
 
 %while abs(gagediffavg)>gainchangelimit
      
@@ -577,20 +646,20 @@ for ii=1:5
 for sr=srt:srb
 %    if sr==1  %use this to replace top of reach with gage flow rather than calculated flow
     if and(sr==1,r==Rt)  %initialize at top given if gage or reservoir etc
-        if SR.(ds).(zs).R0.type==0         %zone starts with gage; indicated by type in reach = 0
-            Qus=SR.(ds).(zs).R0.Qnode(:,1);   %for subreach = 0 and type = gage put gage flows in zs
+        if SR.(ds).(wds).R0.type==0         %wd zone starts with gage; indicated by type in reach = 0
+            Qus=SR.(ds).(wds).R0.Qnode(:,1);   %for subreach = 0 and type = gage put gage flows in wds
         else
-            Qus=SR.(ds).(zs).(rs).Qnode(:,end,1);  %zone starts with reservoir etc - using gage at bottom of first reach
+            Qus=SR.(ds).(wds).(rs).Qnode(:,end,1);  %wd zone starts with reservoir etc - using gage at bottom of first reach
             for srtop=srt:srb                      %adding back in any intermediate diversions; but NOT CONSIDERING EVAPORATION!!! so currently need evapfactor=0 in these
-                for i=1:SR.(ds).(zs).(rs).dsnodes(srtop)
-                    type=SR.(ds).(zs).(rs).type(i,srtop);
-                    Qnode=SR.(ds).(zs).(rs).Qnode(:,srtop,i);
+                for i=1:SR.(ds).(wds).(rs).dsnodes(srtop)
+                    type=SR.(ds).(wds).(rs).type(i,srtop);
+                    Qnode=SR.(ds).(wds).(rs).Qnode(:,srtop,i);
                     Qus=Qus-type*Qnode;
                 end
             end
         end
     elseif sr==1
-        Qus=SR.(ds).(zs).(['R' num2str(r-1)]).Qdsnodes(:,end);
+        Qus=SR.(ds).(wds).(['R' num2str(r-1)]).Qdsnodes(:,end);
     end
     if gain==-999   %gain=-999 to not run J349 
         Qus=max(0,Qus);
@@ -599,41 +668,45 @@ for sr=srt:srb
         dispersion=0;
     else
         Qus=max(1,Qus);
-        gainportion=gain*SR.(ds).(zs).(rs).reachportion(sr);
-        [Qds,celerity,dispersion]=TLAPwritecard(ds,zs,rs,sr,Qus,gainportion,rdays,rhours,rsteps,basedir,-999,-999);
+        gainportion=gain*SR.(ds).(wds).(rs).reachportion(sr);
+        if strcmp(srmethod,'j349')
+            [Qds,celerity,dispersion]=runj349f(ds,wds,rs,sr,Qus,gainportion,rdays,rhours,rsteps,basedir,-999,-999);
+        elseif strcmp(srmethod,'muskingum')
+            [Qds,celerity,dispersion]=runmuskingum(ds,wds,rs,sr,Qus,rhours,rsteps,-999,-999);
+        end
         Qds=max(0,Qds);
     end
         
     Qavg=(max(Qus,1)+max(Qds,1))/2;
-    width=10.^((log10(Qavg)*SR.(ds).(zs).(rs).widtha(sr))+SR.(ds).(zs).(rs).widthb(sr));
-    evap=SR.(ds).(zs).evap(rjulien,1)*SR.(ds).(zs).(rs).evapfactor(sr).*width.*SR.(ds).(zs).(rs).channellength(sr); %EvapFactor = 0 to not have evap 
+    width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
+    evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr); %EvapFactor = 0 to not have evap 
 %    Qdsnodes=Qds-evap;
-    Qdsnodes=Qds-evap+gagediff*SR.(ds).(zs).(rs).reachportion(sr);
+    Qdsnodes=Qds-evap+gagediff*SR.(ds).(wds).(rs).reachportion(sr);
 
-    for i=1:SR.(ds).(zs).(rs).dsnodes(sr)
-       type=SR.(ds).(zs).(rs).type(i,sr);
-       Qnode=SR.(ds).(zs).(rs).Qnode(:,sr,i);
+    for i=1:SR.(ds).(wds).(rs).dsnodes(sr)
+       type=SR.(ds).(wds).(rs).type(i,sr);
+       Qnode=SR.(ds).(wds).(rs).Qnode(:,sr,i);
        Qdsnodes=Qdsnodes+type*Qnode;
     end
     Qdsnodes=max(0,Qdsnodes);
     
-    SR.(ds).(zs).(rs).gagediffportion(:,sr)=gagediff*SR.(ds).(zs).(rs).reachportion(sr);
-    SR.(ds).(zs).(rs).evap(:,sr)=evap;
-    SR.(ds).(zs).(rs).Qus(:,sr)=Qus;
-    SR.(ds).(zs).(rs).Qds(:,sr)=Qds;
-    SR.(ds).(zs).(rs).Qdsnodes(:,sr)=Qdsnodes;    
-    SR.(ds).(zs).(rs).celerity(:,sr)=celerity;    
-    SR.(ds).(zs).(rs).dispersion(:,sr)=dispersion;    
+    SR.(ds).(wds).(rs).gagediffportion(:,sr)=gagediff*SR.(ds).(wds).(rs).reachportion(sr);
+    SR.(ds).(wds).(rs).evap(:,sr)=evap;
+    SR.(ds).(wds).(rs).Qus(:,sr)=Qus;
+    SR.(ds).(wds).(rs).Qds(:,sr)=Qds;
+    SR.(ds).(wds).(rs).Qdsnodes(:,sr)=Qdsnodes;    
+    SR.(ds).(wds).(rs).celerity(:,sr)=celerity;    
+    SR.(ds).(wds).(rs).dispersion(:,sr)=dispersion;    
     Qus=Qdsnodes;
     
 end %sr
 
-SR.(ds).(zs).(rs).gagediff=gagediff;  %this one that was applied
+SR.(ds).(wds).(rs).gagediff=gagediff;  %this one that was applied
 
-if or(srt>1,srb<SR.(ds).(zs).(rs).SR(end))
+if or(srt>1,srb<SR.(ds).(wds).(rs).SR(end))
     gagediffavg=0;  %if partial reach so don't have gage to gage, then don't do gain iteration?
 else
-    Qdsgage=SR.(ds).(zs).(rs).Qnode(:,end,1);
+    Qdsgage=SR.(ds).(wds).(rs).Qnode(:,end,1);
     if Qdsgage(1,1)==-999
         gagediffavg=0;
         gagediff=0;
@@ -646,15 +719,15 @@ else
 %    gain=gain+gagediffavg/2;
     gagediff=gagediffnew+gagediff;
     end
-    SR.(ds).(zs).(rs).gain=[SR.(ds).(zs).(rs).gain gain];
-    SR.(ds).(zs).(rs).gagediffseries(:,ii)=gagediff;
+    SR.(ds).(wds).(rs).gain=[SR.(ds).(wds).(rs).gain gain];
+    SR.(ds).(wds).(rs).gagediffseries(:,ii)=gagediff;
 end
 
 end %gainchange
-%SR.(ds).(zs).(rs).gagediff=gagediff;  %this not the last one that was applied
+%SR.(ds).(wds).(rs).gagediff=gagediff;  %this not the last one that was applied
 
     end %r
-end %z
+end %wd
 
 
 
@@ -674,8 +747,8 @@ if waterclass{w,2}==3 %exchange
     release=release*-1;
 end
 
-Ztr=SR.(ds).WDID{wdidfromid,3};
-Zbr=SR.(ds).WDID{wdidtoid,3};
+WDtr=SR.(ds).WDID{wdidfromid,3};
+WDbr=SR.(ds).WDID{wdidtoid,3};
 Rtr=SR.(ds).WDID{wdidfromid,4};
 Rbr=SR.(ds).WDID{wdidtoid,4};
 if Rtr==0
@@ -687,10 +760,10 @@ SRbr=SR.(ds).WDID{wdidtoid,5};
 SRtrd=SR.(ds).WDID{wdidfromid,6};
 SRbrd=SR.(ds).WDID{wdidtoid,6};
 
-srids=SR.(ds).(zs).(['R' num2str(Rb)]).subreachid(end)  %just to set size of release matrices
-SR.(ds).(zs).(ws).Qusrelease(1440,srids)=0;     %just used for plotting, maybe better way..
-SR.(ds).(zs).(ws).Qdsrelease(1440,srids)=0;
-SR.(ds).(zs).(ws).Qdsnodesrelease(1440,srids)=0;
+srids=SR.(ds).(wds).(['R' num2str(Rb)]).subreachid(end)  %just to set size of release matrices
+SR.(ds).(wds).(ws).Qusrelease(1440,srids)=0;     %just used for plotting, maybe better way..
+SR.(ds).(wds).(ws).Qdsrelease(1440,srids)=0;
+SR.(ds).(wds).(ws).Qdsnodesrelease(1440,srids)=0;
 
 
 % release=zeros(rsteps,1);
@@ -699,8 +772,8 @@ SR.(ds).(zs).(ws).Qdsnodesrelease(1440,srids)=0;
 % releaseendid=find(rdates==datenum(2017,8,18,3,0,0));
 % release(releasestartid:releaseendid,1)=100.833; %200AF/day release from about 12pm to 3am
 
-for z=Ztr:Zbr
-    zs=['Z' num2str(z)];
+for wd=WDtr:WDbr
+    wds=['WD' num2str(wd)];
     for r=Rtr:Rbr
         rs=['R' num2str(r)]
         if r==Rtr
@@ -711,20 +784,20 @@ for z=Ztr:Zbr
         if r==Rbr
             srb=SRbr;
         else
-            srb=SR.(ds).(zs).(rs).SR(end);
+            srb=SR.(ds).(wds).(rs).SR(end);
         end
 
 for sr=srt:srb
     if and(sr==SRtr,r==Rtr)
         if pred==1 %predictive case
-            Qus=SR.(ds).(zs).(rs).Qus(:,sr)+release;
+            Qus=SR.(ds).(wds).(rs).Qus(:,sr)+release;
         else  %administrative case
-            Qus=SR.(ds).(zs).(rs).Qus(:,sr)-release;
+            Qus=SR.(ds).(wds).(rs).Qus(:,sr)-release;
         end
     else
     end
     
-    gain=SR.(ds).(zs).(rs).gain(end);
+    gain=SR.(ds).(wds).(rs).gain(end);
 %     if gain<0;  %if losses, distribute to release also.. %this needs to be discussed further!!
 %         
 %         
@@ -732,8 +805,8 @@ for sr=srt:srb
     if pred==1
         celerity=-999;dispersion=-999;
     else
-        celerity=SR.(ds).(zs).(rs).celerity(:,sr);
-        dispersion=SR.(ds).(zs).(rs).dispersion(:,sr);
+        celerity=SR.(ds).(wds).(rs).celerity(:,sr);
+        dispersion=SR.(ds).(wds).(rs).dispersion(:,sr);
     end
 
     if gain==-999   %gain=-999 to not run J349 
@@ -741,46 +814,50 @@ for sr=srt:srb
         Qds=Qus;
     else
         Qus=max(1,Qus);
-        gainportion=gain*SR.(ds).(zs).(rs).reachportion(sr);
-        [Qds,celerity,dispersion]=TLAPwritecard(ds,zs,rs,sr,Qus,gainportion,rdays,rhours,rsteps,basedir,celerity,dispersion);
+        gainportion=gain*SR.(ds).(wds).(rs).reachportion(sr);
+        if strcmp(srmethod,'j349')
+            [Qds,celerity,dispersion]=runj349f(ds,wds,rs,sr,Qus,gainportion,rdays,rhours,rsteps,basedir,-999,-999);
+        elseif strcmp(srmethod,'muskingum')
+            [Qds,celerity,dispersion]=runmuskingum(ds,wds,rs,sr,Qus,rhours,rsteps,-999,-999);
+        end
         Qds=max(0,Qds);
     end
     Qavg=(max(Qus,1)+max(Qds,1))/2;
-    width=10.^((log10(Qavg)*SR.(ds).(zs).(rs).widtha(sr))+SR.(ds).(zs).(rs).widthb(sr));
+    width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
     if waterclass{w,2}==3 %exchange
         evap=0;
     else
-        evap=SR.(ds).(zs).evap(rjulien,1)*SR.(ds).(zs).(rs).evapfactor(sr).*width.*SR.(ds).(zs).(rs).channellength(sr);
+        evap=SR.(ds).(wds).evap(rjulien,1)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr);
     end
-    Qdsnodes=Qds-evap+SR.(ds).(zs).(rs).gagediff*SR.(ds).(zs).(rs).reachportion(sr);
+    Qdsnodes=Qds-evap+SR.(ds).(wds).(rs).gagediff*SR.(ds).(wds).(rs).reachportion(sr);
 
-    for i=1:SR.(ds).(zs).(rs).dsnodes(sr)
-       type=SR.(ds).(zs).(rs).type(i,sr);
-       Qnode=SR.(ds).(zs).(rs).Qnode(:,sr,i);
+    for i=1:SR.(ds).(wds).(rs).dsnodes(sr)
+       type=SR.(ds).(wds).(rs).type(i,sr);
+       Qnode=SR.(ds).(wds).(rs).Qnode(:,sr,i);
        Qdsnodes=Qdsnodes+type*Qnode;
     end
     Qdsnodes=max(0,Qdsnodes);
     
-    lsr=SR.(ds).(zs).(rs).subreachid(sr);
-    SR.(ds).(zs).(rs).(ws).Qusnative(:,sr)=Qus;
-    SR.(ds).(zs).(rs).(ws).Qdsnative(:,sr)=Qds;
-    SR.(ds).(zs).(rs).(ws).Qdsnodesnative(:,sr)=Qdsnodes;    
+    lsr=SR.(ds).(wds).(rs).subreachid(sr);
+    SR.(ds).(wds).(rs).(ws).Qusnative(:,sr)=Qus;
+    SR.(ds).(wds).(rs).(ws).Qdsnative(:,sr)=Qds;
+    SR.(ds).(wds).(rs).(ws).Qdsnodesnative(:,sr)=Qdsnodes;    
     if pred==1
-        SR.(ds).(zs).(rs).(ws).Qusrelease(:,sr)=Qus-SR.(ds).(zs).(rs).Qus(:,sr);
-        SR.(ds).(zs).(rs).(ws).Qdsrelease(:,sr)=Qds-SR.(ds).(zs).(rs).Qds(:,sr);
-        SR.(ds).(zs).(rs).(ws).Qdsnodesrelease(:,sr)=Qdsnodes-SR.(ds).(zs).(rs).Qdsnodes(:,sr);
+        SR.(ds).(wds).(rs).(ws).Qusrelease(:,sr)=Qus-SR.(ds).(wds).(rs).Qus(:,sr);
+        SR.(ds).(wds).(rs).(ws).Qdsrelease(:,sr)=Qds-SR.(ds).(wds).(rs).Qds(:,sr);
+        SR.(ds).(wds).(rs).(ws).Qdsnodesrelease(:,sr)=Qdsnodes-SR.(ds).(wds).(rs).Qdsnodes(:,sr);
 
-        SR.(ds).(zs).(ws).Qusrelease(:,lsr)=Qus-SR.(ds).(zs).(rs).Qus(:,sr);
-        SR.(ds).(zs).(ws).Qdsrelease(:,lsr)=Qds-SR.(ds).(zs).(rs).Qds(:,sr);
-        SR.(ds).(zs).(ws).Qdsnodesrelease(:,lsr)=Qdsnodes-SR.(ds).(zs).(rs).Qdsnodes(:,sr);
+        SR.(ds).(wds).(ws).Qusrelease(:,lsr)=Qus-SR.(ds).(wds).(rs).Qus(:,sr);
+        SR.(ds).(wds).(ws).Qdsrelease(:,lsr)=Qds-SR.(ds).(wds).(rs).Qds(:,sr);
+        SR.(ds).(wds).(ws).Qdsnodesrelease(:,lsr)=Qdsnodes-SR.(ds).(wds).(rs).Qdsnodes(:,sr);
     else
-        SR.(ds).(zs).(rs).(ws).Qusrelease(:,sr)=SR.(ds).(zs).(rs).Qus(:,sr)-Qus;
-        SR.(ds).(zs).(rs).(ws).Qdsrelease(:,sr)=SR.(ds).(zs).(rs).Qds(:,sr)-Qds;
-        SR.(ds).(zs).(rs).(ws).Qdsnodesrelease(:,sr)=SR.(ds).(zs).(rs).Qdsnodes(:,sr)-Qdsnodes;
+        SR.(ds).(wds).(rs).(ws).Qusrelease(:,sr)=SR.(ds).(wds).(rs).Qus(:,sr)-Qus;
+        SR.(ds).(wds).(rs).(ws).Qdsrelease(:,sr)=SR.(ds).(wds).(rs).Qds(:,sr)-Qds;
+        SR.(ds).(wds).(rs).(ws).Qdsnodesrelease(:,sr)=SR.(ds).(wds).(rs).Qdsnodes(:,sr)-Qdsnodes;
         
-        SR.(ds).(zs).(ws).Qusrelease(:,lsr)=SR.(ds).(zs).(rs).Qus(:,sr)-Qus;
-        SR.(ds).(zs).(ws).Qdsrelease(:,lsr)=SR.(ds).(zs).(rs).Qds(:,sr)-Qds;
-        SR.(ds).(zs).(ws).Qdsnodesrelease(:,lsr)=SR.(ds).(zs).(rs).Qdsnodes(:,sr)-Qdsnodes;
+        SR.(ds).(wds).(ws).Qusrelease(:,lsr)=SR.(ds).(wds).(rs).Qus(:,sr)-Qus;
+        SR.(ds).(wds).(ws).Qdsrelease(:,lsr)=SR.(ds).(wds).(rs).Qds(:,sr)-Qds;
+        SR.(ds).(wds).(ws).Qdsnodesrelease(:,lsr)=SR.(ds).(wds).(rs).Qdsnodes(:,sr)-Qdsnodes;
         
     end
     
@@ -789,7 +866,7 @@ for sr=srt:srb
 end %sr
 
     end %r
-end %z
+end %wd
 
 end %j - waterclass
 
@@ -810,8 +887,8 @@ figure('Renderer','zbuffer','Position',[349,93,1006.4,691.2]);
 releasestartid=25;
 ts1=1100;
 
-for z=Zt:Zb
-    zs=['Z' num2str(z)];
+for wd=WDt:WDb
+    wds=['WD' num2str(wd)];
 %    for ts=rdatesstartid:rdatesstartid+100
 %    for ts=releasestartid-24:(1440-24)
     for ts=ts1:1440
@@ -832,42 +909,42 @@ for z=Zt:Zb
         if r==Rb
             srb=SRb;
         else
-            srb=SR.(ds).(zs).(rs).SR(end);
+            srb=SR.(ds).(wds).(rs).SR(end);
         end
 
 for sr=srt:srb
 %     plotx=[plotx (r-1)*20+(sr-1)*3 (r-1)*20+(sr-1)*3+1 (r-1)*20+(sr-1)*3+1];    
-     plotlinex=[plotlinex plotx plotx+SR.(ds).(zs).(rs).channellength(sr) plotx+SR.(ds).(zs).(rs).channellength(sr)];
-     plotx=plotx+SR.(ds).(zs).(rs).channellength(sr);
+     plotlinex=[plotlinex plotx plotx+SR.(ds).(wds).(rs).channellength(sr) plotx+SR.(ds).(wds).(rs).channellength(sr)];
+     plotx=plotx+SR.(ds).(wds).(rs).channellength(sr);
      
-     plotline(k+1:k+3,1)=[SR.(ds).(zs).(rs).Qus(ts,sr);SR.(ds).(zs).(rs).Qds(ts,sr);SR.(ds).(zs).(rs).Qdsnodes(ts,sr)];
-     lsr=SR.(ds).(zs).(rs).subreachid(sr);
+     plotline(k+1:k+3,1)=[SR.(ds).(wds).(rs).Qus(ts,sr);SR.(ds).(wds).(rs).Qds(ts,sr);SR.(ds).(wds).(rs).Qdsnodes(ts,sr)];
+     lsr=SR.(ds).(wds).(rs).subreachid(sr);
      kwr=0;kwe=1;
      for w=1:length(waterclass(:,1))
          ws=['W' num2str(w)];
          if waterclass{w,2}==3 %for exchanges add onto native line
             kwe=kwe+1;
-            plotline(k+1:k+3,kwe)=[SR.(ds).(zs).(ws).Qusrelease(ts,lsr);SR.(ds).(zs).(ws).Qdsrelease(ts,lsr);SR.(ds).(zs).(ws).Qdsnodesrelease(ts,lsr)];
+            plotline(k+1:k+3,kwe)=[SR.(ds).(wds).(ws).Qusrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsnodesrelease(ts,lsr)];
          else
             kwr=kwr+1;
-            plotlinerelease(k+1:k+3,kwr)=[SR.(ds).(zs).(ws).Qusrelease(ts,lsr);SR.(ds).(zs).(ws).Qdsrelease(ts,lsr);SR.(ds).(zs).(ws).Qdsnodesrelease(ts,lsr)];
+            plotlinerelease(k+1:k+3,kwr)=[SR.(ds).(wds).(ws).Qusrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsnodesrelease(ts,lsr)];
          end
           
-%         plotlinerelease(k+1:k+3,w)=[SR.(ds).(zs).(ws).Qusrelease(ts,lsr);SR.(ds).(zs).(ws).Qdsrelease(ts,lsr);SR.(ds).(zs).(ws).Qdsnodesrelease(ts,lsr)];
+%         plotlinerelease(k+1:k+3,w)=[SR.(ds).(wds).(ws).Qusrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsrelease(ts,lsr);SR.(ds).(wds).(ws).Qdsnodesrelease(ts,lsr)];
          
-%         plotlinerelease.(ws)=[plotlinerelease.(ws) SR.(ds).(zs).(ws).Qusrelease(ts,lsr) SR.(ds).(zs).(ws).Qdsrelease(ts,lsr) SR.(ds).(zs).(ws).Qdsnodesrelease(ts,lsr)];
+%         plotlinerelease.(ws)=[plotlinerelease.(ws) SR.(ds).(wds).(ws).Qusrelease(ts,lsr) SR.(ds).(wds).(ws).Qdsrelease(ts,lsr) SR.(ds).(wds).(ws).Qdsnodesrelease(ts,lsr)];
         
-%          if (z>=Ztr & r>=Rtr & sr>=SRtr) & (z<=Zbr & r<=Rbr & sr<=SRbr)
-% %         plotlinenative.(ws)=[plotlinenative SR.(ds).(zs).(rs).(ws).Qusnative(ts,sr) SR.(ds).(zs).(rs).(ws).Qdsnative(ts,sr) SR.(ds).(zs).(rs).(ws).Qdsnodesnative(ts,sr)];
-%          plotlinerelease(k+1:k+3,w)=[SR.(ds).(zs).(rs).(ws).Qusrelease(ts,sr);SR.(ds).(zs).(rs).(ws).Qdsrelease(ts,sr);SR.(ds).(zs).(rs).(ws).Qdsnodesrelease(ts,sr)];
+%          if (wd>=WDtr & r>=Rtr & sr>=SRtr) & (wd<=WDbr & r<=Rbr & sr<=SRbr)
+% %         plotlinenative.(ws)=[plotlinenative SR.(ds).(wds).(rs).(ws).Qusnative(ts,sr) SR.(ds).(wds).(rs).(ws).Qdsnative(ts,sr) SR.(ds).(wds).(rs).(ws).Qdsnodesnative(ts,sr)];
+%          plotlinerelease(k+1:k+3,w)=[SR.(ds).(wds).(rs).(ws).Qusrelease(ts,sr);SR.(ds).(wds).(rs).(ws).Qdsrelease(ts,sr);SR.(ds).(wds).(rs).(ws).Qdsnodesrelease(ts,sr)];
 %          else
 %             plotlinerelease(k+1:k+3,w)=[0;0;0];
 %          end
      end
      k=k+3;
 
-%     plotline=[plotline SR.(ds).(zs).(rs).Qdsnodes(ts,sr)];
-%     plotlinenative=[plotlinenative SR.(ds).(zs).(rs).(ws).Qdsnodesnative(ts,sr)];
+%     plotline=[plotline SR.(ds).(wds).(rs).Qdsnodes(ts,sr)];
+%     plotlinenative=[plotlinenative SR.(ds).(wds).(rs).(ws).Qdsnodesnative(ts,sr)];
     
 end
     end
@@ -900,13 +977,218 @@ text(127.5,0,'JohnMartin','Rotation',90,'HorizontalAlignment','Right')
     end
 end
 
-
-    
         
 % movie(F,1,8)
 
-
 disp(datestr(now))
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% function using TL=percent loss and travel=Muskinghum-Cunge routing using celerity and dispersion coefficients..
+%
+% from TLAP:
+% dispersion = K(ft2/s) = Qo / (2 So Wo ) - Q (ft3/s), So - channel slope, Wo - avg stream width (ft) at Qo
+% celerity =  c(ft/s) = 1/Wo * dQo / dy   - inverse of slope of stage-discharge relation at Qo
+%
+% from Chang: http://chang.sdsu.edu/textbookhydrologyp294.html
+% X = 1/2 (1 - qo / So c dx) - qo=refernce discharge per unit width
+%
+% therefore:
+% K = qo / 2 So
+% X = 1/2 - K / (c dx)
+%
+% from Chang: http://chang.sdsu.edu/textbookhydrologyp292.html 
+% Q (n+1/j+1) = C0 Q (n+1/j) + C1 Q (n/j) + C2 Q(n/j+1); - j in x, n in time
+% C0 = (c (dt/dx) - 2X )       / (2 * (1-X) + c (dt/dx))
+% C1 = (c (dt/dx) + 2X )       / (2 * (1-X) + c (dt/dx))
+% C2 = (2 * (1-X) - c (dt/dx)) / (2 * (1-X) + c (dt/dx))
+
+function [Qds,celerity,dispersion]=runmuskingum(ds,wds,rs,sr,Qus,rhours,rsteps,celerity,dispersion)
+global SR
+
+Qusavg=mean(Qus);  %watch - this would be different than TLAP; but think basing on that subreach flow might be more correct than on entire reach avg
+
+channellength=SR.(ds).(wds).(rs).channellength(sr);
+if celerity==-999
+    celeritya=SR.(ds).(wds).(rs).celeritya(sr);
+    celerityb=SR.(ds).(wds).(rs).celerityb(sr);
+    celerity=celeritya*Qusavg^celerityb;
+end
+if dispersion==-999
+    dispersiona=SR.(ds).(wds).(rs).dispersiona(sr);
+    dispersionb=SR.(ds).(wds).(rs).dispersionb(sr);
+    dispersion=dispersiona*Qusavg^dispersionb;
+end
+
+losspercent=SR.(ds).(wds).(rs).losspercent(sr);
+dspercent=(1-losspercent/100);
+
+%Muskinghum-Cunge parameters
+dt=rhours * 60 * 60; %sec
+dx=channellength * 5280; %ft
+X = 1/2 - dispersion / (celerity * dx);
+Cbot = 2 * (1-X) + celerity *(dt/dx);
+C0 = (celerity * (dt/dx) - 2 * X) / Cbot;
+C1 = (celerity * (dt/dx) + 2 * X) / Cbot;
+C2 = ( 2 * (1-X) - celerity * (dt/dx)) / Cbot;
+
+Qds=ones(rsteps,1);
+Qds(1,1) = Qus(1,1) * dspercent; %spinup??
+
+for n=1:rsteps-1  %Muskinghum-Cunge Routing
+    Qds (n+1,1) = (C0 * Qus (n+1,1) * dspercent) + (C1 * Qus (n,1) * dspercent) + C2 * Qds(n,1);
+%    Qds (n+1,1) = Qus (n+1,1) * dspercent;
+end
+
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%function for subreach to take upstream hydrograph and subreach specific data, build input card, 
+%run TLAP/j349 fortran, read output card, and return resulting downstream hydrograph
+
+function [Qds,celerity,dispersion]=runj349f(ds,wds,rs,sr,Qus,gain,rdays,rhours,rsteps,basedir,celerity,dispersion)
+global SR
+
+Qusavg=mean(Qus);  %watch - this would be different than TLAP; but think basing on that subreach flow might be more correct
+%Qusavg=(667+ARKAVOCO)/2; %current in TLAP- based on average flow for entire reach
+
+channellength=SR.(ds).(wds).(rs).channellength(sr);
+alluviumlength=SR.(ds).(wds).(rs).alluviumlength(sr);
+transmissivity=SR.(ds).(wds).(rs).transmissivity(sr);
+storagecoefficient=SR.(ds).(wds).(rs).storagecoefficient(sr);
+aquiferwidth=SR.(ds).(wds).(rs).aquiferwidth(sr);
+closure=SR.(ds).(wds).(rs).closure(sr);
+if celerity==-999
+    dispersiona=SR.(ds).(wds).(rs).dispersiona(sr);
+    dispersionb=SR.(ds).(wds).(rs).dispersionb(sr);
+    celeritya=SR.(ds).(wds).(rs).celeritya(sr);
+    celerityb=SR.(ds).(wds).(rs).celerityb(sr);
+    dispersion=dispersiona*Qusavg^dispersionb;
+    celerity=celeritya*Qusavg^celerityb;
+end
+stagedischarge=SR.(ds).(wds).stagedischarge;
+
+inputcardfilename=['StateTL_' ds wds rs 'SR' num2str(sr) '_us.dat'];
+outputcardfilename=['StateTL_' ds wds rs 'SR' num2str(sr) '_ds.dat'];
+
+fid=fopen([basedir inputcardfilename],'w');
+
+cardstr='CDWR TIMING AND TRANSIT LOSS MODEL                                              CARD 1 GEN INFO';
+    fprintf(fid,'%95s\r\n',cardstr);
+cardstr='SUBREACH  UPSTREAM                                                              CARD 2 RUN INFO';
+    fprintf(fid,'%95s\r\n',cardstr);
+cardstr='         1         2                                                            CARD 3 INPUT SOURCE AND RUN OBJECTIVE';
+    fprintf(fid,'%117s\r\n',cardstr);
+cardstr='         1         0                                                            CARD 4 DESCRIB OF RUN>>> COL C=DAYS (MAX=100)';
+cardstr2=num2str(rdays,'%10.0f');cardstr3=num2str(rhours,'%10.1f');
+cardstr(31-length(cardstr2):30)=cardstr2;cardstr(41-length(cardstr3):40)=cardstr3;
+    fprintf(fid,'%125s\r\n',cardstr);
+cardstr='         2        12      2001         6        17      2001                    CARD 5 START/END DATE ARIBITRARY--NOT USED IN CALCS';
+    fprintf(fid,'%131s\r\n',cardstr);
+cardstr='               False       0.0                                                  CARD 6 RATING INFO AND>>>COL C= MIN FLOW';
+cardstr2=num2str(length(stagedischarge),'%10.0f');
+cardstr(11-length(cardstr2):10)=cardstr2;
+    fprintf(fid,'%120s\r\n',cardstr);
+
+
+%stage discharge
+%this is currently built so that has to have minimum of 4 points and number
+%of points must be divisible by 4
+
+cardstr='                                                                                CARD 7  S VS Q (S/Q/S/Q/S ETC)';
+cardstr1=num2str(stagedischarge(1,1),'%10.2f');cardstr2=num2str(stagedischarge(2,1),'%10.2f');cardstr3=num2str(stagedischarge(3,1),'%10.2f');cardstr4=num2str(stagedischarge(4,1),'%10.2f');
+cardstr1a=num2str(stagedischarge(1,2),'%10.1f');cardstr2a=num2str(stagedischarge(2,2),'%10.1f');cardstr3a=num2str(stagedischarge(3,2),'%10.1f');cardstr4a=num2str(stagedischarge(4,2),'%10.1f');
+cardstr(11-length(cardstr1):10)=cardstr1;cardstr(21-length(cardstr1a):20)=cardstr1a;cardstr(31-length(cardstr2):30)=cardstr2;cardstr(41-length(cardstr2a):40)=cardstr2a;
+cardstr(51-length(cardstr3):50)=cardstr3;cardstr(61-length(cardstr3a):60)=cardstr3a;cardstr(71-length(cardstr4):70)=cardstr4;cardstr(81-length(cardstr4a):80)=cardstr4a;
+    fprintf(fid,'%110s\r\n',cardstr);
+% fidstr='%10.2f %9.1f %9.2f %9.1f %9.2f %9.1f %9.2f %9.1f %29s\r\n';
+% fprintf(fid,fidstr,stagedischarge(1,1),stagedischarge(1,2),stagedischarge(2,1),stagedischarge(2,2),stagedischarge(3,1),stagedischarge(3,2),stagedischarge(4,1),stagedischarge(4,2),'CARD 7 S VS Q (S/Q/S/Q/S ETC)');
+for j=1:ceil(length(stagedischarge)/4)-1
+    fidstr='%10.2f %9.1f %9.2f %9.1f %9.2f %9.1f %9.2f %9.1f\r\n';
+    fprintf(fid,fidstr,stagedischarge(j*4+1,1),stagedischarge(j*4+1,2),stagedischarge(j*4+2,1),stagedischarge(j*4+2,2),stagedischarge(j*4+3,1),stagedischarge(j*4+3,2),stagedischarge(j*4+4,1),stagedischarge(j*4+4,2));
+end
+
+%upstream hydrograph
+%this is currently built so that number of points must be divisible by 6
+for j=1:ceil(rsteps/6)
+    fidstr='%10.1f %9.1f %9.1f %9.1f %9.1f %9.1f\r\n';
+    fprintf(fid,fidstr,Qus((j-1)*6+1,1),Qus((j-1)*6+2,1),Qus((j-1)*6+3,1),Qus((j-1)*6+4,1),Qus((j-1)*6+5,1),Qus((j-1)*6+6,1));
+end
+
+cardstr='CDWR TIMING AND TRANSIT LOSS MODEL                                              CARD 10 GEN INFO';
+    fprintf(fid,'%96s\r\n',cardstr);
+cardstr='SUBREACH  DOWNSTREAM                                                            CARD 11 DS NODE';
+    fprintf(fid,'%95s\r\n',cardstr);
+cardstr='         2     False     False      True     False     False     False      TrueCARD 12 RULES FOR SUBREACH NOTE COL G=TRUE FOR OBS HYD FOR COMPARE';
+    fprintf(fid,'%146s\r\n',cardstr);
+cardstr='                                                                                CARD 13 TT, CHANNEL L, ALLUVIUM L';
+cardstr2=num2str(channellength/2,'%10.2f');cardstr3=num2str(channellength,'%10.2f');cardstr4=num2str(alluviumlength,'%10.2f');
+cardstr(11-length(cardstr2):10)=cardstr2;cardstr(21-length(cardstr3):20)=cardstr3;cardstr(31-length(cardstr4):30)=cardstr4;
+    fprintf(fid,'%113s\r\n',cardstr);
+cardstr='                             0                                                  CARD 14 AQUIFER T, S  (LAST FIELD CONSTANT 0)';
+cardstr2=num2str(transmissivity,'%10.1f');cardstr3=num2str(storagecoefficient,'%10.2f');
+cardstr(11-length(cardstr2):10)=cardstr2;cardstr(21-length(cardstr3):20)=cardstr3;
+    fprintf(fid,'%125s\r\n',cardstr);
+cardstr='                                                                                CARD 15 WAVE DISP, WAVE CEL, Closure Criteria,(BLANK), AQUIFER WIDTH';
+cardstr2=num2str(dispersion,'%10.4f');cardstr3=num2str(celerity,'%10.7f');cardstr4=num2str(closure,'%10.0f');cardstr5=num2str(aquiferwidth,'%10.0f');
+cardstr(11-length(cardstr2):10)=cardstr2;cardstr(21-length(cardstr3):20)=cardstr3;cardstr(31-length(cardstr4):30)=cardstr4;cardstr(51-length(cardstr5):50)=cardstr5;
+    fprintf(fid,'%148s\r\n',cardstr);
+cardstr='               False                                                            CARD 16 RATING INFO AND>>>COL C= MIN FLOW';
+cardstr2=num2str(length(stagedischarge),'%10.0f');cardstr3=num2str(gain,'%10.2f');
+cardstr(11-length(cardstr2):10)=cardstr2;cardstr(31-length(cardstr3):30)=cardstr3;
+    fprintf(fid,'%121s\r\n',cardstr);
+
+%stage discharge
+%this is currently built so that has to have minimum of 4 points and number
+%of points must be divisible by 4
+cardstr='                                                                                CARD 17  S VS Q (S/Q/S/Q/S ETC)';
+cardstr1=num2str(stagedischarge(1,1),'%10.2f');cardstr2=num2str(stagedischarge(2,1),'%10.2f');cardstr3=num2str(stagedischarge(3,1),'%10.2f');cardstr4=num2str(stagedischarge(4,1),'%10.2f');
+cardstr1a=num2str(stagedischarge(1,2),'%10.1f');cardstr2a=num2str(stagedischarge(2,2),'%10.1f');cardstr3a=num2str(stagedischarge(3,2),'%10.1f');cardstr4a=num2str(stagedischarge(4,2),'%10.1f');
+cardstr(11-length(cardstr1):10)=cardstr1;cardstr(21-length(cardstr1a):20)=cardstr1a;cardstr(31-length(cardstr2):30)=cardstr2;cardstr(41-length(cardstr2a):40)=cardstr2a;
+cardstr(51-length(cardstr3):50)=cardstr3;cardstr(61-length(cardstr3a):60)=cardstr3a;cardstr(71-length(cardstr4):70)=cardstr4;cardstr(81-length(cardstr4a):80)=cardstr4a;
+    fprintf(fid,'%111s\r\n',cardstr);
+% fidstr='%10.2f %9.1f %9.2f %9.1f %9.2f %9.1f %9.2f %9.1f %29s\r\n';
+% fprintf(fid,fidstr,stagedischarge(1,1),stagedischarge(1,2),stagedischarge(2,1),stagedischarge(2,2),stagedischarge(3,1),stagedischarge(3,2),stagedischarge(4,1),stagedischarge(4,2),'CARD 7 S VS Q (S/Q/S/Q/S ETC)');
+for j=1:ceil(length(stagedischarge)/4)-1
+    fidstr='%10.2f %9.1f %9.2f %9.1f %9.2f %9.1f %9.2f %9.1f\r\n';
+    fprintf(fid,fidstr,stagedischarge(j*4+1,1),stagedischarge(j*4+1,2),stagedischarge(j*4+2,1),stagedischarge(j*4+2,2),stagedischarge(j*4+3,1),stagedischarge(j*4+3,2),stagedischarge(j*4+4,1),stagedischarge(j*4+4,2));
+end
+
+fclose(fid);
+
+fid=fopen([basedir 'filenames'],'w');
+fprintf(fid,'%s\r\n',inputcardfilename);
+fprintf(fid,'%s\r\n',outputcardfilename);
+fclose(fid);
+
+[s, w] = dos([basedir 'j349.exe']);
+
+fid=fopen([basedir outputcardfilename],'r');
+
+k=0;  %just to get header length
+while 1
+	line = fgetl(fid);
+	if strcmp(line,'                                                   SUMMARY OF DATA AND RESULTS'), break, end  %check to see if line starting 1900 or 2000s
+    k=k+1;
+end
+for j=1:5
+    line = fgetl(fid);
+end
+Qds=zeros(rsteps,1);
+for j=1:rsteps
+    line = fgetl(fid);
+%    datechunk(j,:)=line(2:12);
+    Qds(j,1)=str2num(line(42:54));
+end
+fclose(fid);
+
+end
+
+
+
+
+
 
 
 
