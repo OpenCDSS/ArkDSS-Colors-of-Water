@@ -1,4 +1,5 @@
 C     Program J349 with modifications by P.R. Jordan, Kansas, Nov. 1984 - Feb. 1985, and some earlier ones by Ken Schriner.
+C         kt indicates modification by K.L. Thompson, Colorado DWR, Sep 2021
 C
 C
 C******************* NEED TO LOAD LIBRARY IMSLIB77D WITH THIS PROGRAM ****************************************
@@ -78,17 +79,17 @@ C                                                                       00005000
       CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20),  00005300
      1FILENAME *40
       DIMENSION IAV(10), LREC(10)                                       00005400
-      CHARACTER *4 IWARN (1600)
+      CHARACTER *4 IWARN (9000)
       CHARACTER *4 IW0, IW1, IW2
-      DIMENSION UR(20,100), DUSRF(1600), QLIN(20), NRESP(20), ITT(20)   00005600
-      DIMENSION SRAT(2,20), QRAT(2,20), SHIFT(2,1600)                   00005700
+      DIMENSION UR(20,100), DUSRF(9000), QLIN(20), NRESP(20), ITT(20)   00005600
+      DIMENSION SRAT(2,20), QRAT(2,20), SHIFT(2,9000)                   00005700
       DIMENSION X(25), QLOSS(25), ISTRT(25), IEND(25)                   00005800
-      DIMENSION USS(1600), DSS(1600), DELS(1600), S(1600)               00005900
-      DIMENSION USQ(1600), DSQ(3200), DSQ1(1600), SQLOSS(3200),QI(3200) 00006000
+      DIMENSION USS(9000), DSS(9000), DELS(9000), S(9000)               00005900
+      DIMENSION USQ(9000),DSQ(18000),DSQ1(9000),SQLOSS(18000),QI(18000) 00006000
 C     NEW VARIABLE DSQO, OBSERVED DS. DISCHARGE, CREATED TO KEEP UNCHANGED
 C     FOR OUTPUT AND PRINTED NEXT TO COMPUTED DS. DISCHARGE FOR COMPARISON.  G. KUHN, 9-26-85.
 C
-      DIMENSION DSQO(1600)
+      DIMENSION DSQO(9000)
 C
       DIMENSION AC0(20), AXK(20), C0RAT(10), C0QRAT(10),                00006100
      1XKRAT(10), XKQRAT(10)                                             00006200
@@ -360,18 +361,18 @@ C       QOUTPT-PROGRAMMED BY J O SHEARMAN.  OUTPUTS HYDROGRAPH DATA ON  00030400
 C              DISK                                                     00030500
       IMPLICIT LOGICAL(Z)                                               00005100
       INTEGER OPFILE,C,P,PU,US,DS                                       00005200
-      DIMENSION A (1600), AB (3200)                                               kt changed A to smaller dim, AB to larger dim
+      DIMENSION A(9000), AB(18000)                                                kt changed A to smaller dim, AB to larger dim
       CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20)        00005300
       DIMENSION IAV(10), LREC(10)                                       00005400
-      CHARACTER *4 IWARN (1600)
+      CHARACTER *4 IWARN (9000)
       CHARACTER*10   TEST_ZMULT
       CHARACTER *4 IW0, IW1, IW2
-      DIMENSION UR(20,100), DUSRF(1600), QLIN(20), NRESP(20), ITT(20)    00005600
-      DIMENSION SRAT(2,20), QRAT(2,20), SHIFT(2,1600)                    00005700
+      DIMENSION UR(20,100), DUSRF(9000), QLIN(20), NRESP(20), ITT(20)    00005600
+      DIMENSION SRAT(2,20), QRAT(2,20), SHIFT(2,9000)                    00005700
       DIMENSION X(25), QLOSS(25), ISTRT(25), IEND(25)                   00005800
-      DIMENSION USS(1600), DSS(1600), DELS(1600), S(1600)               00005900
-      DIMENSION USQ(1600), DSQ(3200), DSQ1(1600), SQLOSS(3200), QI(3200)00006000
-      DIMENSION DSQO(1600)
+      DIMENSION USS(9000), DSS(9000), DELS(9000), S(9000)               00005900
+      DIMENSION USQ(9000),DSQ(18000),DSQ1(9000),SQLOSS(18000),QI(18000) 00006000
+      DIMENSION DSQO(9000)
       DIMENSION AC0(20), AXK(20), C0RAT(10), C0QRAT(10),                00006100
      1XKRAT(10), XKQRAT(10)                                             00006200
       REAL *8 UR
@@ -822,12 +823,12 @@ C                                                                       00066900
       IMPLICIT LOGICAL(Z)                                               00067000
       INTEGER OPFILE,C,P,PU,US,DS                                       00067100
       CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20)        00067200
-      DIMENSION UR(20,100), DUSRF(1600), QLIN(20), NRESP(20), ITT(20)    00067300
+      DIMENSION UR(20,100), DUSRF(9000), QLIN(20), NRESP(20), ITT(20)    00067300
       REAL *8 UR
-      DIMENSION Q(3200)                                                 00067400
-      DIMENSION USS(1600), DSS(1600), DELS(1600), S(1600)                   00067500
-      DIMENSION USQ(1600), DSQ(3200), DSQ1(1600), SQLOSS(3200),QI(3200) 00067600  kt fixed DSQ array size typo
-      DIMENSION DSQO(1600)                                              00067601  kt added DSQO dim
+      DIMENSION Q(18000)                                                 00067400
+      DIMENSION USS(9000), DSS(9000), DELS(9000), S(9000)                   00067500
+      DIMENSION USQ(9000),DSQ(18000),DSQ1(9000),SQLOSS(18000),QI(18000) 00067600  kt fixed DSQ array size typo
+      DIMENSION DSQO(9000)                                              00067601  kt added DSQO dim
       COMMON /ZLOGIC/ ZBEGIN,ZEND,ZPLOT,ZROUTE,ZFLOW,ZLOSS,ZDISK,ZCARDS,00067700
      1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT             00067800
       COMMON /PLT/ INITMO,INITDY,INITYR,LASTMO,LASTDY,LASTYR,NRECDS,STAN00067900
@@ -1003,7 +1004,7 @@ C             FUNCTION' FOR EITHER OF THREE BOUNDARY CONDITIONS.        00084500
 C             PRINTS RESULTS.                                           00084600
 C                                                                       00084700
       INTEGER OPFILE,C,P,PU,US,DS                                       00084800
-      DIMENSION UR(20,100), DUSRF(1600), QLIN(20), NRESP(20), ITT(20)    00084900
+      DIMENSION UR(20,100), DUSRF(9000), QLIN(20), NRESP(20), ITT(20)    00084900
       REAL *8 UR
       COMMON /RESFCT/ UR,DUSRF,QLIN,NURS,NRO,NRESP,ITT,NUR1,            00085000
      1                NSTAIL,NATAIL                                     00085100
@@ -1166,12 +1167,12 @@ C                                                                       00099600
       REAL K                                                            00099900
       DIMENSION CC(20), BPC(10), CBP(10), Q2T(10), BPW(10), WBP(10),    00100000  kt dim Q2T 5 to 10
      1Q1T(20)                                                           00100100
-      DIMENSION USQ(1600), DSQ(3200), DSQ1(1600), SQLOSS(3200), QI(3200)00100200
+      DIMENSION USQ(9000),DSQ(18000),DSQ1(9000),SQLOSS(18000),QI(18000) 00100200
       DIMENSION AC0(20), AXK(20), C0RAT(10), C0QRAT(10),                00100300
      1XKRAT(10), XKQRAT(10)                                             00100400
       DIMENSION DUMMY(10)                                               00100401  kt added dummy arg
       COMMON /URPARM/ AC0,AXK,QMIN,QMAX,C0RAT,C0QRAT,XKRAT,XKQRAT,NURSF 00100500  kt added NURSF
-      DIMENSION UR(20,100), DUSRF(1600), QLIN(20), NRESP(20), ITT(20)    00100600
+      DIMENSION UR(20,100), DUSRF(9000), QLIN(20), NRESP(20), ITT(20)    00100600
       REAL *8 UR
       COMMON /RESFCT/ UR,DUSRF,QLIN,NURS,NRO,NRESP,ITT,NUR1,            00100700
      1                NSTAIL,NATAIL                                     00100800
@@ -1364,8 +1365,8 @@ C        RESPONSE FUNCTION) AND ACCUMULATES THE RESULT IN ARRAY A       00118100
 C        (THE OUTPUT FUNCTION),WHICH MAY BE LAGGED BY LAG TIME          00118200
 C        INTERVALS.                                                     00118300
 C                                                                       00118400
-      DIMENSION A (1600), B(1600), CUTIL(1600)                                   kt added smaller dim
-      DIMENSION AB (3200), BB(3200), CUTILB (3200)                               kt changed larger dim vars to name B
+      DIMENSION A (9000), B(9000), CUTIL(9000)                                   kt added smaller dim
+      DIMENSION AB (18000), BB(18000), CUTILB (18000)                            kt changed larger dim vars to name B
       DIMENSION CCC(20,100), QLIN(20), LAG(20), NRESP(20)
       REAL *8 CCC
       ENTRY FILL(AB,I1,I2,VALU)                                         00118700  kt changed FILL function for larger dims
@@ -1481,8 +1482,8 @@ C                                                                       00127500
 C     RATNG-  COMPUTES A STAGE HYDROGRAPH FROM A STATION'S DISCHARGE    00127600
 C             HYDROGRAPH AND RATING TABLE.                              00127700
 C                                                                       00127800
-      DIMENSION SRAT(2,20), QRAT(2,20), SHIFT(2,1600)                   00127900
-      DIMENSION S2 (1600), Q2 (1600)
+      DIMENSION SRAT(2,20), QRAT(2,20), SHIFT(2,9000)                   00127900
+      DIMENSION S2 (9000), Q2 (9000)
       COMMON /TIMEPR/ TMAX,ITMAX,DT,NTS,KR,NDT24,NRCHS,NSR,KTSTRT,N1ST,N00128100
      12ND,NLST,IQBEG,IQEND,KCNT,IBEGR                                   00128200  KCNT and IBEGR added 2/12/85 PRJ
       COMMON /RATING/ SRAT,QRAT,SHIFT,NUSRP,NDSRP                       00128300
@@ -1515,7 +1516,7 @@ C     MEANS-  COMPUTES A STAGE HYDROGRAPH AT THE CENTER OF A SUBREACH.  00130800
 C             A SUBREACH'S LENGTH IS EQUAL TO THE DISTANCE A FLOOD WAVE 00130900
 C             TRAVELS IN ONE TIME STEP                                  00131000
 C                                                                       00131100
-      DIMENSION USS(1600), DSS(1600), DELS(1600), S(1600)               00131200
+      DIMENSION USS(9000), DSS(9000), DELS(9000), S(9000)               00131200
       COMMON /STAGES/ USS,DSS,DELS                                      00131300
       COMMON /TIMEPR/ TMAX,ITMAX,DT,NTS,KR,NDT24,NRCHS,NSR,KTSTRT,N1ST,N00131400
      12ND,NLST,IQBEG,IQEND,KCNT,IBEGR                                   00131500  KCNT and IBEGR added 2/12/85 PRJ
@@ -1816,10 +1817,10 @@ C             TIME STEP.                                                00160000
       INTEGER OPFILE,C,P,PU,US,DS                                       00160200
       CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20)        00160300
       CHARACTER *1 GRID (56000)
-      DIMENSION Q3(1), Q3LOG(1600)                                      00160500
-      DIMENSION Q1(1), Q2(1),Q1LOG(1600),Q2LOG(1600),XI(1600), NSCALE(5)00160600
+      DIMENSION Q3(1), Q3LOG(9000)                                      00160500
+      DIMENSION Q1(1), Q2(1),Q1LOG(9000),Q2LOG(9000),XI(9000), NSCALE(5)00160600
      1, MINQA(5)                                                        00160700
-      DIMENSION IYEAR(1600),IDAY(1600),IMON(1600),TIME(1600),IHOUR(1600)00160800
+      DIMENSION IYEAR(9000),IDAY(9000),IMON(9000),TIME(9000),IHOUR(9000)00160800
       DIMENSION MODAYS (12)
       COMMON /PLT/ INITMO,INITDY,INITYR,LASTMO,LASTDY,LASTYR,NRECDS,STAN00160900
      1O1,STANM1,STANO2,STANM2,INFO,JYEAR                                00161000
@@ -1910,7 +1911,7 @@ C                                                                       00169000
 C     DATE-   PROGRAMMED BY J O SHEARMAN.  COMPUTES AN ARRAY OF DATE    00169100
 C             AND TIME VALUES FOR A GIVEN TIME STEP AND STUDY PERIOD    00169200
 C                                                                       00169300
-      DIMENSION IYEAR(1600),IDAY(1600),IMON(1600),TIME(1600),IHOUR(1600)00169400
+      DIMENSION IYEAR(9000),IDAY(9000),IMON(9000),TIME(9000),IHOUR(9000)00169400
       DIMENSION MODAYS (12)
       COMMON / DAYSMO / MODAYS
       COMMON /B2/ IYEAR,IDAY,IMON,TIME                                  00169600
@@ -2033,15 +2034,15 @@ C                                                                       00180500
       CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20)        00180800
       INTEGER NSCALE (5)
       CHARACTER *1 GRID (56000)
-      CHARACTER *4 IWARN (1600)
+      CHARACTER *4 IWARN (9000)
       CHARACTER *4 IW0, IW1, IW2
-      DIMENSION USS(1600), DSS(1600), DELS(1600), S(1600)               00181200
+      DIMENSION USS(9000), DSS(9000), DELS(9000), S(9000)               00181200
       DIMENSION X(25), QLOSS(25), ISTRT(25), IEND(25)                   00181300
-      DIMENSION USQ(1600),DSQ(3200),DSQ1(1600),SQLOSS(3200),QI(3200)    00181400
+      DIMENSION USQ(9000),DSQ(18000),DSQ1(9000),SQLOSS(18000),QI(18000)    00181400
 C     NEW VARIABLE.  SEE MAIN.
-      DIMENSION DSQO(1600)
+      DIMENSION DSQO(9000)
 C
-      DIMENSION IYEAR(1600),IDAY(1600),IMON(1600),TIME(1600),IHOUR(1600)00181500
+      DIMENSION IYEAR(9000),IDAY(9000),IMON(9000),TIME(9000),IHOUR(9000)00181500
       COMMON /ZLOGIC/ ZBEGIN,ZEND,ZPLOT,ZROUTE,ZFLOW,ZLOSS,ZDISK,ZCARDS,00181600
      1ZWARN,ZPRINT,ZPUNCH,ZUSHFT,ZDSHFT,ZMULT,ZDSQO,ZOUTPUT             00181700
       COMMON /PLT/ INITMO,INITDY,INITYR,LASTMO,LASTDY,LASTYR,NRECDS,STAN00181800
@@ -2367,13 +2368,13 @@ C
       BLOCK DATA                                                        00203100
 C                                                                       00203200
       INTEGER OPFILE,C,P,PU,US,DS                                       00203300
-      CHARACTER *4 IWARN (1600)
+      CHARACTER *4 IWARN (9000)
       CHARACTER *4 IW0, IW1, IW2
       DIMENSION MODAYS (12)
       COMMON / DAYSMO / MODAYS
       COMMON /WARN/ IWARN,IW0,IW1,IW2                                   00203600
       COMMON /UNITS/ C,P,PU,US,DS,NDIM,MDIM                             00203700
-      DATA NDIM/1600/,MDIM/3200/                                        00203800  %kt changed for 400 800 to 1600 3200
+      DATA NDIM/9000/,MDIM/18000/                                       00203800  %kt changed for 400 800 to 1600 3200 etc
       DATA C/7/,P/10/,PU/7/,US/1/,DS/2/
 C--------------- "C" changed to 7 to reflect Pr1me file system.    jbs  6/83
 C--------------- "P" changed to 10                    jbs  6/83

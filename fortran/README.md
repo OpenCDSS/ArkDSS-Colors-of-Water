@@ -23,15 +23,15 @@ The j349 combines a streamflow-routing component (channel-storage component) wit
 
 ## Summary of Changes
 The original USGS fortran code was updated to compile in the 64bit gfortran compiler and dimensioning expanded to operate for a full calendar year.  An error was fixed in the multiple linearization method and celerity/dispersion dimensioning for the method was increased from 8 to 10.  A “fast” feature was also added to reduce output to just Qds in a binary rather than text file to increase efficiency when deployed.
-1. Original j349.f code from USGS
-2. Code acquired from Lou Parslow, an original TLAP developer, by Jim Brannon.  This version had some arrays (originally at 1600) dimensioned to 3200 and has modified versions of RATNG and ERFC.  The dimensioning was confirmed to be needed and may be due to the bank storage URFs being of equal size as the original time series so that the array sizing needs to be double the time step. 
-3. Code from Jim Brannon, as modified from the Lou Parslow code.  Fixes were primarily to get to run in 32bit gfortran.  Includes executable which is currently used by TLAP used by DWR Div2 for administration.
-4. Code modified by Kelley Thompson to run on 64bit gfortran; starting from Lou Parslow code.  Compile errors but not warnings were resolved.
-
+1. Original j349.f code from USGS.  Fortan file dated 9/5/2018 3:46 PM (as obtained by Jim Brannon)
+2. Code acquired from Lou Parslow, an original TLAP developer, by Jim Brannon.  This version had some arrays (originally at 1600) dimensioned to 3200 and has modified versions of RATNG and ERFC.  The dimensioning was confirmed to be needed and may be due to the bank storage URFs being of equal size as the original time series so that the array sizing needs to be double the time step. Fortan file dated 9/5/2018 3:50 PM (as obtained by Jim Brannon)
+3. Code from Jim Brannon, as modified from the Lou Parslow code.  Fixes were primarily to get to run in 32bit gfortran.  Includes executable which is currently used by TLAP used by DWR Div2 for administration. Fortan file dated 9/10/2018 3:08 PM
+4. Code modified by Kelley Thompson to run on 64bit gfortran; starting from Lou Parslow code.  Compile errors but not warnings were resolved. Fortan file dated 9/20/2021 12:41 PM
+5. Increased dimensions of main arrays from 1600/3200 to 9000/18000.  Enables calendar year time step of 9000 hours which is 365 or 366 days plus 9 days spinup.  Fortan file dated 9/22/2021 10:37 AM
 
 ## Compiling
-Fortran code for use in COW project is being compiled with 64bit GNU gcc/gfortran (https://gcc.gnu.org/fortran/) and using the Msys2 environment.  Installation and use followed information at:https://opencdss.state.co.us/statemod/16.00.47/doc-dev/dev-env/machine/#install-mingw also looking at: https://gcc.gnu.org/wiki/GFortranUsage and https://gcc.gnu.org/onlinedocs/gfortran/
-For compiling, .a files were directly included but using this process in the compiler build that was used still required 2 dlls to be supplied directly with the compiled executable.  However, this compiled version was tested to run faster than when using a -static include statement.   Therefore, we are currently using the following statements to compile:
+Fortran code for use in COW project is being compiled with 64bit GNU gcc/gfortran (https://gcc.gnu.org/fortran/) and using the Msys2 environment.  Installation and use followed information at:https://opencdss.state.co.us/statemod/16.00.47/doc-dev/dev-env/machine/#install-mingw also looking at: https://gcc.gnu.org/wiki/GFortranUsage and https://gcc.gnu.org/onlinedocs/gfortran/ .
+When compiling, .a files were included but with the compiler build used 2 dlls were still required to be supplied directly with the compiled executable.  However, this compiled version was tested to run faster than when using a -static include statement.   Therefore, currently using the following statements to compile:
 ```
 gfortran -c j349.f
 gfortran -o executable j349.o libgfortran.a libgcc_s.a libquadmath.a libwinpthread.a
