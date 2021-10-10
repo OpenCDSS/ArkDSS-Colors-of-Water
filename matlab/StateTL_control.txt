@@ -1,0 +1,48 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% StateTL Run Control Options
+%
+% comment lines can start with % or #
+% for variable names, caps dont matter but end with '=' and no spaces
+% seperate multiple values with comma; put single quotes around text values
+% if semicolon (;) after value can enter comments etc after
+% if no semicolon, no spaces or comments etc after value  
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Div=2;						%Division - currently can only run one at a time but eventually run multiple (seperate by commas)
+WDlist=112,11,10,172,17,67;		%WD run list in order; from upper tribs first to lower/mainstem, seperate by commas
+srmethod='default';        		%will pick j349 or muskingum-cunge based on input data table
+%srmethod='j349';       			%dynamic j349/Livinston method - only pick one of two methods (comment other)
+%srmethod='muskingum';   			%percent loss TL plus muskingum-cunge for travel time
+j349fast=1;                          %1 for j349 reduces output written by j349, and also uses one single file for input/output, for use in deployment
+j349multurf=0;                       %1 for j349 multiple urf method to do flow routing using variable celerity/dispersion (0 uses single celerity/dispersion for time series) 
+inputfilename='StateTL_inputdata.xlsx'; %filename used for subreach input data - currently xlsx or csv/txt/dat delimited - if changing base name (ie for calibration), first load evap and stagedischarge from StateTL_inputdata.xlsx 
+datestart=2018,4,01;				%year,month,day as first day of river and wc/release loops; 
+rundays=20;                          %days to run from datestart(plus 30 days spinup); will be overriden by fullyear option
+fullyear=1;                          %overrides smaller period and uses year specified in date above but runs for full calendar year (plus 9 days spinup - ie 374 or 375 total days)
+readinputfile=1;				%1 reads from excel and saves mat file; otherwise reads mat file;
+readstagedischarge=1;				%1 rereads stagedischarge data and also default methods; but if rereading subreach data dont have to reread (ie for calibration)
+readevap=0;					%1 rereads evap; if evapnew=1 repulls locations using HBrest and evap for full time periods, must do if adding/modifing locations or wdids; but if rereading subreach data dont have to reread; 
+pullstationdata=1;				%0,1,2 - read station (gage and telemetry based) flow data; 1 rebuilds and reads from REST, 2 only pull new/modified from REST, 3 loads from saved mat file
+pulllongtermstationdata=1;			%1 reads daily station data from 2000 through previous year to establish dry/wet/avgs for filling; only runs if pullstationdata is 1 or 2
+pullreleaserecs=1;				%0,1,2 - 0 load from saved mat file, 1 if want to repull all from REST(ie for new period), 2 if only pull new/modified from REST for same period
+runriverloop=1;				    	%1 runs gageflow loop for full river amounts (ie not looking at individual water classes)
+runwcloop=1;					%1 runs water class release loop - have to have run river loop before (saved .mat file) or during
+doexchanges=1;					%1 run upstream exchanges - this only operates within wcloop
+runcaptureloop=1;				%1 runs loop to characterize release capture amounts into headgates vs available amt.
+runcalibloop=1;					%1 runs loop to simulate river flows from gage amount at top of wd down without restarting each gage location with gage amount
+
+logfilename='StateTL_runlog.txt';  	%log filename if writing
+displaymessage=1;  				%1=display messages to matlab workspace screen
+writemessage=1; 				%1=write messages to logfile
+
+outputfilebase='StateTL_out_';  	%output filename base - will add srmethod + gage/wc/etc + hour/day + .csv
+outputgage=1;  					%output river amounts by reach
+outputwc=1;  					%output waterclass amounts by reach
+outputcal=1;  					%output calibration amounts by gage location
+outputhr=0;  					%output on hour timestep
+outputday=1;  					%output on day timestep
+
+WDcaliblist=17,67;				%WD to calibrate if running calibloop, if multiple seperate by commas
+calibstartdate=2018,4,01;			%calib startdate year,month,day
+calibenddate=2018,5,01;			%calib enddate year,month,day
+calibavggainloss='mean'; 			%currently 'mean' or 'linreg' - method to set average gain/loss/error correction for period- mean seems to do about as well as linear regression
