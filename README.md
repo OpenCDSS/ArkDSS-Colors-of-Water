@@ -6,7 +6,7 @@ which is part of [Colorado's Decision Support Systems (CDSS)](https://www.colora
 
 See the following sections in this page:
 
-* [Colors of Water Repository Folder Structure](#statemod-repository-folder-structure)
+* [Colors of Water Repository Folder Structure](#colors-of-water-repository-folder-structure)
 * [License](#license)
 * [Contact](#contact)
 
@@ -14,7 +14,10 @@ See the following sections in this page:
 
 ## Colors of Water Repository Folder Structure ##
 
-The following are folders in the repository.  
+The following are folders in the repository.
+1. matlab - This folder contains the StateTL matlab based model engine code for the Colors of Water (COW) tool.  The StateTL manages inputs, outputs, stream network routing, and transit loss and routing calculations given options in a control file.
+1. fortran - This folder contains the fortran code modified from the original USGS j349 code that performs dynamic streamflow routing and bank storage calculations that can be called from the matlab StateTL code for a given stream subreach.
+
 
 ## License ##
 
