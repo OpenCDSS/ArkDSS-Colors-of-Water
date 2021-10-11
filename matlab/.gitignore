@@ -1,0 +1,8 @@
+# Ignore additional files in this folder, except for those listed below including the .gitignore file itself
+# If adding files to version control, explicitly add them here
+*
+!.gitignore
+!StateTL.m
+!StateTL_inputdata.xlsx
+!StateTL_control.txt
+!README.md
