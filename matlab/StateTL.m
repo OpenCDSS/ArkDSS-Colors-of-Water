@@ -2229,16 +2229,16 @@ SR.(ds).Rivloc.flowwc.us(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to
 SR.(ds).Rivloc.flowwc.ds(1:rsteps,SR.(ds).(wds).(rs).locid(sr))=0;  %variable to sum total wc release amounts within river
 end
 
-wsstop=0;
+%wsstop=0;
 for w=1:length(wwcnumids)
 ws=SR.(ds).WCloc.Rloc{wwcnumids(w),1};
 
-if wsstop==1
-    error('stop')
-%elseif strcmp(ws,'W151408') & r==2
-elseif strcmp(ws,'W151415') & r==7
-    wsstop=1;
-end
+% if wsstop==1
+%     error('stop')
+% %elseif strcmp(ws,'W151408') & r==2
+% elseif strcmp(ws,'W151415') & r==7
+%     wsstop=1;
+% end
 
 srtt=SR.(ds).WCloc.Rloc{wwcnumids(w),5};
 srtb=SR.(ds).WCloc.Rloc{wwcnumids(w),6};
