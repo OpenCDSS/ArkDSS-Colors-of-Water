@@ -63,6 +63,7 @@ useregrfillforgages=0;  %will fill gages with data from closest stations using r
     regfillwindow=28*24; %regression fill window hrs=(days*24)
 trendregwindow=14*24;  %hrs to estimate trend for end filling
 avgwindow=[7*24 30*24]; %2 values - 1) hrs to start to apply dry/avg/wet average within weighting, 2) hrs to start to apply straight up average     
+dayvshrthreshold=[0.05 0.15];  %2 percent difference thresholds to apply daily improved data to hourly telemetry data, <first - dont adjust, >=first-adjust hourly data so daily mean equals daily data, >=second-replace hourly data with daily data 
 
 structureurl='https://dwr.state.co.us/Rest/GET/api/v2/structures/';  %currently used to get structure coordinates just for evaporation
 telemetryhoururl='https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour/';  %for gages and ditch telemetry
@@ -1102,7 +1103,7 @@ end
 % can also be used for some filling of missing hourly data
  
 
-dayvshrthreshold=[0.05 0.15];
+
 dailyid1=find(Station.date.avgdates==datestart);
 
 if ~isempty(dailyid1)
@@ -1161,7 +1162,7 @@ for wd=WDlist
                             tsmeasQC(missingids,1)=mean(tsmeas(notmissingids,1));
                         end
                         
-%                         %the following would consider cases that missing should be zeros or should be mean values - but so far didnt like when put in a zero
+%                         %commented out - the following would consider cases that missing should be zeros or should be mean values - but so far didnt like when put in a zero
 %                         tshrdayperdiff=(mean(tsmeas(notmissingids,1))-tsdaily(i))/tsdaily(i);
 %                         tshrdayperdiffwithzeros=(mean([tsmeas(notmissingids,1);zeros(length(missingids),1)])-tsdaily(i))/tsdaily(i);
 %                         if abs(tshrdayperdiffwithzeros) < dayvshrthreshold(1)  %likes with zeros
