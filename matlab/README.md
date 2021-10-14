@@ -49,6 +49,7 @@ The original model engine code was functional in 2019.  This code (as slightly m
 ## Primary Processes Built
 Primary processes and components that have so-far been built include:
 * pull gage and diversion (release - Type 7) records using REST services
+* QC hourly telemetry data using daily 'improved' data
 * fill missing station (gage and telemetry) data and extending data into future
 * routing - from branch above (ie upper Ark above Pueblo Res) and mid-branch (ie Fountain Creek into main branch)
 * methods - j349 and muskingum (%TL + muskingum routing)

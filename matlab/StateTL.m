@@ -67,6 +67,7 @@ avgwindow=[7*24 30*24]; %2 values - 1) hrs to start to apply dry/avg/wet average
 structureurl='https://dwr.state.co.us/Rest/GET/api/v2/structures/';  %currently used to get structure coordinates just for evaporation
 telemetryhoururl='https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour/';  %for gages and ditch telemetry
 telemetrydayurl='https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeseriesday/';  %for gages and ditch telemetry
+surfacewaterdayurl='https://dwr.state.co.us/Rest/GET/api/v2/surfacewater/surfacewatertsday/';  %for published daily gage/ditch data
 divrecdayurl='https://dwr.state.co.us/Rest/GET/api/v2/structures/divrec/divrecday/';   %for release/diversion records
 logwdidlocations=1;  %for log also document all wdid locations when pulled for evap
 load([basedir 'StateTL_llave.mat']);
@@ -195,7 +196,8 @@ dateend=datestart+(rdays-spinupdays)-1;
 datedays=[datestart:dateend];
 
 nowvec=datevec(now);
-avgdates=[datenum(avgstartyear,1,1):datenum(nowvec(1)-1,12,31)];
+%avgdates=[datenum(avgstartyear,1,1):datenum(nowvec(1)-1,12,31)];
+avgdates=[datenum(avgstartyear,1,1):datenum(nowvec(1),12,31)];
 
 
 
@@ -974,26 +976,32 @@ for wd=WDlist
             for sr=SR.(ds).(wds).(rs).SR
                 if strcmp(SR.(ds).(wds).(rs).station{1,sr},'NaN') | strcmp(SR.(ds).(wds).(rs).station{1,sr},'none')  %if no telemetry station then uses low/avg/high number
 %                    SR.(ds).(wds).(rs).Qnode(:,sr,1)=SR.(ds).(wds).(rs).(flow)(1,sr)*ones(rsteps,1);
-                    Station.(ds).(wds).(rs).avgQnodemeas(:,sr)=blankvalues;
-                    Station.(ds).(wds).(rs).avgmodifieddatenum(:,sr)=blankvalues;
+                    Station.(ds).(wds).(rs).Qnodemeasdaylong(:,sr)=blankvalues;
+                    Station.(ds).(wds).(rs).modifieddatenumlong(:,sr)=blankvalues;
                 else
                     station=SR.(ds).(wds).(rs).station{1,sr};
                     parameter=SR.(ds).(wds).(rs).parameter{1,sr};
                     if pullstationdata==1
-                        Station.(ds).(wds).(rs).avgQnodemeas(:,sr)=blankvalues;
-                        Station.(ds).(wds).(rs).avgmodifieddatenum(:,sr)=blankvalues;
+                        Station.(ds).(wds).(rs).Qnodemeasdaylong(:,sr)=blankvalues;
+                        Station.(ds).(wds).(rs).modifieddatenumlong(:,sr)=blankvalues;
                     end
                      
                     RESTworked=0;
                     try
                         logm=['HBREST: reading daily records from ' station ' from:' datestr(avgdates(1),21) ' to:' datestr(avgdates(end),21) ' to establish long term averages for filling'];
                         domessage(logm,logfilename,displaymessage,writemessage)
-                        gagedata=webread(telemetrydayurl,'format','json','abbrev',station,'parameter',parameter,'startDate',datestr(avgdates(1),21),'endDate',datestr(avgdates(end),21),'includeThirdParty','true','modified',modifiedstr,weboptions('Timeout',60),'apiKey',apikey);
+                        try
+                            gagedata=webread(surfacewaterdayurl,'format','json','abbrev',station,'min-measDate',datestr(avgdates(1),23),'max-measDate',datestr(avgdates(end),23),'min-modified',modifiedstr(1:10),weboptions('Timeout',60),'apiKey',apikey);
+                        catch
+                            logm=['HBREST: couldt read long term surfacewater based records, trying telemetry based records for ' station ' '];
+                            domessage(logm,logfilename,displaymessage,writemessage)
+                            gagedata=webread(telemetrydayurl,'format','json','abbrev',station,'parameter',parameter,'startDate',datestr(avgdates(1),21),'endDate',datestr(avgdates(end),21),'includeThirdParty','true','modified',modifiedstr,weboptions('Timeout',60),'apiKey',apikey);
+                        end
                         RESTworked=1;
 %                    catch ME
                     catch
                         if pullstationdata==1
-                            logm=['WARNING: didnt return daily telemetry data for station:' station ' parameter:' parameter ' (issue with command, station, API, REST services, data, etc)'];
+                            logm=['WARNING: didnt return daily surfacewater/telemetry data for station:' station ' parameter:' parameter ' (issue with command, station, API, REST services, data, etc)'];
                         else
                             logm=['WARNING: - probably no new data since last REST pull - didnt return any daily telemetry data for station:' station ' parameter:' parameter ' for modified date: ' modifiedstr ' (probably new data beyond modified date - or could be other issue)'];
                         end
@@ -1003,16 +1011,21 @@ for wd=WDlist
                     if RESTworked==1
                         for i=1:gagedata.ResultCount
                             measdatestr=gagedata.ResultList(i).measDate;
+                            measdatestr=measdatestr(1:19);  %surfacewater has more characters than telemetry (!)
                             measdatestr(11)=' ';
                             measdateid=find(strcmp(avgdatesstr,measdatestr));
                             % measunit{i}=gagedata.ResultList(i).measUnit; %check?
                             if ~isempty(measdateid)
-                                Station.(ds).(wds).(rs).avgQnodemeas(measdateid,sr)=gagedata.ResultList(i).measValue;
+                                if isfield(gagedata.ResultList,'value')
+                                    Station.(ds).(wds).(rs).Qnodemeasdaylong(measdateid,sr)=gagedata.ResultList(i).value;  %surfacewater
+                                else
+                                    Station.(ds).(wds).(rs).Qnodemeasdaylong(measdateid,sr)=gagedata.ResultList(i).measValue;  %telemetry
+                                end
                                 modifieddatestr=gagedata.ResultList(i).modified;
 %                                 modifieddatestr(11)=' ';
 %                                 modifieddatenum=datenum(modifieddatestr,31);
                                 modifieddatenum=str2double([modifieddatestr(1:4) modifieddatestr(6:7) modifieddatestr(9:10) modifieddatestr(12:13) modifieddatestr(15:16)]);
-                                Station.(ds).(wds).(rs).avgmodifieddatenum(measdateid,sr)=modifieddatenum;
+                                Station.(ds).(wds).(rs).modifieddatenumlong(measdateid,sr)=modifieddatenum;
                                 maxmodified=max(maxmodified,modifieddatenum);  %do as array below?
                             else
                                 logm=['WARNING: telemetry datevalue outside of model daterange for station: ' station ' telemetry datestr:' measdatestr ' ignoring datapoint'];
@@ -1025,8 +1038,8 @@ for wd=WDlist
             end
         else
             % SR.(ds).(wds).(rs).Qnode(:,:,1)=SR.(ds).(wds).(rs).(flow)(1,:).*ones(rsteps,length(SR.(ds).(wds).(rs).SR));
-            Station.(ds).(wds).(rs).avgQnodemeas(:,sr)=blankvalues;
-            Station.(ds).(wds).(rs).avgmodifieddatenum(:,sr)=blankvalues;
+            Station.(ds).(wds).(rs).Qnodemeasdaylong(:,sr)=blankvalues;
+            Station.(ds).(wds).(rs).modifieddatenumlong(:,sr)=blankvalues;
         end
     end
     Station.date.(ds).(wds).avgmodified=maxmodified;
@@ -1042,10 +1055,11 @@ for wd=WDlist
                 Station.(ds).(wds).(rs).avgQnodedaydry(:,sr)=SR.(ds).(wds).(rs).avgflow(1,sr)*ones(366,1);  %carry over from livingston - but need to base on diversion records if avail
                 Station.(ds).(wds).(rs).avgQnodedayavg(:,sr)=SR.(ds).(wds).(rs).avgflow(2,sr)*ones(366,1);
                 Station.(ds).(wds).(rs).avgQnodedaywet(:,sr)=SR.(ds).(wds).(rs).avgflow(3,sr)*ones(366,1);
+                Station.(ds).(wds).(rs).lastdailydate=Station.date.avgdates(1);
             else
                 for i=1:366
                     avgdatesids=avgdatesid{i};
-                    avgdaymeas=Station.(ds).(wds).(rs).avgQnodemeas(avgdatesids,sr);
+                    avgdaymeas=Station.(ds).(wds).(rs).Qnodemeasdaylong(avgdatesids,sr);
                     posids=find(avgdaymeas~=-999);
                     if isempty(posids)
                         Station.(ds).(wds).(rs).avgQnodedaydry(i,sr)=-999;
@@ -1069,13 +1083,124 @@ for wd=WDlist
                 Station.(ds).(wds).(rs).avgQnodeavg(:,sr)=reshape(repmat(Station.(ds).(wds).(rs).avgQnodedayavg(:,sr),1,24)',[366*24,1]);
                 Station.(ds).(wds).(rs).avgQnodewet(:,sr)=reshape(repmat(Station.(ds).(wds).(rs).avgQnodedaywet(:,sr),1,24)',[366*24,1]);
 
+                %additional thing for use in daily QC loop - last day with data
+                hasdailyid=find(Station.(ds).(wds).(rs).Qnodemeasdaylong(:,sr)~=-999);  %could put these in avg processing loop
+                if ~isempty(hasdailyid)
+                    Station.(ds).(wds).(rs).lastdailydate=Station.date.avgdates(hasdailyid(end));
+                else
+                    Station.(ds).(wds).(rs).lastdailydate=Station.date.avgdates(1);
+                end
             end
         end
     end
 end
 
 end
-    
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% QC of hourly (telemetry) data with daily (surfacewater) sometimes 'published' data
+% can also be used for some filling of missing hourly data
+ 
+
+dayvshrthreshold=[0.05 0.15];
+dailyid1=find(Station.date.avgdates==datestart);
+
+if ~isempty(dailyid1)
+    logm=['Attempting to QC (telemetry) data using daily (surfacewater) (sometimes worked) data'];
+    domessage(logm,logfilename,displaymessage,writemessage)
+
+    dailyid2=find(Station.date.avgdates==dateend);
+    if ~isempty(dailyid2)
+        dailyids=[dailyid1:dailyid2];
+    else
+        dailyids=[dailyid1:length(Station.date.avgdates)];
+    end
+    dailydates=Station.date.avgdates(dailyids);  %could potentially be different than datedays
+    for i=1:length(dailydates)
+        dailydateids{i}=find(rdatesday(datestid:end)==dailydates(i));
+    end
+
+for wd=WDlist
+    wds=['WD' num2str(wd)];    
+    for r=SR.(ds).(wds).R
+        rs=['R' num2str(r)];
+        for sr=SR.(ds).(wds).(rs).SR
+            tsmeas=Station.(ds).(wds).(rs).Qnodemeas(:,sr);
+            tsmeasQC=tsmeas;
+            tsdaily=Station.(ds).(wds).(rs).Qnodemeasdaylong(dailyids,sr);
+            for i=1:length(dailydates)
+                Station.(ds).(wds).(rs).Qnodedaily(dailydateids{i},sr)=tsdaily(i);
+                if tsdaily(i)~=-999  %if no daily data then skip
+                    tshrdayids=dailydateids{i};
+                    tshrforday=tsmeas(tshrdayids,1);
+                    missingids=find(tshrforday==-999);
+                    if isempty(missingids)
+                        notmissingids=tshrdayids;
+                    else
+                        missingids=tshrdayids(missingids); %re-reference to full hourly set
+                        notmissingids=setdiff(tshrdayids,missingids);
+                    end
+                    
+                    if isempty(notmissingids) %if no hourly data, fill with daily
+                        tsmeasQC(tshrdayids,1)=tsdaily(i);
+                    elseif isempty(missingids) %if no missing hourly data, adjust if diff exceeds thres1 or replace if exceeds thres2
+                        tshrdayperdiff=(mean(tshrforday)-tsdaily(i))/tsdaily(i);                        
+                        if abs(tshrdayperdiff) >= dayvshrthreshold(2)  %replace it
+                            tsmeasQC(tshrdayids,1)=tsdaily(i);
+                        elseif abs(tshrdayperdiff) >= dayvshrthreshold(1)  %adjust it
+                            tsmeasQC(tshrdayids,1)=tsmeas(tshrdayids,1)-((mean(tshrforday)-tsdaily(i))/mean(tshrforday))*tsmeas(tshrdayids,1); %slight variation from tshrdayperdiff so that calculates exactly
+                        end
+                    else %if has some missingids, 
+                        tshrdayperdiff=(mean(tsmeas(notmissingids,1))-tsdaily(i))/tsdaily(i);
+                        if abs(tshrdayperdiff) >= dayvshrthreshold(2)  %replace it
+                            tsmeasQC(tshrdayids,1)=tsdaily(i);
+                        elseif abs(tshrdayperdiff) >= dayvshrthreshold(1)  %adjust it
+                            tsmeasQC(notmissingids,1)=tsmeas(notmissingids,1)-(mean(tsmeas(notmissingids,1))-tsdaily(i))/mean(tsmeas(notmissingids,1))*tsmeas(notmissingids,1);
+                            tsmeasQC(missingids,1)=tsdaily(i);
+                        else
+                            tsmeasQC(missingids,1)=mean(tsmeas(notmissingids,1));
+                        end
+                        
+%                         %the following would consider cases that missing should be zeros or should be mean values - but so far didnt like when put in a zero
+%                         tshrdayperdiff=(mean(tsmeas(notmissingids,1))-tsdaily(i))/tsdaily(i);
+%                         tshrdayperdiffwithzeros=(mean([tsmeas(notmissingids,1);zeros(length(missingids),1)])-tsdaily(i))/tsdaily(i);
+%                         if abs(tshrdayperdiffwithzeros) < dayvshrthreshold(1)  %likes with zeros
+%                             tsmeasQC(missingids,1)=0;
+%                         elseif abs(tshrdayperdiff) < dayvshrthreshold(1)    %likes with mean
+%                             tsmeasQC(missingids,1)=mean(tsmeas(notmissingids,1));
+%                         elseif abs(tshrdayperdiffwithzeros) < dayvshrthreshold(2)
+%                             tsmeasQC(notmissingids,1)=tsmeas(notmissingids,1)-(mean([tsmeas(notmissingids,1);zeros(length(missingids),1)])-tsdaily(i))/mean([tsmeas(notmissingids,1);zeros(length(missingids),1)])*tsmeas(notmissingids,1);
+%                             tsmeasQC(missingids,1)=0;
+%                         elseif abs(tshrdayperdiff) < dayvshrthreshold(2)
+%                             tsmeasQC(notmissingids,1)=tsmeas(notmissingids,1)-(mean(tsmeas(notmissingids,1))-tsdaily(i))/mean(tsmeas(notmissingids,1))*tsmeas(notmissingids,1);
+%                             tsmeasQC(missingids,1)=mean(tsmeas(notmissingids,1));
+%                         else %just replace it
+%                             tsmeasQC(tshrdayids,1)=tsdaily(i);
+%                         end
+
+                    end
+                else
+                    % if daily blank, then blank out hourly - if can say that not at the end of the time series
+                    if dailydates(i) < Station.(ds).(wds).(rs).lastdailydate
+                        tsmeasQC(dailydateids{i},1)=-999;
+                    end
+                end
+            end
+            Station.(ds).(wds).(rs).QnodeQC(:,sr)=tsmeasQC;
+        end
+    end
+end
+
+
+else  %if isempty(dailyid1)
+    logm=['Warning: cannot QC hourly data with daily data - longterm daily data that has been downloaded does not include time period'];
+    domessage(logm,logfilename,displaymessage,writemessage)
+end
+
+
+
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Filling of missing station data
 
@@ -1086,7 +1211,7 @@ for wd=WDlist
     for r=SR.(ds).(wds).R 
         rs=['R' num2str(r)];
         for sr=SR.(ds).(wds).(rs).SR
-            tsmeas=Station.(ds).(wds).(rs).Qnodemeas(:,sr);  %Qnodemeas does not include spinup period
+            tsmeas=Station.(ds).(wds).(rs).QnodeQC(:,sr);  %Qnodemeas/QnodeQC does not include spinup period
             tsfill=tsmeas;
 %             if strcmp(wds,'WD17') && strcmp(rs,'R3') && sr==1
 %                 tsfill(6500:end,sr)=-999;
@@ -1124,7 +1249,7 @@ for wd=WDlist
                         rsr=SR.(ds).SR{gid,9};
                         srr=SR.(ds).SR{gid,6};
                         
-                        tsmeasrepl=Station.(dsr).(wdsr).(rsr).Qnodemeas(:,srr);                       
+                        tsmeasrepl=Station.(dsr).(wdsr).(rsr).QnodeQC(:,srr);                       
                         missinglistrepl=find(tsmeasrepl==-999);
                         missinglist2=intersect(missinglist,missinglistrepl);    %bad/missing in common in both sets
                         missinglist1=setdiff(missinglist,missinglist2);         %fill locations -  bad/missing in station but with good data in filling station
@@ -1193,7 +1318,7 @@ for wd=WDlist
                                 for i=1:30
                                     avgdayid=find(Station.date.avgdates==dateend+i);
                                     if ~isempty(avgdayid)
-                                        avgdayval=Station.(ds).(wds).(rs).avgQnodemeas(avgdayid,sr);
+                                        avgdayval=Station.(ds).(wds).(rs).Qnodemeasdaylong(avgdayid,sr);
                                         if avgdayval~=-999
                                             break;
                                         end
@@ -1223,7 +1348,7 @@ for wd=WDlist
                                 for i=1:30
                                     avgdayid=find(Station.date.avgdates==datestart-i);
                                     if ~isempty(avgdayid)
-                                        avgdayval=Station.(ds).(wds).(rs).avgQnodemeas(avgdayid,sr);
+                                        avgdayval=Station.(ds).(wds).(rs).Qnodemeasdaylong(avgdayid,sr);
                                         if avgdayval~=-999
                                             break;
                                         end
