@@ -139,13 +139,13 @@ c      OPEN(10,FILE=FILENAME)
          open (22,file='StateTL_filenames.dat',status='old')                      kt moved orig statement
          read (22,1) filename                                                     kt moved orig statement
       END IF                                                                      kt cmd arg
-      OPEN(7,FILE=FILENAME)
+      OPEN(7,FILE=TRIM(FILENAME))
       IF (ZCMDOPT) THEN                                                           kt cmd arg
          CALL GET_COMMAND_ARGUMENT(3,FILENAME)                                    kt cmd arg
       ELSE                                                                        kt cmd arg
          read (22,1) filename                                                     kt moved orig statement
       END IF                                                                      kt cmd arg
-	  OPEN(10,FILE=FILENAME)                                                      kt even in fast option leaving open in case of closure error
+      OPEN(10,FILE=TRIM(FILENAME))                                                kt even in fast option leaving open in case of closure error
       CONTINUE
 C                                                                       00008200
 C                                                                       00008300
@@ -157,7 +157,7 @@ C
       ELSE                                                                        kt cmd arg
          read (22,1) filename                                                     kt moved orig statement
       END IF                                                                      kt cmd arg
-	  OPEN(12,FILE=FILENAME,ACCESS='STREAM')                                      kt fast option   
+	  OPEN(12,FILE=TRIM(FILENAME),ACCESS='STREAM')                                kt fast option   
 C
     5 IF (ZCARDS) GO TO 10                                              00008500  kt fast option
       IF (NRECDS.LE.0) NRECDS=20                                        00008600
