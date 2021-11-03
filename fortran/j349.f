@@ -299,7 +299,8 @@ C             PREPARE FOR NEW REACH                                     00023100
       USQB=DSQB                                                         00023500
       DO 200 J=1,20                                                     00023600
       QRAT(US,J)=QRAT(DS,J)                                             00023700
-  200 SRAT(US,J)=SRAT(DS,J)                                             00023800
+      SRAT(US,J)=SRAT(DS,J)                                             00023800
+  200 CONTINUE                                                                    kt warning fix
       NUSPR=NDSRP                                                       00023900
       STANO1(1)=STANO2(1)                                               00024000
       STANO1(2)=STANO2(2)                                               00024100
@@ -311,11 +312,13 @@ C             PREPARE FOR NEW REACH                                     00023100
       USS(NT)=DSS(NT)                                                   00024500
       DELS(NT)=0.0                                                      00024600
       DSQ1(NT)=0.0                                                      00024700
-  210 DSS(NT)=0.0                                                       00024800
+      DSS(NT)=0.0                                                       00024800
+  210 CONTINUE                                                                    kt warning fix
       ZUSHFT=ZDSHFT                                                     00024900
       DO 220 K=1,NDIM                                                   00025000
       SHIFT(US,K)=SHIFT(DS,K)                                           00025100
-  220 SHIFT(DS,K)=0.0                                                   00025200
+      SHIFT(DS,K)=0.0                                                   00025200
+  220 CONTINUE                                                                    kt warning fix
       CALL FILL (SQLOSS,1,MDIM,0.0)                                     00025300
       CALL FILL (QI,1,MDIM,0.0)                                         00025400
       CALL FILL (DSQ,1,MDIM,0.0)                                        00025500
@@ -481,13 +484,16 @@ C           -----                                                       00039600
       DELS(NT)=0.0                                                      00040200
       DUSRF(NT)=0.0                                                     00040300
       DSQO(NT)=0.0
-   10 DSQ1(NT)=0.0                                                      00040400
+      DSQ1(NT)=0.0                                                      00040400
+   10 CONTINUE                                                                    kt warning fix
       DO 40 I=1,2                                                       00040500
       DO 20 J=1,20                                                      00040600
       QRAT(I,J)=0.0                                                     00040700
-   20 SRAT(I,J)=0.0                                                     00040800
+      SRAT(I,J)=0.0                                                     00040800
+   20 CONTINUE                                                                    kt warning fix
       DO 30 J=1,NDIM                                                    00040900
-   30 SHIFT(I,J)=0.0                                                    00041000
+      SHIFT(I,J)=0.0                                                    00041000
+   30 CONTINUE                                                                    kt warning fix
    40 CONTINUE                                                          00041100
       DO 42 I = 1,MDIM
       QI (I) = 0.0
@@ -607,7 +613,8 @@ C     IF (MOD(JLYR,4).EQ.0) IEND1=IEND1+1                               00048700
       IF (X(N).GT.10.) GO TO 100                                        00049300
 C             DIRECT DIVERSIONS                                         00049400
       DO 90 NT=I1,I2                                                    00049500
-   90 SQLOSS(NT)=SQLOSS(NT)+QLOSS(N)                                    00049600
+      SQLOSS(NT)=SQLOSS(NT)+QLOSS(N)                                    00049600
+   90 CONTINUE                                                                    kt warning fix
       GO TO 120                                                         00049700
 C             STREAM DEPLETION (CAUSED BY WELL PUMPAGE)                 00049800
   100 I0=0                                                              00049900
@@ -721,7 +728,8 @@ C             PRINT DATA                                                00055100
       WRITE (10,365)                                                    00057000
       DO 126 I=1,NURS                                                   00057100
       N=NRESP(I)                                                        00057200
-  126 WRITE(10,368) I,AC0(I),AXK(I),ITT(I),QLIN(I),(J,UR(I,J),J=1,N)    00057300
+      WRITE(10,368) I,AC0(I),AXK(I),ITT(I),QLIN(I),(J,UR(I,J),J=1,N)    00057300
+  126 CONTINUE                                                                    kt warning fix
   128 CONTINUE                                                          00057400
       CALL AQTYPE (ICASE)                                               00057500
       IF (ZFAST) GO TO 130                                                        kt fast option
@@ -902,11 +910,13 @@ C             ITERATE                                                   00072200
 C                                                                       00073100
 C             COMPUTE BANK STORAGE DISCHARGE                            00073200
       CALL RATNG (DSQ1,DSS,DSQB,DS)                                     00073300
-      IF (NSR.LT.1) GO TO 30                                            00073400
-      DO 50 N=1,NSR                                                     00073500
+C      IF (NSR.LT.1) GO TO 30                                            00073400  kt warning fix
+      NSRM = MAX(NSR,1)                                                           kt warning fix
+      DO 50 N=1,NSRM                                                    00073500  kt warning fix, changed NSR to NSRM
    30 CALL MEANS (N,S)                                                  00073600
       DO 40 NT=N2ND,NLST                                                00073700
-   40 DELS(NT)=S(NT)-S(NT-1)+DELS(NT)                                   00073800
+      DELS(NT)=S(NT)-S(NT-1)+DELS(NT)                                   00073800
+   40 CONTINUE                                                                    kt warning fix
 C
       IF (NSR.LT.1) GO TO 51
 C        THIS AND '51' ADDED 12-13-85 IN ORDER TO RUN ON PRIMOS REV 9.4.4--GKUHN.
@@ -925,7 +935,8 @@ C             ADJUST FOR WATER RETAINED BY SOIL                         00074900
       IF (Q(NT).LE.0.0) GO TO 70                                        00075100
       QILOST=QILOST+Q(NT)*(1.00-SOILMS)                                 00075200
       Q(NT)=Q(NT)*SOILMS                                                00075300
-   70 QI(NT)=Q(NT)                                                      00075400
+      QI(NT)=Q(NT)                                                      00075400
+   70 CONTINUE                                                                    kt warning fix
       GO TO 140                                                         00075500
 C             COMPUTE ADJUSTMENTS FOR DOWNSTREAM HYDROGRAPH             00075600
    80 DO 110 NT=N1ST,NLST                                               00075700
@@ -942,7 +953,8 @@ C             COMPUTE ADJUSTMENTS FOR DOWNSTREAM HYDROGRAPH             00075600
       IF (DSQ1(MT).LT.0.0) DSQ1(MT)=0.0                                 00076800
   100 SDSQ12=SDSQ12+DSQ1(NT)                                            00076900
       SQA2=SQA2+FLOWA                                                   00077000
-  110 SQI2=SQI2+QI(NT)*CONST1                                           00077100
+      SQI2=SQI2+QI(NT)*CONST1                                           00077100
+  110 CONTINUE                                                                    kt warning fix
       SQA2=SQA2*CONST2/86400.                                           00077200
       SDSQ12=SDSQ12*CONST2/86400.                                       00077300
       SQI2=SQI2*CONST2/86400.                                           00077400
@@ -980,13 +992,15 @@ C        NOTE:  QI TAIL IS SAVED IN THE LAST HALF OF THE QI ARRAY       00079900
       QILOS1=QILOS1+Q(NT+NLST)*(1.00-SOILMS)                            00080600
       Q(NT+NLST)=Q(NT+NLST)*SOILMS                                      00080700
   160 QI(NT)=QI(NT)+QI(NT+NDIM)                                         00080800
-  170 QI(NT+NDIM)=Q(NT+NLST)                                            00080900
+      QI(NT+NDIM)=Q(NT+NLST)                                            00080900
+  170 CONTINUE                                                                    kt warning fix
       IF (ZFLOW) GO TO 190                                              00081000
       IF (NLST.LE.20) GO TO 190                                         00081100
       NDIM20=NDIM-20                                                    00081200
       NLST20=NLST-20                                                    00081300
       DO 180 NT=1,20                                                    00081400
-  180 QI(NDIM20+NT)=QI(NLST20+NT)                                       00081500
+      QI(NDIM20+NT)=QI(NLST20+NT)                                       00081500
+  180 CONTINUE                                                                    kt warning fix
   190 CONTINUE                                                          00081600
 C                                                                       00081700
 C                                                                       00081800
@@ -1081,7 +1095,8 @@ C             ------                                                    00089700
       TIME=FLOAT(NT)-.5                                                 00090000
       ARG1=SQRT(ALPHA*TIME)/XKA                                         00090100
       IF (ARG1.GT.3.8) GO TO 90                                         00090200
-   80 DUSRF(NT)=-(1./XKA)*EXP(ARG1**2.)*erfc(ARG1)                      00090300
+      DUSRF(NT)=-(1./XKA)*EXP(ARG1**2.)*erfc(ARG1)                      00090300
+   80 CONTINUE                                                                    kt warning fix
    90 IF (NT.EQ.NTS) GO TO 140                                          00090400
       X1=DUSRF(1)/22.63                                                 00090500
       IF (X1.LT.DUSRF(NT-1)) GO TO 140                                  00090600
@@ -1095,7 +1110,8 @@ C             FIND CORRESPONDING LOCATION ON FUNCTION CURVE OF CASE 1   00090900
       TIME=FLOAT(NT1+K)-.5                                              00091400
       DRF2=-1./SQRT(3.1416*ALPHA*TIME)                                  00091500
       IF (DUSRF(NT-1).LT.DRF2) GO TO 110                                00091600
-  100 DRF1=DRF2                                                         00091700
+      DRF1=DRF2                                                         00091700
+  100 CONTINUE                                                                    kt warning fix
       I=0                                                               00091800
       GO TO 120                                                         00091900
   110 D=(DRF1+DRF2)/2.                                                  00092000
@@ -1259,7 +1275,8 @@ C     NRO=NUMBER OF ORDINATES IN RESPONSE FUNCTION.                     00102700
       DO 90 LL=1,NQ                                                     00105400
       NRF=NRF+1                                                         00105500
       CC(NRF)=CLRTY                                                     00105600
-   90 Q1T(NRF)=Q2T(LL)                                                  00105700
+      Q1T(NRF)=Q2T(LL)                                                  00105700
+   90 CONTINUE                                                                    kt warning fix
       TNEXT=TNEXT-TCHK                                                  00105800
   100 CONTINUE                                                          00105900
       IF (NRF.LE.20) GO TO 110                                          00106000
@@ -1269,9 +1286,9 @@ C     NRO=NUMBER OF ORDINATES IN RESPONSE FUNCTION.                     00102700
 C     ORDER CELERITY AND DISCHARGE ON INCREASING DISCHARGE.             00106400
       IF (.NOT.ZORDER) GO TO 130                                        00106500
       IP2=NURS-1                                                        00106600
-      DO 120 NRF=1,IP2                                                  00106700
+      DO 120 NRF=1,IP2                                                  00106700  kt warning fix
       IP1=NRF+1                                                         00106800
-      DO 120 J=IP1,NURS                                                 00106900
+      DO 115 J=IP1,NURS                                                 00106900
       IF (Q1T(NRF).LE.Q1T(J)) GO TO 120                                 00107000
       TEMP=Q1T(NRF)                                                     00107100
       Q1T(NRF)=Q1T(J)                                                   00107200
@@ -1279,11 +1296,13 @@ C     ORDER CELERITY AND DISCHARGE ON INCREASING DISCHARGE.             00106400
       TEMP=CC(NRF)                                                      00107400
       CC(NRF)=CC(J)                                                     00107500
       CC(J)=TEMP                                                        00107600
+  115 CONTINUE                                                                    kt warning fix
   120 CONTINUE                                                          00107700
 C        GENERATE FLAGGING TABLE, QLIN=LINEARIZATION DISCHARGE OF Q.    00107800
   130 LF=NURS-1                                                         00107900
       DO 140 NRF=1,LF                                                   00108000
-  140 QLIN(NRF)=(Q1T(NRF)+Q1T(NRF+1))/2.                                00108100
+      QLIN(NRF)=(Q1T(NRF)+Q1T(NRF+1))/2.                                00108100
+  140 CONTINUE                                                                    kt warning fix
       QLIN(NURS)=Q1T(NURS)                                              00108200
       NRF=1                                                             00108300
   150 Q3T=Q1T(NRF)                                                      00108400
@@ -1447,9 +1466,10 @@ C                                                                       00121400
       ENTRY CONVOL(AB,B,CUTIL,I1,I2,NRO,LAG0)                                     kt changed CONVOL function to mix of dims
 C           ------                                                      00121600
       DO 50 I=I1,I2                                                     00121700
-      DO 50 J=1,NRO                                                     00121800
+      DO 45 J=1,NRO                                                     00121800  kt warning fix
       K=I+J-1+LAG0                                                      00121900
       AB(K) = AB(K) + B(I)*CUTIL(J)                                               kt changed CONVOL function to mix of dims
+   45 CONTINUE                                                                    kt warning fix
    50 CONTINUE                                                          00122100
       RETURN                                                            00122200
 C                                                                       00122300
@@ -1476,9 +1496,10 @@ C           ------                                                      00124300
       IF (NURS.GT.1) GO TO 100                                          00124400
       L=1                                                               00124500
       DO 90 I=I1,I2                                                     00124600
-      DO 90 J=1,NRO                                                     00124700
+      DO 85 J=1,NRO                                                     00124700  kt warning fix
       K=I+J-1+LAG(L)                                                    00124800
       AB(K)=AB(K) + B(I) * CCC(L,J)                                               kt changed CVOLUT function to mix of dims
+   85 CONTINUE                                                                    kt warning fix
    90 CONTINUE                                                          00125000
       RETURN                                                            00125100
   100 DO 160 I=I1,I2                                                    00125200
@@ -1550,7 +1571,8 @@ C                                                                       00131600
 C             NO. OF SUBREACHES EQUAL TO ZERO                           00131700
       IF (NSR.GT.0) GO TO 20                                            00131800
       DO 10 NT=N1ST,NLST                                                00131900
-   10 S(NT)=(USS(NT)+DSS(NT))/2.                                        00132000
+      S(NT)=(USS(NT)+DSS(NT))/2.                                        00132000
+   10 CONTINUE                                                                    kt warning fix
       RETURN                                                            00132100
 C             NO. OF SUBREACHES GREATER THAN ZERO                       00132200
    20 CONTINUE                                                          00132300
@@ -1697,7 +1719,8 @@ C                                                                       00141600
       FOX3(9:9)=NOS(NA+1)                                                 00146900
       IF (NV.GT.0) GO TO 70                                             00147000
       DO 60 J=11,18                                                     00147100
-   60 FOX3(J:J)=' '                                                        00147200
+      FOX3(J:J)=' '                                                        00147200
+   60 CONTINUE                                                                    kt warning fix
       GO TO 80                                                          00147300
    70 I1=NV/10                                                          00147400
       I2=NV-I1*10                                                       00147500
@@ -1737,9 +1760,10 @@ C                                                                       00149000
       DV=(XMAX-XMIN)/FLOAT(NDV)                                         00150900
       DO 110 I=1,NVP                                                    00151000
       ABNOS(I)=(XMIN+FLOAT((I-1)*NSV)*DV)*FSX                           00151100
-110   CONTINUE
+  110 CONTINUE
       DO 120 I=1,NIMG                                                   00151200
-  120 GRID (I) = BL
+      GRID (I) = BL
+  120 CONTINUE                                                                    kt warning fix
       DO 160 I=1,NDHP                                                   00151400
       I2=I*NDVP                                                         00151500
       I1=I2-NDV                                                         00151600
@@ -1749,11 +1773,12 @@ C                                                                       00149000
       GRID (J) = HC
   130 CONTINUE
   140 CONTINUE                                                          00152100
-      DO 160 J=I1,I2,NSV                                                00152200
-      IF (KNHOR) GO TO 150                                              00152300
+      DO 155 J=I1,I2,NSV                                                00152200
+      IF (KNHOR) GO TO 150                                              00152300  kt warning fix
       GRID (J) = NC
       GO TO 160                                                         00152500
   150 GRID (J) = VC
+  155 CONTINUE                                                                    kt warning fix
   160 CONTINUE                                                          00152700
       XMIN1=XMIN-DV/2.                                                  00152800
       YMIN1=YMIN-DH/2.                                                  00152900
@@ -1769,12 +1794,22 @@ C                                                                       00153100
       WRITE (IFL,340)                                                   00153900
       RETURN                                                            00154000
   190 DO 260 I=1,N3                                                     00154100
-      IF (DV) 210,200,210                                               00154200
+C      IF (DV) 210,200,210                                               00154200  kt warning fix 
+      IF (DV.EQ.0) THEN                                                           kt warning fix
+        GO TO 200                                                                 kt warning fix
+      ELSE                                                                        kt warning fix
+        GO TO 210                                                                 kt warning fix
+      END IF                                                                      kt warning fix
   200 DUM1=0                                                            00154300
       GO TO 220                                                         00154400
   210 CONTINUE                                                          00154500
       DUM1=(X(I)-XMIN1)/DV                                              00154600
-  220 IF (DH) 240,230,240                                               00154700
+C  220 IF (DH) 240,230,240                                               00154700  kt warning fix
+  220 IF (DH.EQ.0) THEN                                                           kt warning fix
+        GO TO 230                                                                 kt warning fix
+      ELSE                                                                        kt warning fix
+        GO TO 240                                                                 kt warning fix
+      END IF                                                                      kt warning fix
   230 DUM2=0                                                            00154800
       GO TO 250                                                         00154900
   240 CONTINUE                                                          00155000
@@ -2041,7 +2076,8 @@ C                                                                       00178600
       IF (JMON.EQ.1) GO TO 20                                           00179300
       MOS=JMON-1                                                        00179400
       DO 10 I=1,MOS                                                     00179500
-   10 JNWYDY=JNWYDY+MODAYS(I)                                           00179600
+      JNWYDY=JNWYDY+MODAYS(I)                                           00179600
+   10 CONTINUE                                                                    kt warning fix
    20 IF (JNWYDY.GT.365) JNWYDY=JNWYDY-(LEAP+365)                       00179700 done because 92 was added to JDAY
       IF (JMON.GT.2) JNWYDY=JNWYDY+LEAP                                 00179800
       NYR = IWTRYR - 1901                                                added 2/20/85 PRJ
@@ -2131,8 +2167,9 @@ C             PRINT TIME ARRAY DATA FOR FLOW OPTION                     00187000
       DO 30 NT=N1ST,NLST                                                00187200
       QI(NT)=QI(NT)*CONST1                                              00187300
       IHOUR(NT)=TIME(NT)*100.+.501                                      00187400
-   30 WRITE (10,330) IMON(NT),IDAY(NT),IYEAR(NT),IHOUR(NT),USQ(NT),DSQ(N00187500
+      WRITE (10,330) IMON(NT),IDAY(NT),IYEAR(NT),IHOUR(NT),USQ(NT),DSQ(N00187500
      1T),USS(NT),DSS(NT),DELS(NT),QI(NT)                                 00187600
+   30 CONTINUE                                                                    kt warning fix
       GO TO 70                                                          00187700
    40 IF (.NOT.ZLOSS.OR.NLOSS.EQ.0) GO TO 50                            00187800
 C             PRINT SUMMARY OF LOSSES                                   00187900
@@ -2178,7 +2215,8 @@ C
       SUMPRED=SUMPRED+DSQ1(NT)
       SUMDSQ=SUMDSQ+DSQ(NT)
       SUMQI=SUMQI+QI(NT)
-   62 SUMLOSS=SUMLOSS+SQLOSS(NT)
+      SUMLOSS=SUMLOSS+SQLOSS(NT)
+   62 CONTINUE                                                                    kt warning fix
 C
       IF (ZFAST) GO TO 80                                                         kt fast option
       WRITE (10,342)
@@ -2194,7 +2232,8 @@ C                                                                       00189600
 C             PLOT BANK STORAGE DISCHARGE HYDROGRAPH                    00189700
       IF (.NOT.ZPLOT) GO TO 130                                         00189800
       DO 90 NT=1,NLST                                                   00189900
-   90 TIME(NT)=FLOAT(NT)*DT/24.                                         00190000
+      TIME(NT)=FLOAT(NT)*DT/24.                                         00190000
+   90 CONTINUE                                                                    kt warning fix
       IF (.NOT.ZBEGIN) GO TO 120                                        00190100
       XMIN=0.0                                                          00190200
       K100=100                                                          00190300
@@ -2226,7 +2265,8 @@ C            ACCUMULATION AND MASS BALANCE COMPUTATIONS                 00192500
       QLSVOL=QLSVOL+SQLOSS(NT)*CONST2                                   00192900
       USQVOL=USQVOL+USQ(NT)*CONST2                                      00193000
       DSQVOL=DSQVOL+DSQ(NT)*CONST2                                      00193100
-  140 DSQ1VO=DSQ1VO+DSQ1(NT)*CONST2                                     00193200
+      DSQ1VO=DSQ1VO+DSQ1(NT)*CONST2                                     00193200
+  140 CONTINUE                                                                    kt warning fix
       DBQVOL=DBQVOL+DSQB*FLOAT(NLST-N1ST+1)*CONST2                      00193300
       UBQVOL=UBQVOL+USQB*FLOAT(NLST-N1ST+1)*CONST2                      00193400
       QILSVO=QILSVO+QILOST*CONST3                                       00193500
@@ -2256,7 +2296,12 @@ C      WRITE (10,218) USREL1                                                    
       IF (USREL1.EQ.0.0) GO TO 159                                            ADDED 1/23/86, G. KUHN
        EXWEPC = 100*QLEXWE/USREL1                                                 ADDED 2/11/85 PRJ
   159 QX=(QIAVOL+ABS(QIVOL))/2.                                         00195200
-      IF (QIVOL) 160,170,170                                            00195300
+C      IF (QIVOL) 160,170,170                                            00195300  kt warning fix
+      IF (QIVOL.LT.0) THEN                                                        kt warning fix
+        GO TO 160                                                                 kt warning fix
+      ELSE                                                                        kt warning fix
+        GO TO 170                                                                 kt warning fix
+      END IF                                                                      kt warning fix
   160 VOLOUT=QX                                                         00195400
       VOLIN=QIAVOL-VOLOUT                                               00195500
       GO TO 180                                                         00195600
