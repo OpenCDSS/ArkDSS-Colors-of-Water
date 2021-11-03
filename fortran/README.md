@@ -2,6 +2,7 @@
 This folder contains the fortran code, originally called j349 from the USGS, that has been further developed by the State of Colorado / ArkDSS Colors of Water (COW) project.  The compiled fortran code is utilized by the COW model engine currently called StateTL (*matlab*).
 * [Background](#background)
 * [Summary of Changes](#summary-of-changes)
+* [Usage Notes](#usage-notes)
 * [Compiling](#compiling)
 * [Remaining Issues](#remaining-issues)
 
@@ -25,13 +26,23 @@ The j349 combines a streamflow-routing component (channel-storage component) wit
 ## Summary of Changes
 The original USGS fortran code was updated to compile in the 64bit gfortran compiler and dimensioning expanded to operate for a full calendar year.  An error was fixed in the multiple linearization method and celerity/dispersion dimensioning for the method was increased from 8 to 10.  A “fast” feature was also added to reduce output to just Qds in a binary rather than text file to increase efficiency when deployed.
 1. Original j349.f code from USGS.  Fortran file dated 9/5/2018 3:46 PM (as obtained by Jim Brannon)
-2. Code acquired from Lou Parslow, an original TLAP developer, by Jim Brannon.  This version had some arrays (originally at 1600) dimensioned to 3200 and has modified versions of RATNG and ERFC.  The dimensioning was confirmed to be needed and may be due to the bank storage URFs being of equal size as the original time series so that the array sizing needs to be double the time step. Fortran file dated 9/5/2018 3:50 PM (as obtained by Jim Brannon)
-3. Code from Jim Brannon, as modified from the Lou Parslow code.  Fixes were primarily to get to run in 32bit gfortran.  Includes executable which is currently used by TLAP used by DWR Div2 for administration. Fortran file dated 9/10/2018 3:08 PM
-4. Code modified by Kelley Thompson to run on 64bit gfortran; starting from Lou Parslow code.  Compile errors but not warnings were resolved. Fortran file dated 9/20/2021 12:41 PM
-5. Increased dimensions of main arrays from 1600/3200 to 9000/18000.  Enables calendar year time step of 9000 hours which is 365 or 366 days plus 9 days spinup.  Fortran file dated 9/22/2021 10:37 AM
-6. Added 'fast' option to reduce output to Qds in a binary rather than text file.  A bug in the multiple linearization method was also fixed and Q/celerity/dispersion input dimension increased from 8 to 10.  The fast option is turned on in the input text file in column C of row 3; an example input text file is included that shows fast option as well as multiple linearization input.
-7. Modified code so that input and output(2) filenames are provided through command line arguments rather than through a file.  An example new command line to call the code (using fast=1) is '$ j349.exe j349input_us.dat j349output_ds.dat j349output_ds.bin'.  Increased dimensioning of these filenames to upto 200 characters to allow folder references from within filename.
-8. Code modified to resolve warnings when compiled in 64bit gfortran. Fortran file dated 11/1/2021 1:13 PM
+1. Code acquired from Lou Parslow, an original TLAP developer, by Jim Brannon.  This version had some arrays (originally at 1600) dimensioned to 3200 and has modified versions of RATNG and ERFC.  The dimensioning was confirmed to be needed and may be due to the bank storage URFs being of equal size as the original time series so that the array sizing needs to be double the time step. Fortran file dated 9/5/2018 3:50 PM (as obtained by Jim Brannon)
+1. Code from Jim Brannon, as modified from the Lou Parslow code.  Fixes were primarily to get to run in 32bit gfortran.  Includes executable which is currently used by TLAP used by DWR Div2 for administration. Fortran file dated 9/10/2018 3:08 PM
+1. Code modified by Kelley Thompson to run on 64bit gfortran; starting from Lou Parslow code.  Compile errors but not warnings were resolved. Fortran file dated 9/20/2021 12:41 PM
+1. Increased dimensions of main arrays from 1600/3200 to 9000/18000.  Enables calendar year time step of 9000 hours which is 365 or 366 days plus 9 days spinup.  Fortran file dated 9/22/2021 10:37 AM
+1. Added 'fast' option to reduce output to Qds in a binary rather than text file.  A bug in the multiple linearization method was also fixed and Q/celerity/dispersion input dimension increased from 8 to 10.  The fast option is turned on in the input text file in column C of row 3; an example input text file is included that shows fast option as well as multiple linearization input.
+1. Code modified to resolve warnings when compiled in 64bit gfortran. Fortran file dated 11/1/2021 1:13 PM
+1. Modified code so that input and output(2) filenames can be provided through command line arguments rather than through a file.  Increased dimensioning of these filenames to 200 characters to allow folder references from within filename. 11/3/2021 3:32 PM
+
+## Usage Notes
+As with the original USGS j349, if the code is triggered without command line options then a file must be provided in the same directory as the executable that supplies the input filename, output filename (ascii), plus the binary file if the fast option is being used.  In the revised code, this filename is now be named the following:
+```
+StateTL_filenames.dat
+```
+Filenames can now also be passed to the program via command line arguments.  The -f option is used to indicate that the 2 or 3 filenames will also follow in the command line argument.  Double quotes are not required but can be placed around the filenames in case of whitespaces, filenames can include folder addresses, and the total length of each filename can be up to 200 characters.  An example command line statement is:
+```
+$ j349.exe "j349input_us.dat" "j349output_ds.dat" "j349output_ds.bin"
+```
 
 ## Compiling
 Fortran code for use in COW project is being compiled with 64bit GNU gcc/gfortran (https://gcc.gnu.org/fortran/) and using the Msys2 environment.  Installation and use followed information at:https://opencdss.state.co.us/statemod/16.00.47/doc-dev/dev-env/machine/#install-mingw also looking at: https://gcc.gnu.org/wiki/GFortranUsage and https://gcc.gnu.org/onlinedocs/gfortran/ .

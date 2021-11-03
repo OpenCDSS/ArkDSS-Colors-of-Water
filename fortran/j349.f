@@ -58,6 +58,7 @@ C        ZMULT - IDENTIFIES MULTI-LINEARIZATION OPTION                  00003300
 C        ZDSQO--ALLOWS FOR INPUT OF DS OBSERVED FLOW FOR HYDRGRAPH COMPARISON.   G. KUHN, 3-18-87
 C        ZOUTPUT--ALLOWS FOR NO PRINT IF DAILY(HOURLY, ETC.) VALUES.             G. KUHN, 3-18-87
 C        ZFAST - option to speed up execution using binary for Qds output         kt fast option
+C        ZCMDOPT - command line option if '-f' then filenames via cmd line        kt cmd arg
 C                                                                       00003400
 C     SELECTED ARRAYS IN TIME DIMENSION                                 00003500
 C        USQ   - UPSTREAM DISCHARGE HYDROGRAPH.                         00003600
@@ -77,8 +78,9 @@ C                                                                       00004900
 C                                                                       00005000
       IMPLICIT LOGICAL(Z)                                               00005100
       INTEGER OPFILE,C,P,PU,US,DS                                       00005200
-      CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20),  00005300
-     1FILENAME *200                                                              kt changed from 40 to 200 to enable folders
+      CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20)   00005300  kt stop line
+      CHARACTER *200 FILENAME                                                     kt filename from 40 to 200 to enable folders
+      CHARACTER *2 CMDOPT                                                         kt cmd line option
       DIMENSION IAV(10), LREC(10)                                       00005400
       CHARACTER *4 IWARN (9000)
       CHARACTER *4 IW0, IW1, IW2
@@ -122,15 +124,27 @@ c      OPEN(7,FILE=FILENAME)
 c      WRITE(*,3)
 c3     FORMAT(5X,'TYPE IN OUTPUT FILENAME:')
 c      READ(*,2)FILENAME
-c      OPEN(10,FILE=FILENAME)                                                      kt commented out to use cmd line args (use if file)
-C      open (22,file='StateTL_filenames.dat',status='old')                         kt added StateTL_ and .dat to filenames / (use if file)
-C      read (22,1) filename                                                        kt commented out to use cmd line args (use if file)
-C 1    format (a200)                                                               kt changed from 40 to 200 to enable folders / (use if file)
-  2   format (a40)                                                               kt copied/changed to line 2 for other statement
-      CALL GET_COMMAND_ARGUMENT(1,FILENAME)                                       kt added to get input filename from command line argument
+c      OPEN(10,FILE=FILENAME)
+  1   format (a200)                                                               kt moved orig statement
+  2   format (a40)                                                                kt copied/changed to line 2 for other statement
+      CALL GET_COMMAND_ARGUMENT(1,CMDOPT)                                         kt added - use '-f' on command line to use cmd line for filenames
+      IF (CMDOPT.EQ.'-f') THEN                                                    kt cmd arg
+         ZCMDOPT=.TRUE.                                                           kt cmd arg
+      ELSE                                                                        kt cmd arg
+         ZCMDOPT=.FALSE.                                                          kt cmd arg
+      END IF                                                                      kt cmd arg
+      IF (ZCMDOPT) THEN                                                           kt cmd arg
+         CALL GET_COMMAND_ARGUMENT(2,FILENAME)                                    kt cmd arg
+      ELSE                                                                        kt cmd arg
+         open (22,file='StateTL_filenames.dat',status='old')                      kt moved orig statement
+         read (22,1) filename                                                     kt moved orig statement
+      END IF                                                                      kt cmd arg
       OPEN(7,FILE=FILENAME)
-C      read (22,1) filename                                                        kt commented out to use cmd line args (use if file)
-      CALL GET_COMMAND_ARGUMENT(2,FILENAME)                                       kt added to get output (ascii) filename from command line argument
+      IF (ZCMDOPT) THEN                                                           kt cmd arg
+         CALL GET_COMMAND_ARGUMENT(3,FILENAME)                                    kt cmd arg
+      ELSE                                                                        kt cmd arg
+         read (22,1) filename                                                     kt moved orig statement
+      END IF                                                                      kt cmd arg
 	  OPEN(10,FILE=FILENAME)                                                      kt even in fast option leaving open in case of closure error
       CONTINUE
 C                                                                       00008200
@@ -138,8 +152,11 @@ C                                                                       00008300
   999 CALL START
 C
       IF (.NOT.ZFAST) GO TO 5                                                     kt fast option
-C      read (22,1) filename                                                        kt fast option/commented out to use cmd line args (use if file)
-      CALL GET_COMMAND_ARGUMENT(3,FILENAME)                                       kt added to get output (binary) filename from command line argument
+      IF (ZCMDOPT) THEN                                                           kt cmd arg
+         CALL GET_COMMAND_ARGUMENT(4,FILENAME)                                    kt cmd arg
+      ELSE                                                                        kt cmd arg
+         read (22,1) filename                                                     kt moved orig statement
+      END IF                                                                      kt cmd arg
 	  OPEN(12,FILE=FILENAME,ACCESS='STREAM')                                      kt fast option   
 C
     5 IF (ZCARDS) GO TO 10                                              00008500  kt fast option
