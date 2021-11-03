@@ -1,5 +1,5 @@
 C     Program J349 with modifications by P.R. Jordan, Kansas, Nov. 1984 - Feb. 1985, and some earlier ones by Ken Schriner.
-C         kt indicates modification by K.L. Thompson, Colorado DWR, Sep 2021
+C         kt indicates modification by K.L. Thompson, Colorado DWR, 2021
 C
 C
 C******************* NEED TO LOAD LIBRARY IMSLIB77D WITH THIS PROGRAM ****************************************
@@ -78,7 +78,7 @@ C                                                                       00005000
       IMPLICIT LOGICAL(Z)                                               00005100
       INTEGER OPFILE,C,P,PU,US,DS                                       00005200
       CHARACTER *4 STANO1(2),STANO2(2),STANM1(17),STANM2(17),INFO(20),  00005300
-     1FILENAME *40
+     1FILENAME *200                                                              kt changed from 40 to 200 to enable folders
       DIMENSION IAV(10), LREC(10)                                       00005400
       CHARACTER *4 IWARN (9000)
       CHARACTER *4 IW0, IW1, IW2
@@ -122,12 +122,15 @@ c      OPEN(7,FILE=FILENAME)
 c      WRITE(*,3)
 c3     FORMAT(5X,'TYPE IN OUTPUT FILENAME:')
 c      READ(*,2)FILENAME
-c      OPEN(10,FILE=FILENAME)
-      open (22,file='StateTL_filenames.dat',status='old')                         kt added StateTL_ and .dat to filenames
-	  read (22,1) filename
- 1    format (a40)
+c      OPEN(10,FILE=FILENAME)                                                      kt commented out to use cmd line args (use if file)
+C      open (22,file='StateTL_filenames.dat',status='old')                         kt added StateTL_ and .dat to filenames / (use if file)
+C      read (22,1) filename                                                        kt commented out to use cmd line args (use if file)
+C 1    format (a200)                                                               kt changed from 40 to 200 to enable folders / (use if file)
+  2   format (a40)                                                               kt copied/changed to line 2 for other statement
+      CALL GET_COMMAND_ARGUMENT(1,FILENAME)                                       kt added to get input filename from command line argument
       OPEN(7,FILE=FILENAME)
-	  read (22,1) filename
+C      read (22,1) filename                                                        kt commented out to use cmd line args (use if file)
+      CALL GET_COMMAND_ARGUMENT(2,FILENAME)                                       kt added to get output (ascii) filename from command line argument
 	  OPEN(10,FILE=FILENAME)                                                      kt even in fast option leaving open in case of closure error
       CONTINUE
 C                                                                       00008200
@@ -135,7 +138,8 @@ C                                                                       00008300
   999 CALL START
 C
       IF (.NOT.ZFAST) GO TO 5                                                     kt fast option
-	  read (22,1) filename                                                        kt fast option
+C      read (22,1) filename                                                        kt fast option/commented out to use cmd line args (use if file)
+      CALL GET_COMMAND_ARGUMENT(3,FILENAME)                                       kt added to get output (binary) filename from command line argument
 	  OPEN(12,FILE=FILENAME,ACCESS='STREAM')                                      kt fast option   
 C
     5 IF (ZCARDS) GO TO 10                                              00008500  kt fast option
@@ -267,7 +271,7 @@ C                PREPARE FOR NEXT YEAR'S DATA AND COMPUTATIONS          00020400
       IF (.NOT.ZEND) GO TO 160                                          00021000
       NRECDS=IAV(JOUT)-1                                                00021100
 C                WRITE HEADER INFORMATION                               00021200
-      WRITE (OPFILE,1) NRECDS,STANO2,STANM2                             00021300
+      WRITE (OPFILE,2) NRECDS,STANO2,STANM2                             00021300  kt changed from line 1 to 2
       GO TO 190                                                         00021400
   160 CONTINUE                                                          00021500
       CALL MOVE (DSQ,DSQ,1,NSTAIL,0,ITEMS)                              00021600
@@ -1067,6 +1071,7 @@ C             ------                                                    00087400
    50 I=I+1                                                             00089100
       DUSRF(NT)=-1./SQRT(3.1416*ALPHA*TIME)                             00089200
    60 CONTINUE                                                          00089300
+      GO TO 140                                                                    kt fast option hardwiring
       IF (I.GE.1) WRITE (10,220) I                                      00089400
       GO TO 140                                                         00089500
 C             CASE 3                                                    00089600
@@ -1122,6 +1127,7 @@ C      IF (ZFAST) GO TO 181                                                     
       WRITE (10,210) NUR1                                               00094100
       GO TO 180                                                         00094200
   170 NUR1=NTS                                                          00094300
+      GO TO 181                                                                    kt fast option hardwiring
       WRITE (10,210) NUR1                                               00094100
   180 WRITE (10,200) (NT,DUSRF(NT),NT=1,NUR1)                           00094400
   181 CONTINUE                                                                    kt fast option
