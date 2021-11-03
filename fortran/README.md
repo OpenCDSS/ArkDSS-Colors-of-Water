@@ -35,13 +35,14 @@ The original USGS fortran code was updated to compile in the 64bit gfortran comp
 1. Modified code so that input and output(2) filenames can be provided through command line arguments rather than through a file.  Increased dimensioning of these filenames to 200 characters to allow folder references from within filename. 11/3/2021 3:32 PM
 
 ## Usage Notes
-As with the original USGS j349, if the code is triggered without command line options then a file must be provided in the same directory as the executable that supplies the input filename, output filename (ascii), plus the binary file if the fast option is being used.  In the revised code, this filename is now be named the following:
+An example input datafile is included to show current/new input data options and formatting.
+As with the original USGS j349, if the code is triggered without command line options a file must be provided in the same directory as the executable that supplies the input filename, output filename (ascii), plus the output filename (binary) if the fast option is being used.  In the revised code, this filename now must be named the following:
 ```
 StateTL_filenames.dat
 ```
-Filenames can now also be passed to the program via command line arguments.  The -f option is used to indicate that the 2 or 3 filenames will also follow in the command line argument.  Double quotes are not required but can be placed around the filenames in case of whitespaces, filenames can include folder addresses, and the total length of each filename can be up to 200 characters.  An example command line statement is:
+Filenames can now also be passed to the program via command line arguments.  The -f option is used to indicate that the filenames will be provided through the command line argument.  Double quotes (not required) can be placed around the filenames in case of blanks, filenames can include folder addresses, and the total length of each filename can be up to 200 characters.  An example command line argument is:
 ```
-$ j349.exe "j349input_us.dat" "j349output_ds.dat" "j349output_ds.bin"
+$ j349.exe -f j349input_us.dat j349output_ds.dat j349output_ds.bin
 ```
 
 ## Compiling
