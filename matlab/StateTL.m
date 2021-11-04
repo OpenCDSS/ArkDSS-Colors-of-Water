@@ -3,13 +3,21 @@
 % Matlab (preliminary) Colors of Water Transit Loss and Timing engine
 % State of Colorado - Division of Water Resources / Colorado Water Conservation Board
 %
+% cd C:\Projects\Ark\ColorsofWater\matlab
+% deployed as function - but when using as .m, may want to remove start/end function/end statements
 
-%cd C:\Projects\Ark\ColorsofWater\matlab
-clear all
+function StateTL(varargin)  %end near 3800
+
+% % comment next lines if using as function
+% clear all
+% %varargin=[];
+% %varargin={'foldertest4'};
+% %varargin=[{'\calibration\caltest8'} {'calibration:2018,04,02,04,20,WD17'}];
+% varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018,04,02,04,20,WD17'}];
+
+
 runstarttime=now;
 basedir=cd;basedir=[basedir '\'];
-%j349dir=[basedir 'j349dir\']; %currently need to a cd where run fortran but may slow to cd at every instance
-j349dir=basedir;
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -17,7 +25,7 @@ j349dir=basedir;
 %watch out - if change variable names in code also need to change them here!
 %currently - if leave out one of these from control file will assign it a zero value
 controlvars={'srmethod','j349fast','j349multurf','inputfilename','rundays','fullyear','readinputfile','readevap','readstagedischarge','pullstationdata','pulllongtermstationdata','pullreleaserecs','runriverloop','runwcloop','doexchanges','runcaptureloop','runcalibloop'};
-controlvars=[controlvars,{'logfilename','displaymessage','writemessage','outputfilebase','outputgage','outputwc','outputcal','outputhr','outputday','calibavggainloss'}];
+controlvars=[controlvars,{'copydatafiles','savefinalmatfile','logfilename','displaymessage','writemessage','outputfilebase','outputgage','outputwc','outputcal','outputhr','outputday','calibavggainloss'}];
 controlfilename='StateTL_control.txt';
 
 
@@ -50,7 +58,6 @@ inadv3b_increaseint=0;    %currently using over 3a; similar step as 3a / only us
 minc=1;              %minimum flow applied to celerity, dispersion, and evaporation calculations (dont want to have a zero celerity for reverse operations etc) / this is also seperately in j349/musk functions
 minj349=1;           %minimum flow for j349 application - TLAP uses 1.0
 gainchangelimit=0.1;
-savefinalcalfile=0;  %saves final file after calibration loop, big and only need if want StateTLplot for cal after clearing
 
 evapnew=1;           %1=use new evap method (statewide et dataset) or else old single curve
     evapstartyear=2000;
@@ -151,6 +158,174 @@ end
 fclose(fid);
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% interpretation of command line arguments if given
+% as a start; may pass datadirectory and calibration command options
+% current example:
+% from matlab: StateTL('-f','\calibration\Par.1','-c','2018,04,02,04,20,WD17')
+% compiled: StateTL -f \calibration\Par.1 -c 2018,04,02,04,20,WD17
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+if isempty(varargin)
+    datadir=basedir;
+    datafiledir=basedir;
+    logmc=[logmc;'Data directory not defined, all files in: ' basedir];
+else
+    logmcv='Additional options were defined by command line arguments:';
+    for i=1:length(varargin)
+        logmcv=[logmcv ' ' varargin{i}];
+    end
+    logmc=[logmc;logmcv];
+    %first command line input argument generally defines folder to put data into
+    varloop=1;
+    i=1;
+    while varloop==1
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % option-f defines folder to put data into
+        if strcmp(varargin{i},'-f')
+            if length(varargin)>i
+                i=i+1;
+                datadirtxt=varargin{i};
+                if datadirtxt(1)~='-' %indicating another command
+                    if datadirtxt(1)=='\'  %if first char is '\' backup one level to place folder at some level as matlab folder
+                        slashids=find(basedir=='\');
+                        datadir=[basedir(1:slashids(end-1)-1) datadirtxt];
+                    else
+                        datadir=[basedir datadirtxt];
+                    end
+                    if datadir(end)~='\'
+                        datadir=[datadir '\'];
+                    end
+                    logmc=[logmc;'Command Line Option -f: datadir=' datadir];
+                    if length(varargin)==i
+                        varloop=0;
+                    else
+                        i=i+1;
+                    end
+
+                    %check if folder (make if not) or if inputfilename already in folder
+                    if isfolder(datadir) %if inputfilename is in folder, use that as input (otherwise use one in basedir)
+                        if isfile([datadir inputfilename])
+                            inputfilename=[datadir inputfilename];
+                            logmc=[logmc;'Inputfile in folder: ' inputfilename];
+                        end
+                    else
+                        mkdir(datadir);  %mkdir if data directory doesnt exist, debating if would want to copy in inputfile
+                        logmc=[logmc;'Data folder created: ' datadir];
+                    end
+
+                    % if also copydatafiles=1 then copy datafiles from main matlab folder into command line specified folder
+                    % (to avoid potential issues with multiple instances)
+                    if copydatafiles==1
+                        datafiledir=datadir;
+                        logmc=[logmc;'Copying datafiles from: ' basedir ' to ' datadir ' starting:' datestr(now)];
+                        copyfile([basedir 'StateTL_data_subreach.mat'],[datadir 'StateTL_data_subreach.mat']);
+                        copyfile([basedir 'StateTL_data_evap.mat'],[datadir 'StateTL_data_evap.mat']);
+                        copyfile([basedir 'StateTL_data_stagedis.mat'],[datadir 'StateTL_data_stagedis.mat']);
+                        copyfile([basedir 'StateTL_data_qnode.mat'],[datadir 'StateTL_data_qnode.mat']);
+                        copyfile([basedir 'StateTL_data_release.mat'],[datadir 'StateTL_data_release.mat']);
+                        logmc=[logmc;'Copying datafiles done: ' datestr(now) ' file: StateTL_data_subreach.mat,StateTL_data_evap.mat,StateTL_data_stagedis.mat,StateTL_data_qnode.mat,StateTL_data_release.mat'];
+                    else
+                        datafiledir=basedir;
+                    end
+                    
+                    % output and log to data folder
+                    outputfilebase=[datadir outputfilebase];
+                    logfilename=[datadir logfilename];
+                    logmc=[logmc;'output directory and basename: ' outputfilebase];
+                    logmc=[logmc;'logfilename directory: ' logfilename];
+
+
+                else
+                    logmc=[logmc;'Warning Command Line Option -f but no folder listed before next command option'];                
+                end
+            else
+                logmc=[logmc;'Warning Command Line Option -f but no folder listed afterwards'];
+                varloop=0;
+            end
+        end
+
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % option-c defines do calibration - can have optional additional arguments of year,sm,sd,em,ed,WDxx
+        
+        if strcmp(varargin{i},'-c') % option-c defines do calibration
+
+            readinputfile=2;  %will read new inputfile but not save mat file
+            readstagedischarge=0;
+            readevap=0;
+            pullstationdata=0;
+            pulllongtermstationdata=0;
+            pullreleaserecs=0;
+            runriverloop=2;
+            runwcloop=0;
+            doexchanges=0;
+            runcaptureloop=0;
+            runcalibloop=1;
+            displaymessage=0;
+            writemessage=1;
+            outputgage=0;
+            outputwc=0;
+            outputcal=1;
+
+            %ergg not great - but repeat options verbatim here for log file
+            logmc=[logmc;'calibration command option: readinputfile=2'];
+            logmc=[logmc;'calibration command option: readstagedischarge=0'];
+            logmc=[logmc;'calibration command option: readevap=0'];
+            logmc=[logmc;'calibration command option: pullstationdata=0'];
+            logmc=[logmc;'calibration command option: pulllongtermstationdata=0'];
+            logmc=[logmc;'calibration command option: pullreleaserecs=0'];
+            logmc=[logmc;'calibration command option: runriverloop=2'];
+            logmc=[logmc;'calibration command option: runwcloop=0'];
+            logmc=[logmc;'calibration command option: doexchanges=0'];
+            logmc=[logmc;'calibration command option: runcaptureloop=0'];
+            logmc=[logmc;'calibration command option: runcalibloop=1'];
+            logmc=[logmc;'calibration command option: displaymessage=0'];
+            logmc=[logmc;'calibration command option: writemessage=1'];
+            logmc=[logmc;'calibration command option: outputgage=0'];
+            logmc=[logmc;'calibration command option: outputwc=0'];
+            logmc=[logmc;'calibration command option: outputcal=1'];
+            if length(varargin)>i
+                i=i+1;
+                cmdtxt=varargin{i};
+                if datadirtxt(1)~='-' %indicating another command
+                    cids=find(cmdtxt==',');
+                    if isempty(cids) && ~strcmp(cmdtxt(1:2),'WD')
+                        yearstart=str2double(cmdtxt(1:end));
+                        logmc=[logmc;'Command Line Argument: yearstart=' num2str(yearstart)];
+                    elseif ~isempty(cids)
+                        tids=[cids,length(cmdtxt)+1];
+                        yearstart=str2double(cmdtxt(1:tids(1)-1));
+                        calibstartdate=datenum(yearstart,str2double(cmdtxt(tids(1)+1:tids(2)-1)),str2double(cmdtxt(tids(2)+1:tids(3)-1)));
+                        calibenddate=datenum(yearstart,str2double(cmdtxt(tids(3)+1:tids(4)-1)),str2double(cmdtxt(tids(4)+1:tids(5)-1)));
+                        logmc=[logmc;'Command Line Argument: yearstart=' num2str(yearstart)];
+                        logmc=[logmc;'Command Line Argument: calibration start=' datestr(calibstartdate,23)];
+                        logmc=[logmc;'Command Line Argument: calibration end=' datestr(calibenddate,23)];
+                        if length(cids)>4
+                            WDcaliblist=str2double(cmdtxt(tids(5)+3:tids(6)-1)); %counting on WD and just a single calibration reach
+                            logmc=[logmc;'Command Line Argument: WDcaliblist=' num2str(WDcaliblist)];
+                        end
+                    else
+                        WDcaliblist=str2double(cmdtxt(3:end));
+                        logmc=[logmc;'Command Line Argument: WDcaliblist=' num2str(WDcaliblist)];
+                    end
+                    if length(varargin)==i
+                        varloop=0;
+                    end
+                    i=i+1;
+                end
+            else %no additional calibration options
+                varloop=0;
+            end
+        end
+    end
+end
+
+j349dir=datadir;   %if datadir will write fortran i/o there, fortran codes now using a command line argument to use datadir
+logmc=[logmc;'J349 read/write directory: ' j349dir];
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Initial log write/display given options from control file
 if writemessage==1
@@ -208,21 +383,21 @@ avgdates=[datenum(avgstartyear,1,1):datenum(nowvec(1),12,31)];
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 global SR
 
-if readinputfile==1
+if readinputfile>0
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%    
 % read subreach data    
-logm=['reading subreach info from file: ' basedir inputfilename];
+logm=['reading subreach info from file: ' inputfilename];
 domessage(logm,logfilename,displaymessage,writemessage)
 
 if inputfilename(end-3:end)=='xlsx'
-    inforaw=readcell([basedir inputfilename],'Sheet','SR');
+    inforaw=readcell([inputfilename],'Sheet','SR');
 else
-    inforaw=readcell([basedir inputfilename]);
+    inforaw=readcell([inputfilename]);
 end
 [inforawrow,inforawcol]=size(inforaw);
 
-%[infonum,infotxt,inforaw]=xlsread([basedir inputfilename],'SR');
+%[infonum,infotxt,inforaw]=xlsread([inputfilename],'SR');
 %[inforawrow inforawcol]=size(inforaw);
 
 infoheaderrow=1;
@@ -515,10 +690,13 @@ end
 
 clear c v info*
 
-save([basedir 'StateTL_SRdata.mat'],'SR');
+if readinputfile==1  %not save if readinputfile==2 
+    save([datafiledir 'StateTL_data_subreach.mat'],'SR');
+end
 
 else
-    load([basedir 'StateTL_SRdata.mat']);
+    load([datafiledir 'StateTL_data_subreach.mat']);
+        
 end
 
 
@@ -526,15 +704,15 @@ end
 % Old Evaporation data - original single curve data for wd17
 if evapnew~=1
     if readevap==1
-        infonum=readmatrix([basedir inputfilename],'Sheet','evap');
+        infonum=readmatrix([inputfilename],'Sheet','evap');
         [infonumrow infonumcol]=size(infonum);        
         for wd=SR.(ds).WD
             wds=['WD' num2str(wd)];
             evap.(ds).(wds).evap=infonum(:,end);
         end  
-        save([basedir 'StateTL_SRdataevap.mat'],'evap');
+        save([datafiledir 'StateTL_data_evap.mat'],'evap');
     else
-        load([basedir 'StateTL_SRdataevap.mat']);
+        load([datafiledir 'StateTL_data_evap.mat']);
     end
     
 end
@@ -544,7 +722,7 @@ end
 % this needs to be reworked to have for seperate reacheds (ie in wd67)
 
 if readstagedischarge==1
-    SDmat=readmatrix([basedir inputfilename],'Sheet','stagedischarge');
+    SDmat=readmatrix([inputfilename],'Sheet','stagedischarge');
     [SDmatnumrow SDmatnumcol]=size(SDmat);
     
     for i=1:SDmatnumrow
@@ -556,15 +734,15 @@ if readstagedischarge==1
     end
     stagedischarge.(ds).stagedischarge=SR.(ds).stagedischarge;
     
-    DMmat=readcell([basedir inputfilename],'Sheet','defaultmethod');
+    DMmat=readcell([inputfilename],'Sheet','defaultmethod');
     [DMmatnumrow DMmatnumcol]=size(DMmat);
     for i=1:DMmatnumrow
         SR.(['D' num2str(DMmat{i,1})]).defaultmethod.(['WD' num2str(DMmat{i,2})]).(['R' num2str(DMmat{i,3})])=DMmat{i,4};
     end
     defaultmethod.(['D' num2str(DMmat{i,1})]).defaultmethod=SR.(['D' num2str(DMmat{i,1})]).defaultmethod;
-    save([basedir 'StateTL_SRdatastagedis.mat'],'stagedischarge','defaultmethod');
+    save([datafiledir 'StateTL_data_stagedis.mat'],'stagedischarge','defaultmethod');
 else
-    load([basedir 'StateTL_SRdatastagedis.mat']);
+    load([datafiledir 'StateTL_data_stagedis.mat']);
     SR.(ds).stagedischarge=stagedischarge.(ds).stagedischarge;
     SR.(ds).defaultmethod=defaultmethod.(ds).defaultmethod;
 end
@@ -753,7 +931,7 @@ for wd=SR.(ds).WD
     end
 end
 
-save([basedir 'StateTL_SRdataevap.mat'],'evap');
+save([datafiledir 'StateTL_data_evap.mat'],'evap');
 
 end
 
@@ -763,9 +941,9 @@ end
 % Evaporation - Attaching or rettaching to SR structure
 % using whole year in anticipation of possible calendar year orientation
 
-if readevap==1 || readinputfile==1
+if readevap==1 || readinputfile>0
     if readevap~=1
-        load([basedir 'StateTL_SRdataevap.mat']);
+        load([datafiledir 'StateTL_data_evap.mat']);
     end
     if evapnew~=1
         for wd=SR.(ds).WD
@@ -813,7 +991,10 @@ if readevap==1 || readinputfile==1
         end
         
     end
-    save([basedir 'StateTL_SRdata.mat'],'SR'); 
+    if readinputfile==1  %not save if readinputfile==2 (ie for calibration)
+        save([datafiledir 'StateTL_data_subreach.mat'],'SR');
+    end
+
 end
 
 
@@ -825,7 +1006,7 @@ end
 reststarttime=[];
 if pullstationdata==1
     if pulllongtermstationdata==0
-        load(['StateTL_bin_Qnode.mat']); %better way to do this?
+        load([datafiledir 'StateTL_data_qnode.mat']); %better way to do this?
         for wd=WDlist
             wds=['WD' num2str(wd)];
             for r=SR.(ds).(wds).R
@@ -845,7 +1026,7 @@ if pullstationdata==1
         Station.date.(ds).(wds).modified=0;
     end
 else
-    load(['StateTL_bin_Qnode.mat']);
+    load([datafiledir 'StateTL_data_qnode.mat']);
 end
 
 if pullstationdata>=1
@@ -1479,9 +1660,9 @@ for wd=WDlist
     end
 end
 
-    save([basedir 'StateTL_bin_Qnode.mat'],'Station');
+    save([datafiledir 'StateTL_data_qnode.mat'],'Station');
 else
-    load([basedir 'StateTL_bin_Qnode.mat']);    
+    load([datafiledir 'StateTL_data_qnode.mat']);    
 end
 
 
@@ -1511,7 +1692,7 @@ if pullreleaserecs==1
         WC.date.(ds).(wds).modified=0;
     end
 else
-    load(['StateTL_bin_WC.mat']);
+    load([datafiledir 'StateTL_data_release.mat']);
 end
 
 % this is the read of release diversion records for defined releasestructures
@@ -1611,7 +1792,7 @@ end
 
     WC.date.(ds).(wds).modified=maxmodified;
     end
-    save(['StateTL_bin_WC.mat'],'WC');
+    save([datafiledir 'StateTL_data_release.mat'],'WC');
 end
 
 
@@ -1703,7 +1884,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     
-if runriverloop==1
+if runriverloop>0
 
 logm=['Starting river/gageflow loop at: '  datestr(now)];
 domessage(logm,logfilename,displaymessage,writemessage)
@@ -2072,8 +2253,10 @@ end %ii iteration on gainchange
     lastwdid=[lastwdid;SR.(ds).(wds).(rs).dswdid{sr} {ds} {wds} {rs} {sr}];
 end %wd
 
-save([basedir 'StateTL_bin_riv' srmethod '.mat'],'SR');
-elseif runwcloop==1 | runcalibloop==1
+if runriverloop==1  %not save if riverloop=2 (ie for calibration)
+    save([basedir 'StateTL_bin_riv' srmethod '.mat'],'SR');
+end
+elseif runwcloop>0 | runcalibloop>0
     load([basedir 'StateTL_bin_riv' srmethod '.mat']);  
 end %river/gage loop
 
@@ -2093,7 +2276,7 @@ end %river/gage loop
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-if runwcloop==1
+if runwcloop>0
 
 logm=['Starting water class routing loop at: '  datestr(now)];
 domessage(logm,logfilename,displaymessage,writemessage)
@@ -2949,8 +3132,10 @@ for w=1:length(wwcnums)
 end
 end
 
-save([basedir 'StateTL_bin_wc' srmethod '.mat'],'SR');
-elseif runcaptureloop==1
+if runwcloop==1  %not save if riverloop=2 (ie for calibration)
+    save([basedir 'StateTL_bin_wc' srmethod '.mat'],'SR');
+end
+elseif runcaptureloop>0
     load([basedir 'StateTL_bin_wc' srmethod '.mat']);  
 end %runwcloop
 
@@ -2959,7 +3144,7 @@ end %runwcloop
 % CAPTURE LOOP TO CHARACTERIZE AVAILABLE/CAPTURE AMT
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if runcaptureloop==1
+if runcaptureloop>0
     logm=['Starting capture loop to characterize release capture amounts versus release/available amounts at: '  datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
 
@@ -3114,13 +3299,22 @@ for j=1:length(SR.(ds).Rivloc.loc(:,1))
     SR.(ds).Rivloc.flownativecapture.ds(:,j)=SR.(ds).Rivloc.flowriv.ds(:,j)-SR.(ds).Rivloc.flowwccapture.ds(:,j);
 end
 
+    if savefinalmatfile==1 && runcalibloop==0
+        logm=['Writing final capture loop binary, its a big file, starting:' datestr(now)];
+        domessage(logm,logfilename,displaymessage,writemessage)
+
+        save([datadir 'StateTL_out_allcapture.mat'],'SR','ds','datestid','rsteps');
+
+        logm=['Finished writing final capture loop binary at:' datestr(now)];
+        domessage(logm,logfilename,displaymessage,writemessage)
+    end
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CALIBRATION LOOP TO COMPARE PREDICTED GAGE HYDROGRAPHS TO ACTUAL
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if runcalibloop==1
+if runcalibloop>0
     logm=['Starting simulation loop for use in calibration at: '  datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
 
@@ -3299,8 +3493,15 @@ end %sr
     end %r
 end %wd
     %this extra save will take more time - if don't need comment out
-    if savefinalcalfile==1
-        save([basedir 'StateTL_bin_cal' srmethod '.mat'],'SR','WDcaliblist','ds','datestid','rsteps');
+    if savefinalmatfile==1
+        logm=['Writing final calibration loop binary, its a big file, starting:' datestr(now)];
+        domessage(logm,logfilename,displaymessage,writemessage)
+
+        save([datadir 'StateTL_out_allcal.mat'],'SR','WDcaliblist','ds','datestid','rsteps');
+        
+        logm=['Finished writing final calibration loop binary at:' datestr(now)];
+        domessage(logm,logfilename,displaymessage,writemessage)
+
     end
 end  %runcalibloop
 
@@ -3317,26 +3518,26 @@ if outputgage==1
     titlelocline=[{'atWDID'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-USWDID/2-DSWDID'}];
     if outputhr==1
         titledates=cellstr(datestr(rdates(datestid:end),'mm/dd/yy HH:'));
-        writecell([titlelocline,titledates'],[outputfilebase srmethod '_riverhr.csv']);
-        writecell([titlelocline,titledates'],[outputfilebase srmethod '_nativehr.csv']);
-        writecell([titlelocline,titledates'],[outputfilebase srmethod '_gagediffhr.csv']);
-        writecell([titlelocline,titledates'],[outputfilebase srmethod '_sraddhr.csv']);
-        writecell([titlelocline,titledates'],[outputfilebase srmethod '_totwcreducehr.csv']);
-        if runcaptureloop==1
-        writecell([titlelocline,titledates'],[outputfilebase srmethod '_nativecapturehr.csv']);
+        writecell([titlelocline,titledates'],[outputfilebase '_riverhr.csv']);
+        writecell([titlelocline,titledates'],[outputfilebase '_nativehr.csv']);
+        writecell([titlelocline,titledates'],[outputfilebase '_gagediffhr.csv']);
+        writecell([titlelocline,titledates'],[outputfilebase '_sraddhr.csv']);
+        writecell([titlelocline,titledates'],[outputfilebase '_totwcreducehr.csv']);
+        if runcaptureloop>0
+        writecell([titlelocline,titledates'],[outputfilebase '_nativecapturehr.csv']);
         end
     end
     if outputday==1
         [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:end));
         daymat=unique([yr,mh,dy],'rows','stable');
         titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
-        writecell([titlelocline,titledatesday'],[outputfilebase srmethod '_riverday.csv']);
-        writecell([titlelocline,titledatesday'],[outputfilebase srmethod '_nativeday.csv']);
-        writecell([titlelocline,titledatesday'],[outputfilebase srmethod '_gagediffday.csv']);
-        writecell([titlelocline,titledatesday'],[outputfilebase srmethod '_sraddday.csv']);
-        writecell([titlelocline,titledatesday'],[outputfilebase srmethod '_totwcreduceday.csv']);
-        if runcaptureloop==1
-        writecell([titlelocline,titledatesday'],[outputfilebase srmethod '_nativecaptureday.csv']);
+        writecell([titlelocline,titledatesday'],[outputfilebase '_riverday.csv']);
+        writecell([titlelocline,titledatesday'],[outputfilebase '_nativeday.csv']);
+        writecell([titlelocline,titledatesday'],[outputfilebase '_gagediffday.csv']);
+        writecell([titlelocline,titledatesday'],[outputfilebase '_sraddday.csv']);
+        writecell([titlelocline,titledatesday'],[outputfilebase '_totwcreduceday.csv']);
+        if runcaptureloop>0
+        writecell([titlelocline,titledatesday'],[outputfilebase '_nativecaptureday.csv']);
         end
     end
     for i=1:length(SR.(ds).Rivloc.loc(:,1))
@@ -3350,7 +3551,7 @@ if outputgage==1
         outputlinenative(2*i,:)=SR.(ds).Rivloc.flownative.ds(datestid:end,i)';
         outputlinesradd(2*i-1,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).sraddamtus(datestid:end,SR.(ds).Rivloc.loc{i,4})';
         outputlinesradd(2*i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).sraddamtds(datestid:end,SR.(ds).Rivloc.loc{i,4})';
-        if runcaptureloop==1
+        if runcaptureloop>0
         outputlinenativecapture(2*i-1,:)=SR.(ds).Rivloc.flownativecapture.us(datestid:end,i)';
         outputlinenativecapture(2*i,:)=SR.(ds).Rivloc.flownativecapture.ds(datestid:end,i)';
         end
@@ -3372,13 +3573,13 @@ if outputgage==1
     if outputhr==1
         logm=['writing hourly output files for river/native amounts (hourly is a bit slow), starting: ' datestr(now)];
         domessage(logm,logfilename,displaymessage,writemessage)
-        writecell([loclineriver,num2cell(outputlineriver)],[outputfilebase srmethod '_riverhr.csv'],'WriteMode','append');
-        writecell([loclineriver,num2cell(outputlinenative)],[outputfilebase srmethod '_nativehr.csv'],'WriteMode','append');
-        writecell([loclinereach,num2cell(outputlinegagediff)],[outputfilebase srmethod '_gagediffhr.csv'],'WriteMode','append');
-        writecell([loclineriver,num2cell(outputlinesradd)],[outputfilebase srmethod '_sraddhr.csv'],'WriteMode','append');
-        writecell([loclineriver,num2cell(outputlinetotwcreduce)],[outputfilebase srmethod '_totwcreducehr.csv'],'WriteMode','append');
-        if runcaptureloop==1
-        writecell([loclineriver,num2cell(outputlinenativecapture)],[outputfilebase srmethod '_nativecapturehr.csv'],'WriteMode','append');
+        writecell([loclineriver,num2cell(outputlineriver)],[outputfilebase '_riverhr.csv'],'WriteMode','append');
+        writecell([loclineriver,num2cell(outputlinenative)],[outputfilebase '_nativehr.csv'],'WriteMode','append');
+        writecell([loclinereach,num2cell(outputlinegagediff)],[outputfilebase '_gagediffhr.csv'],'WriteMode','append');
+        writecell([loclineriver,num2cell(outputlinesradd)],[outputfilebase '_sraddhr.csv'],'WriteMode','append');
+        writecell([loclineriver,num2cell(outputlinetotwcreduce)],[outputfilebase '_totwcreducehr.csv'],'WriteMode','append');
+        if runcaptureloop>0
+        writecell([loclineriver,num2cell(outputlinenativecapture)],[outputfilebase '_nativecapturehr.csv'],'WriteMode','append');
         end
     end
     if outputday==1
@@ -3391,17 +3592,17 @@ if outputgage==1
             outputlinedaygagediff(:,i)=mean(outputlinegagediff(:,dayids),2);
             outputlinedaysradd(:,i)=mean(outputlinesradd(:,dayids),2);
             outputlinedaytotwcreduce(:,i)=mean(outputlinetotwcreduce(:,dayids),2);
-            if runcaptureloop==1
+            if runcaptureloop>0
             outputlinedaynativecapture(:,i)=mean(outputlinenativecapture(:,dayids),2);
             end
         end
-        writecell([loclineriver,num2cell(outputlinedayriver)],[outputfilebase srmethod '_riverday.csv'],'WriteMode','append');        
-        writecell([loclineriver,num2cell(outputlinedaynative)],[outputfilebase srmethod '_nativeday.csv'],'WriteMode','append');
-        writecell([loclinereach,num2cell(outputlinedaygagediff)],[outputfilebase srmethod '_gagediffday.csv'],'WriteMode','append');        
-        writecell([loclineriver,num2cell(outputlinedaysradd)],[outputfilebase srmethod '_sraddday.csv'],'WriteMode','append');        
-        writecell([loclineriver,num2cell(outputlinedaytotwcreduce)],[outputfilebase srmethod '_totwcreduceday.csv'],'WriteMode','append');        
-        if runcaptureloop==1
-        writecell([loclineriver,num2cell(outputlinedaynativecapture)],[outputfilebase srmethod '_nativecaptureday.csv'],'WriteMode','append');
+        writecell([loclineriver,num2cell(outputlinedayriver)],[outputfilebase '_riverday.csv'],'WriteMode','append');        
+        writecell([loclineriver,num2cell(outputlinedaynative)],[outputfilebase '_nativeday.csv'],'WriteMode','append');
+        writecell([loclinereach,num2cell(outputlinedaygagediff)],[outputfilebase '_gagediffday.csv'],'WriteMode','append');        
+        writecell([loclineriver,num2cell(outputlinedaysradd)],[outputfilebase '_sraddday.csv'],'WriteMode','append');        
+        writecell([loclineriver,num2cell(outputlinedaytotwcreduce)],[outputfilebase '_totwcreduceday.csv'],'WriteMode','append');        
+        if runcaptureloop>0
+        writecell([loclineriver,num2cell(outputlinedaynativecapture)],[outputfilebase '_nativecaptureday.csv'],'WriteMode','append');
         end
     end
 end
@@ -3423,11 +3624,11 @@ if outputhr==1
     logm=['writing hourly output file by water class amounts (hourly is a bit slow), starting: ' datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
     titledates=cellstr(datestr(rdates(datestid:end),'mm/dd/yy HH:'));
-    writecell([titlelocline,titledates'],[outputfilebase srmethod '_wchr.csv']);
-    writecell([titlelocline,titledates'],[outputfilebase srmethod '_wcsraddhr.csv']);
-    writecell([titlelocline,titledates'],[outputfilebase srmethod '_wcreducehr.csv']);
-    if runcaptureloop==1
-    writecell([titlelocline,titledates'],[outputfilebase srmethod '_wccapturehr.csv']);
+    writecell([titlelocline,titledates'],[outputfilebase '_wchr.csv']);
+    writecell([titlelocline,titledates'],[outputfilebase '_wcsraddhr.csv']);
+    writecell([titlelocline,titledates'],[outputfilebase '_wcreducehr.csv']);
+    if runcaptureloop>0
+    writecell([titlelocline,titledates'],[outputfilebase '_wccapturehr.csv']);
     end
 end
 if outputday==1
@@ -3436,11 +3637,11 @@ if outputday==1
     [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:end));
     daymat=unique([yr,mh,dy],'rows','stable');
     titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
-    writecell([titlelocline,titledatesday'],[outputfilebase srmethod '_wcday.csv']);
-    writecell([titlelocline,titledatesday'],[outputfilebase srmethod '_wcreduceday.csv']);
-    writecell([titlelocline,titledatesday'],[outputfilebase srmethod '_wcsraddday.csv']);
-    if runcaptureloop==1
-    writecell([titlelocline,titledatesday'],[outputfilebase srmethod '_wccaptureday.csv']);
+    writecell([titlelocline,titledatesday'],[outputfilebase '_wcday.csv']);
+    writecell([titlelocline,titledatesday'],[outputfilebase '_wcreduceday.csv']);
+    writecell([titlelocline,titledatesday'],[outputfilebase '_wcsraddday.csv']);
+    if runcaptureloop>0
+    writecell([titlelocline,titledatesday'],[outputfilebase '_wccaptureday.csv']);
     end
 end
 
@@ -3480,7 +3681,7 @@ for w=1:length(wwcnums)
         
            %this is repeating wc output but changing to capture amount at destination.. need/want??
            %if remove above switch for exchanges would need to switch where captureamt placed for exchanges
-           if runcaptureloop==1
+           if runcaptureloop>0
            if i==length(SR.(ds).WCloc.(ws).loc(:,1))
                outputlinewccapture(2*i-1,:)=outputlinewc(2*i-1,:);
                outputlinewccapture(2*i,:)=SR.(ds).WCloc.(ws).captureamt(datestid:end,:)';
@@ -3493,13 +3694,13 @@ for w=1:length(wwcnums)
     end 
     
     if outputhr==1
-        writecell([loclinewc,num2cell(outputlinewc)],[outputfilebase srmethod '_wchr.csv'],'WriteMode','append');
-        writecell([loclinewc,num2cell(outputlinewcsradd)],[outputfilebase srmethod '_wcsraddhr.csv'],'WriteMode','append');
-        if runcaptureloop==1
-        writecell([loclinewc,num2cell(outputlinewccapture)],[outputfilebase srmethod '_wccapturehr.csv'],'WriteMode','append');
+        writecell([loclinewc,num2cell(outputlinewc)],[outputfilebase '_wchr.csv'],'WriteMode','append');
+        writecell([loclinewc,num2cell(outputlinewcsradd)],[outputfilebase '_wcsraddhr.csv'],'WriteMode','append');
+        if runcaptureloop>0
+        writecell([loclinewc,num2cell(outputlinewccapture)],[outputfilebase '_wccapturehr.csv'],'WriteMode','append');
         end
            if outwcreduce==1
-                writecell([loclinewcreduce,num2cell(outputlinewcreduce)],[outputfilebase srmethod '_wcreducehr.csv'],'WriteMode','append');
+                writecell([loclinewcreduce,num2cell(outputlinewcreduce)],[outputfilebase '_wcreducehr.csv'],'WriteMode','append');
            end
     end
 
@@ -3508,20 +3709,20 @@ for w=1:length(wwcnums)
             dayids=find(yr==daymat(i,1) & mh==daymat(i,2) & dy==daymat(i,3));
             outputlinedaywc(:,i)=mean(outputlinewc(:,dayids),2);
             outputlinedaywcsradd(:,i)=mean(outputlinewcsradd(:,dayids),2);
-            if runcaptureloop==1
+            if runcaptureloop>0
             outputlinedaywccapture(:,i)=mean(outputlinewccapture(:,dayids),2);
             end
            if outwcreduce==1
                 outputlinedaywcreduce(:,i)=mean(outputlinewcreduce(:,dayids),2);
            end
         end
-        writecell([loclinewc,num2cell(outputlinedaywc)],[outputfilebase srmethod '_wcday.csv'],'WriteMode','append');        
-        writecell([loclinewc,num2cell(outputlinedaywcsradd)],[outputfilebase srmethod '_wcsraddday.csv'],'WriteMode','append');
-        if runcaptureloop==1
-        writecell([loclinewc,num2cell(outputlinedaywccapture)],[outputfilebase srmethod '_wccaptureday.csv'],'WriteMode','append');
+        writecell([loclinewc,num2cell(outputlinedaywc)],[outputfilebase '_wcday.csv'],'WriteMode','append');        
+        writecell([loclinewc,num2cell(outputlinedaywcsradd)],[outputfilebase '_wcsraddday.csv'],'WriteMode','append');
+        if runcaptureloop>0
+        writecell([loclinewc,num2cell(outputlinedaywccapture)],[outputfilebase '_wccaptureday.csv'],'WriteMode','append');
         end
         if outwcreduce==1
-            writecell([loclinewcreduce,num2cell(outputlinedaywcreduce)],[outputfilebase srmethod '_wcreduceday.csv'],'WriteMode','append');             
+            writecell([loclinewcreduce,num2cell(outputlinedaywcreduce)],[outputfilebase '_wcreduceday.csv'],'WriteMode','append');             
         end
     end
 end
@@ -3533,20 +3734,22 @@ end
 % OUTPUT - comparison of gage and simulated amounts at gage
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if outputcal==1 & runcalibloop==1
+if outputcal==1 & runcalibloop>0
     logm=['Starting output of files listing just at gage locations at: ' datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
 
     titlelocline=[{'WDID'},{'Abbrev'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-Gage/2-Sim'}];
     if outputhr==1
-        titledates=cellstr(datestr(rdates(datestid:end),'mm/dd/yy HH:'));
-        writecell([titlelocline,titledates'],[outputfilebase srmethod '_calhr.csv']);
+%        titledates=cellstr(datestr(rdates(datestid:end),'mm/dd/yy HH:'));
+        titledates=cellstr(datestr(rdates(calibstid:calibendid),'mm/dd/yy HH:'));
+        writecell([titlelocline,titledates'],[outputfilebase '_calhr.csv']);
     end
     if outputday==1
-        [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:end));
+%        [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:end));
+        [yr,mh,dy,hr,mi,sec] = datevec(rdates(calibstid:calibendid));
         daymat=unique([yr,mh,dy],'rows','stable');
         titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
-        writecell([titlelocline,titledatesday'],[outputfilebase srmethod '_calday.csv']);
+        writecell([titlelocline,titledatesday'],[outputfilebase '_calday.csv']);
     end
     iadd=0;
     for wd=WDcaliblist
@@ -3556,15 +3759,15 @@ if outputcal==1 & runcalibloop==1
             j=wdsids(i);
             loclinegage(2*(i+iadd)-1,:)=[SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4),{1}];  %includes both gage and simulated on subseqent lines
             loclinegage(2*(i+iadd),:)=  [SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4),{2}];
-            outputlinegage(2*(i+iadd)-1,:)=SR.(ds).Gageloc.flowgage(datestid:end,j)';
-            outputlinegage(2*(i+iadd),:)=SR.(ds).Gageloc.flowcal(datestid:end,j)';
+            outputlinegage(2*(i+iadd)-1,:)=SR.(ds).Gageloc.flowgage(calibstid:calibendid,j)';
+            outputlinegage(2*(i+iadd),:)=SR.(ds).Gageloc.flowcal(calibstid:calibendid,j)';
         end
         iadd=i;
     end
     if outputhr==1
         logm=['writing hourly output files for gage and simulated (calibration) amounts (hourly is a bit slow), starting: ' datestr(now)];
         domessage(logm,logfilename,displaymessage,writemessage)
-        writecell([loclinegage,num2cell(outputlinegage)],[outputfilebase srmethod '_calhr.csv'],'WriteMode','append');
+        writecell([loclinegage,num2cell(outputlinegage)],[outputfilebase '_calhr.csv'],'WriteMode','append');
     end
     if outputday==1
         logm=['writing daily output files for gage and simulated (calibration) amounts, starting: ' datestr(now)];
@@ -3573,7 +3776,7 @@ if outputcal==1 & runcalibloop==1
             dayids=find(yr==daymat(i,1) & mh==daymat(i,2) & dy==daymat(i,3));
             outputlinedaygage(:,i)=mean(outputlinegage(:,dayids),2);
         end
-        writecell([loclinegage,num2cell(outputlinedaygage)],[outputfilebase srmethod '_calday.csv'],'WriteMode','append');        
+        writecell([loclinegage,num2cell(outputlinedaygage)],[outputfilebase '_calday.csv'],'WriteMode','append');        
     end
 end
 
@@ -3590,6 +3793,7 @@ domessage(logm,logfilename,displaymessage,writemessage)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 
+end %StateTL as deployed function
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % function to calculate celerity and dispersion based on Q
@@ -3767,9 +3971,13 @@ end
 
 stagedischarge=SR.(ds).stagedischarge.(['SD' num2str(SR.(ds).(wds).(rs).sdnum(sr))]);
 
+srtitlefull='                    ';
+srtitlepart=[ds ' ' wds ' ' rs ' SR' num2str(sr)];
+srtitlefull(1:length(srtitlepart))=srtitlepart;
+
 fid=fopen([j349dir inputcardfilename],'w');
 
-cardstr='CDWR TIMING AND TRANSIT LOSS MODEL                                              CARD 1 GEN INFO';
+cardstr=['CDWR TIMING AND TRANSIT LOSS MODEL ' srtitlefull '                         CARD 1 GEN INFO'];
     fprintf(fid,'%95s\r\n',cardstr);
 cardstr='SUBREACH  UPSTREAM                                                              CARD 2 RUN INFO';
     fprintf(fid,'%95s\r\n',cardstr);
@@ -3902,16 +4110,27 @@ end
 
 fclose(fid);
 
-fid=fopen([j349dir filenamesfilename],'w');
-fprintf(fid,'%s\r\n',inputcardfilename);
-fprintf(fid,'%s\r\n',outputcardfilename);
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % the following uses a small file to list filenames
+% %  - without command line arguments this has to be saved in root directory which risks messup if multiple instances running
+% %  - currently turned off to instead use command line arguments
+% fid=fopen([filenamesfilename],'w');
+% fprintf(fid,'%s\r\n',[j349dir inputcardfilename]);
+% fprintf(fid,'%s\r\n',[j349dir outputcardfilename]);
+% if j349fast==1
+%     fprintf(fid,'%s\r\n',[j349dir outputbinfilename]);
+% end
+% fclose(fid);
+% [s, w] = dos(['StateTL_j349.exe']);  %changed this from just j349.exe
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% the following uses command line arguments to pass input/output filenames
+% appears the double quotes will work (but not single quotes) for passing filenames with potential whitespaces
 if j349fast==1
-    fprintf(fid,'%s\r\n',outputbinfilename);
+    [s, w] = dos(['StateTL_j349.exe -f "' [j349dir inputcardfilename] '" "' [j349dir outputcardfilename] '" "' [j349dir outputbinfilename]]);
+else
+    [s, w] = dos(['StateTL_j349.exe -f "' [j349dir inputcardfilename] '" "' [j349dir outputcardfilename]]);
 end
-fclose(fid);
-
-[s, w] = dos([j349dir 'StateTL_j349.exe']);  %changed this from just j349.exe
-
 
 if j349fast==1
    fid=fopen([j349dir outputbinfilename],'r');
@@ -4307,7 +4526,6 @@ else
 end
 
 end
-
 
 
 

@@ -4,6 +4,7 @@ This folder contains the matlab based model engine code developed by the State o
 * [Other Files Needed](#other-files-needed)
 * [Summary of Changes](#summary-of-changes)
 * [Primary Processes Built](#primary-processes-built)
+* [Usage Notes](#usage-notes)
 * [Compiling](#compiling)
 
 ## Background
@@ -45,6 +46,7 @@ The original model engine code was functional in 2019.  This code (as slightly m
 3. June 2021 - To attempt to deal with inadvertent diversion issue, river and water class loops were integrated/nested loop and operated reach by reach so that could iterate back on river flows based on sum of water classes releases (ie when negative native flows were found)
 4. late July 2021 - To improve efficiency for calibration, nested loops were re-separated so that the river flow loop could operate without the water class loop (which is the most time consuming but not needed for calibration).  This broke the action to increase intermediate (between gage) river flows when intermediate negative native flows were encountered, but the initial/current perspective of the COW team was that we should allow potentially negative native flows due to both inaccuracies in calculations and a common practice in Div2 to exchange on reservoir releases.  Loops still operate on a reach basis for all water classes rather than running a complete analysis for each water class as originally done.
 5. October 2021 - initiation of version management using github and recommended CDSS practices
+6. November 2021 - enable data folders and command line arguments
 
 ## Primary Processes Built
 Primary processes and components that have so-far been built include:
@@ -67,6 +69,18 @@ Primary processes and components that have so-far been built include:
 * j349 64bit gfortran exe with dimensions up to 1 year (366 days plus 9 day spinup)
 * options for single or multiple linearization method and “fast” binary file output
 * filling routine to fill missing telemetry data or extend data into future
+* enable command line arguments to control data folder and calibration options
+
+## Usage Notes
+An initial set of command line arguments have been enabled to control a model engine.  Command line option arguments include -f and -c to trigger folder and calibration options.  Additional arguments for these options currently must follow the option command.  Example usage includes:
+```StateTL -f \calibration\Par.1``` - initial \ will create calibration folder at same level as folder with code (ie matlab and calibration folders at same level)
+```StateTL -f calibration\Par.1``` - otherwise folder will be placed within code folder (ie create matlab\calibration\Par.1 folder)
+```StateTL -c``` - as trigger calibration options that will override run options in control file
+```StateTL -c 2018,04,02,04,20``` - also override calibration period in control file (year,startmonth,startday,endmonth,endday)
+```StateTL -c WD17``` - override river water district to run calibration on
+```StateTL -f folder1 -c 2018,04,02,04,20,WD17``` - combination of all options; potentially what will be used for calibration
+
+
 
 ## Compiling
 For initial deployment testing, DWR is compiling StateTL to an executable currently using Matlab version 2021b.  To run the executable directly, the free Matlab MCR version 2021b must be installed from the following location.  In the future, the executable may be compiled in a newer version (ie 2022a) but this progression may be stopped after final deployment.
