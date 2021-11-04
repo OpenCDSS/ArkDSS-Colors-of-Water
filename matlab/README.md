@@ -73,13 +73,18 @@ Primary processes and components that have so-far been built include:
 
 ## Usage Notes
 An initial set of command line arguments have been enabled to control a model engine.  Command line option arguments include -f and -c to trigger folder and calibration options.  Additional arguments for these options currently must follow the option command.  Example usage includes:
-```StateTL -f \calibration\Par.1``` - initial \ will create calibration folder at same level as folder with code (ie matlab and calibration folders at same level)
-```StateTL -f calibration\Par.1``` - otherwise folder will be placed within code folder (ie create matlab\calibration\Par.1 folder)
-```StateTL -c``` - as trigger calibration options that will override run options in control file
-```StateTL -c 2018,04,02,04,20``` - also override calibration period in control file (year,startmonth,startday,endmonth,endday)
-```StateTL -c WD17``` - override river water district to run calibration on
-```StateTL -f folder1 -c 2018,04,02,04,20,WD17``` - combination of all options; potentially what will be used for calibration
 
+```StateTL -f \calibration\Par.1``` - create folder at same level as code folder (ie matlab and calibration folders same level)
+
+```StateTL -f calibration\Par.1``` - otherwise folder will be placed within code folder (ie matlab\calibration\Par.1 folder)
+
+```StateTL -c``` - as trigger calibration options that will override run options in control file
+
+```StateTL -c 2018,04,02,04,20``` - also override calibration period in control file (year,startmo,startday,endmo,endday)
+
+```StateTL -c WD17``` - override river water district to run calibration on
+
+```StateTL -f folder1 -c 2018,04,02,04,20,WD17``` - combination of all options; potentially what will be used for calibration
 
 
 ## Compiling
