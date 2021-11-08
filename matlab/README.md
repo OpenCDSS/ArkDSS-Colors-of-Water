@@ -72,46 +72,44 @@ Primary processes and components that have so-far been built include:
 * enable command line arguments to control data folder, calibration, and other options
 
 ## Usage Notes
-An initial set of command line arguments have been enabled to control the StateTL model engine that will override equivalent lines in the control file.  Command line option arguments include -f -c -b -r -s -d -nd -w -nw to trigger folder, calibration, build base files, save, display, and write options.  For the first four of these commands, additional arguments can be defined that must follow the given '-' command.  Example usage includes:
+An initial set of command line arguments have been enabled to control the StateTL model engine that will override equivalent lines in the control file.  Command line option arguments include `-f -c -b -r -s -d -nd -w -nw` to trigger folder, calibration, build base files, save, display, and write options.  For the first four of these commands, additional arguments can be defined that must follow the given '-' command.  Example usage includes:
 
-folder -f command to use data folder for input/output - options/examples:
+folder `-f` command to use data folder for input/output - options/examples:
 
-```StateTL -f \calibration\Par.1``` - create folder at same level as code folder (ie matlab and calibration folders same level)
+`StateTL -f \calibration\Par.1` - create folder at same level as code folder (ie matlab and calibration folders same level)
 
-```StateTL -f calibration\Par.1``` - otherwise folder will be placed within code folder (ie matlab\calibration\Par.1 folder)
+`StateTL -f calibration\Par.1` - otherwise folder will be placed within code folder (ie matlab\calibration\Par.1 folder)
 
-calibration -c command full examples (yearstart,startmo,startday,endmo,endday,water district (must start with 'WD'):
+calibration `-c` command full (year,startmo,startday,endmo,endday,water district (must start with 'WD') and partial argument examples:
 
-```StateTL -c 2018,03,15,11,15,WD17```
+`StateTL -c 2018,03,15,11,15,WD17`
 
-calibration -c command partial argument examples:
-
-```StateTL -c``` ```StateTL -c 2018``` ```StateTL -c 2018,03,15,11,15``` ```StateTL -c WD17``` ```StateTL -c 2018,WD17```  
+`StateTL -c` `StateTL -c 2018` `StateTL -c 2018,03,15,11,15` `StateTL -c WD17` `StateTL -c 2018,WD17` 
 
 
-build -b command used to build binary files without rebuilding evaporation of long term station data (ie to work with a new year but river network has not been altered)
+build `-b` command to build base binary files without rebuilding evaporation or long term station data (ie to work with a new year but river network has not been altered)
 
-```StateTL -b 2018``` ```StateTL -b 2018,03,15,11,15```
+`StateTL -b 2018` `StateTL -b 2018,03,15,11,15`
 
-rebuild -r command used to rebuild binary files including evaporation and long term station data (ie after river network has been altered)
+rebuild `-r` command to rebuild base files including evaporation and long term station data (ie after river network has been altered)
 
-```StateTL -r 2018``` ```StateTL -r 2018,03,15,11,15```
+`StateTL -r 2018` `StateTL -r 2018,03,15,11,15`
 
-save ```-s``` command saves final mat files from calibration or control loops (currently used for plotting)
+save `-s` command saves final mat files from calibration or control loops (currently used for plotting)
 
-display ```-d``` command displays logfile output to screen
+display `-d` command displays logfile output to screen
 
-display ```-nd``` command does not allow display of logfile output to screen
+display `-nd` command does not allow display of logfile output to screen
 
-display ```-w``` command writes logfile output to logfile
+display `-w` command writes logfile output to logfile
 
-display ```-nw``` command does not allow write of logfile output to logfile
+display `-nw` command does not allow write of logfile output to logfile
 
 example expected command line arguments for calibration:
 
-```StateTL -b 2018``` - build new binary base files for full year 2018
+`StateTL -b 2018` - build new binary base files for full year 2018
 
-```StateTL -f \calibration\Par.1 -c 2018,WD17``` - calibrate year 2018 for WD17 with input/output into Par.1 folder
+`StateTL -f \calibration\Par.1 -c 2018,WD17` - calibrate year 2018 for WD17 with input/output into Par.1 folder
 
 
 
