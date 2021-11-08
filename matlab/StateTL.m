@@ -6,15 +6,13 @@
 % cd C:\Projects\Ark\ColorsofWater\matlab
 % deployed as function - but when using as .m, may want to remove start/end function/end statements
 
-function StateTL(varargin)  %end near 3800
+function StateTL(varargin)  %end near 3923
 
 % % comment next lines if using as function
 % clear all
 % %varargin=[];
 % %varargin={'foldertest4'};
-% %varargin=[{'\calibration\caltest8'} {'calibration:2018,04,02,04,20,WD17'}];
-% varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018,04,02,04,20,WD17'}];
-
+% varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
 
 runstarttime=now;
 basedir=cd;basedir=[basedir '\'];
@@ -79,6 +77,7 @@ surfacewaterdayurl='https://dwr.state.co.us/Rest/GET/api/v2/surfacewater/surface
 divrecdayurl='https://dwr.state.co.us/Rest/GET/api/v2/structures/divrec/divrecday/';   %for release/diversion records
 logwdidlocations=1;  %for log also document all wdid locations when pulled for evap
 load([basedir 'StateTL_llave.mat']);
+saveriv=1;savewc=1; %initial settings to save output from river and wc loops
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %READ INITIAL RUN INFO
@@ -101,6 +100,7 @@ for i=1:length(controlvars)  %initially set these to zero
     eval([controlvars{i} '=0;']);
 end
 displaymessage=1; %default 1
+calibstart=0;calibend=0;
 
 while 1
    line = fgetl(fid);
@@ -145,10 +145,10 @@ while 1
        else
            datestart=datenum(yearstart,1,1);
        end
-   elseif strcmpi(line(1:eids(1)-1),'calibstartdate')   %calib startdate year,month,day
-       calibstartdate=datenum(str2double(line(tids(1)+1:tids(2)-1)),str2double(line(tids(2)+1:tids(3)-1)),str2double(line(tids(3)+1:tids(4)-1)));
-   elseif strcmpi(line(1:eids(1)-1),'calibenddate')   %calib enddate year,month,day
-       calibenddate=datenum(str2double(line(tids(1)+1:tids(2)-1)),str2double(line(tids(2)+1:tids(3)-1)),str2double(line(tids(3)+1:tids(4)-1)));
+   elseif strcmpi(line(1:eids(1)-1),'calibstart')   %calib startdate month,day - will later use yearstart
+       calibstart=[str2double(line(tids(1)+1:tids(2)-1)),str2double(line(tids(2)+1:tids(3)-1))];
+   elseif strcmpi(line(1:eids(1)-1),'calibend')   %calib enddate month,day - will later use yearstart
+       calibend=[str2double(line(tids(1)+1:tids(2)-1)),str2double(line(tids(2)+1:tids(3)-1))];
    else
        logtxt='WARNING: control file line not executed: ';
    end
@@ -157,6 +157,12 @@ while 1
 end
 fclose(fid);
 
+if calibstart(1,1)~=0
+    calibstartdate=datenum(yearstart,calibstart(1),calibstart(2));
+end
+if calibend(1,1)~=0
+    calibenddate=datenum(yearstart,calibend(1),calibend(2));
+end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % interpretation of command line arguments if given
@@ -165,6 +171,7 @@ fclose(fid);
 % from matlab: StateTL('-f','\calibration\Par.1','-c','2018,04,02,04,20,WD17')
 % compiled: StateTL -f \calibration\Par.1 -c 2018,04,02,04,20,WD17
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
 
 if isempty(varargin)
     datadir=basedir;
@@ -176,155 +183,275 @@ else
         logmcv=[logmcv ' ' varargin{i}];
     end
     logmc=[logmc;logmcv];
+
     %first command line input argument generally defines folder to put data into
-    varloop=1;
+    varloop=1;ccmd=0;bcmd=0;
     i=1;
     while varloop==1
+        switch lower(varargin{i})
 
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        % option-f defines folder to put data into
-        if strcmp(varargin{i},'-f')
-            if length(varargin)>i
-                i=i+1;
-                datadirtxt=varargin{i};
-                if datadirtxt(1)~='-' %indicating another command
-                    if datadirtxt(1)=='\'  %if first char is '\' backup one level to place folder at some level as matlab folder
-                        slashids=find(basedir=='\');
-                        datadir=[basedir(1:slashids(end-1)-1) datadirtxt];
-                    else
-                        datadir=[basedir datadirtxt];
-                    end
-                    if datadir(end)~='\'
-                        datadir=[datadir '\'];
-                    end
-                    logmc=[logmc;'Command Line Option -f: datadir=' datadir];
-                    if length(varargin)==i
-                        varloop=0;
-                    else
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % option-f defines data folder, must have folder listed after cmd, \folder or \folder\folder indicates same level as matlab folder, folder or folder\folder indicates put folder below matlab folder
+            case '-f'
+                if length(varargin)>i
+                    cmdtxt=varargin{i+1};
+                    if cmdtxt(1)~='-' %indicating another command
                         i=i+1;
-                    end
-
-                    %check if folder (make if not) or if inputfilename already in folder
-                    if isfolder(datadir) %if inputfilename is in folder, use that as input (otherwise use one in basedir)
-                        if isfile([datadir inputfilename])
-                            inputfilename=[datadir inputfilename];
-                            logmc=[logmc;'Inputfile in folder: ' inputfilename];
+                        if cmdtxt(1)=='\'  %if first char is '\' backup one level to place folder at some level as matlab folder
+                            slashids=find(basedir=='\');
+                            datadir=[basedir(1:slashids(end-1)-1) cmdtxt];
+                        else
+                            datadir=[basedir cmdtxt];
                         end
+                        if datadir(end)~='\'
+                            datadir=[datadir '\'];
+                        end
+                        logmc=[logmc;'Command Line Option -f: datadir=' datadir];
+
+                        %check if folder (make if not) or if inputfilename already in folder
+                        if isfolder(datadir) %if inputfilename is in folder, use that as input (otherwise use one in basedir)
+                            if isfile([datadir inputfilename])
+                                inputfilename=[datadir inputfilename];
+                                logmc=[logmc;'Inputfile in folder: ' inputfilename];
+                            end
+                        else
+                            mkdir(datadir);  %mkdir if data directory doesnt exist, debating if would want to copy in inputfile
+                            logmc=[logmc;'Data folder created: ' datadir];
+                        end
+
+                        % if also copydatafiles=1 then copy datafiles from main matlab folder into command line specified folder
+                        % (to avoid potential issues with multiple instances)
+                        if copydatafiles==1
+                            datafiledir=datadir;
+                            logmc=[logmc;'Copying datafiles from: ' basedir ' to ' datadir ' starting:' datestr(now)];
+                            copyfile([basedir 'StateTL_data_subreach.mat'],[datadir 'StateTL_data_subreach.mat']);
+                            copyfile([basedir 'StateTL_data_evap.mat'],[datadir 'StateTL_data_evap.mat']);
+                            copyfile([basedir 'StateTL_data_stagedis.mat'],[datadir 'StateTL_data_stagedis.mat']);
+                            copyfile([basedir 'StateTL_data_qnode.mat'],[datadir 'StateTL_data_qnode.mat']);
+                            copyfile([basedir 'StateTL_data_release.mat'],[datadir 'StateTL_data_release.mat']);
+                            logmc=[logmc;'Copying datafiles done: ' datestr(now) ' file: StateTL_data_subreach.mat,StateTL_data_evap.mat,StateTL_data_stagedis.mat,StateTL_data_qnode.mat,StateTL_data_release.mat'];
+                        else
+                            datafiledir=basedir;
+                        end
+
+                        % output and log to data folder
+                        outputfilebase=[datadir outputfilebase];
+                        logfilename=[datadir logfilename];
+                        logmc=[logmc;'output directory and basename: ' outputfilebase];
+                        logmc=[logmc;'logfilename directory: ' logfilename];
+
                     else
-                        mkdir(datadir);  %mkdir if data directory doesnt exist, debating if would want to copy in inputfile
-                        logmc=[logmc;'Data folder created: ' datadir];
+                        logmc=[logmc;'Warning Command Line Option -f but no folder listed before next command option'];
                     end
-
-                    % if also copydatafiles=1 then copy datafiles from main matlab folder into command line specified folder
-                    % (to avoid potential issues with multiple instances)
-                    if copydatafiles==1
-                        datafiledir=datadir;
-                        logmc=[logmc;'Copying datafiles from: ' basedir ' to ' datadir ' starting:' datestr(now)];
-                        copyfile([basedir 'StateTL_data_subreach.mat'],[datadir 'StateTL_data_subreach.mat']);
-                        copyfile([basedir 'StateTL_data_evap.mat'],[datadir 'StateTL_data_evap.mat']);
-                        copyfile([basedir 'StateTL_data_stagedis.mat'],[datadir 'StateTL_data_stagedis.mat']);
-                        copyfile([basedir 'StateTL_data_qnode.mat'],[datadir 'StateTL_data_qnode.mat']);
-                        copyfile([basedir 'StateTL_data_release.mat'],[datadir 'StateTL_data_release.mat']);
-                        logmc=[logmc;'Copying datafiles done: ' datestr(now) ' file: StateTL_data_subreach.mat,StateTL_data_evap.mat,StateTL_data_stagedis.mat,StateTL_data_qnode.mat,StateTL_data_release.mat'];
-                    else
-                        datafiledir=basedir;
-                    end
-                    
-                    % output and log to data folder
-                    outputfilebase=[datadir outputfilebase];
-                    logfilename=[datadir logfilename];
-                    logmc=[logmc;'output directory and basename: ' outputfilebase];
-                    logmc=[logmc;'logfilename directory: ' logfilename];
-
-
                 else
-                    logmc=[logmc;'Warning Command Line Option -f but no folder listed before next command option'];                
+                    logmc=[logmc;'Warning Command Line Option -f but no folder listed afterwards'];
+                    varloop=0;
                 end
-            else
-                logmc=[logmc;'Warning Command Line Option -f but no folder listed afterwards'];
-                varloop=0;
-            end
-        end
 
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % option-c defines do calibration - can have optional additional arguments of year,sm,sd,em,ed,WDxx / year / WDxx / year,WDxx /
+            case '-c'
+                ccmd=1;
 
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        % option-c defines do calibration - can have optional additional arguments of year,sm,sd,em,ed,WDxx
-        
-        if strcmp(varargin{i},'-c') % option-c defines do calibration
+                readinputfile=2;  %will read new inputfile but not save mat file
+                logmc=[logmc;'calibration command option: readinputfile=2'];
 
-            readinputfile=2;  %will read new inputfile but not save mat file
-            readstagedischarge=0;
-            readevap=0;
-            pullstationdata=0;
-            pulllongtermstationdata=0;
-            pullreleaserecs=0;
-            runriverloop=2;
-            runwcloop=0;
-            doexchanges=0;
-            runcaptureloop=0;
-            runcalibloop=1;
-            displaymessage=0;
-            writemessage=1;
-            outputgage=0;
-            outputwc=0;
-            outputcal=1;
+                if bcmd==0  %if build command previously issued - let those options govern these
+                    readstagedischarge=0;
+                    readevap=0;
+                    pullstationdata=0;
+                    pulllongtermstationdata=0;
+                    pullreleaserecs=0;
+                    logmc=[logmc;'calibration command option: readstagedischarge=0'];
+                    logmc=[logmc;'calibration command option: readevap=0'];
+                    logmc=[logmc;'calibration command option: pullstationdata=0'];
+                    logmc=[logmc;'calibration command option: pulllongtermstationdata=0'];
+                    logmc=[logmc;'calibration command option: pullreleaserecs=0'];
+                end
 
-            %ergg not great - but repeat options verbatim here for log file
-            logmc=[logmc;'calibration command option: readinputfile=2'];
-            logmc=[logmc;'calibration command option: readstagedischarge=0'];
-            logmc=[logmc;'calibration command option: readevap=0'];
-            logmc=[logmc;'calibration command option: pullstationdata=0'];
-            logmc=[logmc;'calibration command option: pulllongtermstationdata=0'];
-            logmc=[logmc;'calibration command option: pullreleaserecs=0'];
-            logmc=[logmc;'calibration command option: runriverloop=2'];
-            logmc=[logmc;'calibration command option: runwcloop=0'];
-            logmc=[logmc;'calibration command option: doexchanges=0'];
-            logmc=[logmc;'calibration command option: runcaptureloop=0'];
-            logmc=[logmc;'calibration command option: runcalibloop=1'];
-            logmc=[logmc;'calibration command option: displaymessage=0'];
-            logmc=[logmc;'calibration command option: writemessage=1'];
-            logmc=[logmc;'calibration command option: outputgage=0'];
-            logmc=[logmc;'calibration command option: outputwc=0'];
-            logmc=[logmc;'calibration command option: outputcal=1'];
-            if length(varargin)>i
-                i=i+1;
-                cmdtxt=varargin{i};
-                if datadirtxt(1)~='-' %indicating another command
-                    cids=find(cmdtxt==',');
-                    if isempty(cids) && ~strcmp(cmdtxt(1:2),'WD')
-                        yearstart=str2double(cmdtxt(1:end));
-                        logmc=[logmc;'Command Line Argument: yearstart=' num2str(yearstart)];
-                    elseif ~isempty(cids)
+                runriverloop=2;
+                runwcloop=0;
+                doexchanges=0;
+                runcaptureloop=0;
+                runcalibloop=1;
+                displaymessage=0;
+                writemessage=1;
+                outputgage=0;
+                outputwc=0;
+                outputcal=1;
+
+                %ergg not great - but repeat options verbatim here for log file
+                logmc=[logmc;'calibration command option: runriverloop=2'];
+                logmc=[logmc;'calibration command option: runwcloop=0'];
+                logmc=[logmc;'calibration command option: doexchanges=0'];
+                logmc=[logmc;'calibration command option: runcaptureloop=0'];
+                logmc=[logmc;'calibration command option: runcalibloop=1'];
+                logmc=[logmc;'calibration command option: displaymessage=0'];
+                logmc=[logmc;'calibration command option: writemessage=1'];
+                logmc=[logmc;'calibration command option: outputgage=0'];
+                logmc=[logmc;'calibration command option: outputwc=0'];
+
+                if length(varargin)>i
+                    cmdtxt=varargin{i+1};
+                    if cmdtxt(1)~='-' %indicating another command
+                        i=i+1;
+                        cids=find(cmdtxt==',');
                         tids=[cids,length(cmdtxt)+1];
-                        yearstart=str2double(cmdtxt(1:tids(1)-1));
-                        calibstartdate=datenum(yearstart,str2double(cmdtxt(tids(1)+1:tids(2)-1)),str2double(cmdtxt(tids(2)+1:tids(3)-1)));
-                        calibenddate=datenum(yearstart,str2double(cmdtxt(tids(3)+1:tids(4)-1)),str2double(cmdtxt(tids(4)+1:tids(5)-1)));
-                        logmc=[logmc;'Command Line Argument: yearstart=' num2str(yearstart)];
-                        logmc=[logmc;'Command Line Argument: calibration start=' datestr(calibstartdate,23)];
-                        logmc=[logmc;'Command Line Argument: calibration end=' datestr(calibenddate,23)];
-                        if length(cids)>4
-                            WDcaliblist=str2double(cmdtxt(tids(5)+3:tids(6)-1)); %counting on WD and just a single calibration reach
-                            logmc=[logmc;'Command Line Argument: WDcaliblist=' num2str(WDcaliblist)];
+                        if (isempty(cids) && ~strcmp(cmdtxt(1:2),'WD')) || length(cids)==1
+                            yearstart=str2double(cmdtxt(1:tids(1)-1));
+                            calibstartdate=datenum(yearstart,calibstart(1),calibstart(2));
+                            calibenddate=datenum(yearstart,calibend(1),calibend(2));
+                            logmc=[logmc;'calibration command line argument: yearstart=' num2str(yearstart)];
+                            logmc=[logmc;'calibration command line argument: calibration start=' datestr(calibstartdate,23)];
+                            logmc=[logmc;'calibration command line argument: calibration end=' datestr(calibenddate,23)];
+                            if length(cids)==1
+                                WDcaliblist=str2double(cmdtxt(tids(1)+3:tids(2)-1)); %counting on WD and just a single calibration reach
+                                logmc=[logmc;'calibration command line argument: WDcaliblist=' num2str(WDcaliblist)];
+                            end
+                        elseif ~isempty(cids)
+                            yearstart=str2double(cmdtxt(1:tids(1)-1));
+                            calibstartdate=datenum(yearstart,str2double(cmdtxt(tids(1)+1:tids(2)-1)),str2double(cmdtxt(tids(2)+1:tids(3)-1)));
+                            calibenddate=datenum(yearstart,str2double(cmdtxt(tids(3)+1:tids(4)-1)),str2double(cmdtxt(tids(4)+1:tids(5)-1)));
+                            logmc=[logmc;'calibration command line argument: yearstart=' num2str(yearstart)];
+                            logmc=[logmc;'calibration command line argument: calibration start=' datestr(calibstartdate,23)];
+                            logmc=[logmc;'calibration command line argument: calibration end=' datestr(calibenddate,23)];
+                            if length(cids)>4
+                                WDcaliblist=str2double(cmdtxt(tids(5)+3:tids(6)-1)); %counting on WD and just a single calibration reach
+                                logmc=[logmc;'calibration command line argument: WDcaliblist=' num2str(WDcaliblist)];
+                            end
+                        else
+                            WDcaliblist=str2double(cmdtxt(3:end));
+                            logmc=[logmc;'calibration command line argument: WDcaliblist=' num2str(WDcaliblist)];
                         end
-                    else
-                        WDcaliblist=str2double(cmdtxt(3:end));
-                        logmc=[logmc;'Command Line Argument: WDcaliblist=' num2str(WDcaliblist)];
                     end
-                    if length(varargin)==i
-                        varloop=0;
-                    end
-                    i=i+1;
                 end
-            else %no additional calibration options
-                varloop=0;
-            end
+
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % option -b defines build base binary files, as typically if switching to a new year or period
+            % in this case, evaporation and long term station data would not be rebuilt (only required if change in network)
+            % option -4 defines rebuild base binary files, as typically to rebuid after a change in the river networks
+            % in this case, evaporation and long term station data be rebuilt (so slower)
+            % - both can have optional additional arguments of year / year,sm,sd,em,ed
+            case {'-b','-r'}
+                bcmd=1;
+                if strcmpi(varargin{i},'-b')
+                    readinputfile=0;
+                    readstagedischarge=0;
+                    readevap=0;
+                    pullstationdata=1;
+                    pulllongtermstationdata=0;
+                    pullreleaserecs=1;
+                    logmc=[logmc;'build command option: readinputfile=0'];
+                    logmc=[logmc;'build command option: readstagedischarge=0'];
+                    logmc=[logmc;'build command option: readevap=0'];
+                    logmc=[logmc;'build command option: pullstationdata=1'];
+                    logmc=[logmc;'build command option: pulllongtermstationdata=0'];
+                    logmc=[logmc;'build command option: pullreleaserecs=1'];
+                else
+                    readinputfile=1;
+                    readstagedischarge=1;
+                    readevap=1;
+                    pullstationdata=1;
+                    pulllongtermstationdata=1;
+                    pullreleaserecs=1;
+                    logmc=[logmc;'rebuild command option: readinputfile=1'];
+                    logmc=[logmc;'rebuild command option: readstagedischarge=1'];
+                    logmc=[logmc;'rebuild command option: readevap=1'];
+                    logmc=[logmc;'rebuild command option: pullstationdata=1'];
+                    logmc=[logmc;'rebuild command option: pulllongtermstationdata=1'];
+                    logmc=[logmc;'rebuild command option: pullreleaserecs=1'];
+                end
+                
+                if ccmd==0  %if calibration command previously issued - let calib options govern
+                    runriverloop=0;
+                    runwcloop=0;
+                    doexchanges=0;
+                    runcaptureloop=0;
+                    runcalibloop=0;
+                    outputgage=0;
+                    outputwc=0;
+                    outputcal=0;
+
+                    logmc=[logmc;'build/rebuild command option: runriverloop=0'];
+                    logmc=[logmc;'build/rebuild command option: runwcloop=0'];
+                    logmc=[logmc;'build/rebuild command option: doexchanges=0'];
+                    logmc=[logmc;'build/rebuild command option: runcaptureloop=0'];
+                    logmc=[logmc;'build/rebuild command option: runcalibloop=0'];
+                    logmc=[logmc;'build/rebuild command option: outputgage=0'];
+                    logmc=[logmc;'build/rebuild command option: outputwc=0'];
+                    logmc=[logmc;'build/rebuild command option: outputcal=0'];
+                end
+                if length(varargin)>i
+                    cmdtxt=varargin{i+1};
+                    if cmdtxt(1)~='-' %indicating another command
+                        i=i+1;
+                        cids=find(cmdtxt==',');
+                        if isempty(cids)
+                            yearstart=str2double(cmdtxt(1:end));
+                            fullyear=1;
+                            logmc=[logmc;'build/rebuild command line argument: yearstart=' num2str(yearstart)];
+                            logmc=[logmc;'build/rebuild command line argument: fullyear=' num2str(1)];
+                        elseif ~isempty(cids)
+                            tids=[cids,length(cmdtxt)+1];
+                            yearstart=str2double(cmdtxt(1:tids(1)-1));
+                            datestart=datenum(yearstart,str2double(cmdtxt(tids(1)+1:tids(2)-1)),str2double(cmdtxt(tids(2)+1:tids(3)-1)));
+                            dateend=datenum(yearstart,str2double(cmdtxt(tids(3)+1:tids(4)-1)),str2double(cmdtxt(tids(4)+1:tids(5)-1)));
+                            rundays=round(dateend-datestart+1);
+                            logmc=[logmc;'build/rebuild command line argument: yearstart=' num2str(yearstart)];
+                            logmc=[logmc;'build/rebuild command line argument: datestart=' datestr(datestart,23)];
+                            logmc=[logmc;'build/rebuild command line argument: rundays=' num2str(rundays)];
+
+                        end
+                    end
+                end
+
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % option-s overrides savefinalmatfile to save final mat files from calibration or control loops (used for plotting etc)
+            case '-s'
+                savefinalmatfile=1;
+                logmc=[logmc;'save command option: savefinalmatfile=1'];
+
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % option-d overrides displaymessage to display output to screen
+            case '-d'
+                displaymessage=1;
+                logmc=[logmc;'display command option: displaymessage=1'];
+
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % option-nd overrides displaymessage to NOT display output to screen
+            case '-nd'
+                displaymessage=0;
+                logmc=[logmc;'display command option: displaymessage=0'];
+
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % option-w overrides writemessage to write output to logfile
+            case '-w'
+                writemessage=1;
+                logmc=[logmc;'write command option: writemessage=1'];
+
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % option-nd overrides displaymessage to NOT display output to screen
+            case '-nw'
+                writemessage=0;
+                logmc=[logmc;'write command option: writemessage=0'];
+
+            otherwise
+                logmc=[logmc;['Warning command line option: ' varargin{i} ' could not be interpreted and was skipped']];
+
         end
+
+        if length(varargin)==i
+            varloop=0;
+        else
+            i=i+1;
+        end
+
     end
 end
 
 j349dir=datadir;   %if datadir will write fortran i/o there, fortran codes now using a command line argument to use datadir
 logmc=[logmc;'J349 read/write directory: ' j349dir];
-
+%%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Initial log write/display given options from control file
@@ -1253,9 +1380,9 @@ for wd=WDlist
                         drydayids=posids(sort(sortavgdayid(1:max(1,percamt))));
                         avgdayids=posids(sort(sortavgdayid(min(length(sortavgdayid),max(1,percamt+1)):max(1,length(sortavgdayid)-percamt))));
                         wetdayids=posids(sort(sortavgdayid(min(length(sortavgdayid),length(sortavgdayid)-percamt+1):end)));
-                        Station.(ds).(wds).(rs).avgQnodedaydry(i,sr)=mean(avgdaymeas(drydayids));
-                        Station.(ds).(wds).(rs).avgQnodedayavg(i,sr)=mean(avgdaymeas(avgdayids));
-                        Station.(ds).(wds).(rs).avgQnodedaywet(i,sr)=mean(avgdaymeas(wetdayids));
+                        Station.(ds).(wds).(rs).avgQnodedaydry(i,sr)=median(avgdaymeas(drydayids)); %changed this from mean to median
+                        Station.(ds).(wds).(rs).avgQnodedayavg(i,sr)=median(avgdaymeas(avgdayids));
+                        Station.(ds).(wds).(rs).avgQnodedaywet(i,sr)=median(avgdaymeas(wetdayids));
                     end
                 end
                 %need filling here in case any -999
@@ -3132,7 +3259,7 @@ for w=1:length(wwcnums)
 end
 end
 
-if runwcloop==1  %not save if riverloop=2 (ie for calibration)
+if runwcloop==1 %not save if riverloop=2 (ie for calibration)
     save([basedir 'StateTL_bin_wc' srmethod '.mat'],'SR');
 end
 elseif runcaptureloop>0

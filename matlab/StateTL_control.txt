@@ -15,9 +15,9 @@ srmethod='default';        		%will pick j349 or muskingum-cunge based on input d
 %srmethod='muskingum';   			%percent loss TL plus muskingum-cunge for travel time
 j349fast=1;                          %1 for j349 reduces output written by j349, and also uses one single file for input/output, for use in deployment
 j349multurf=0;                       %1 for j349 multiple urf method to do flow routing using variable celerity/dispersion (0 uses single celerity/dispersion for time series) 
-inputfilename='StateTL_inputdata.csv'; %filename used for subreach input data - currently xlsx or csv/txt/dat delimited - if changing base name (ie for calibration), first load evap and stagedischarge from StateTL_inputdata.xlsx 
-datestart=2018,4,01;				%year,month,day as first day of river and wc/release loops; 
-rundays=20;                          %days to run from datestart(plus 30 days spinup); will be overriden by fullyear option
+inputfilename='StateTL_inputdata.csv'; %filename used for subreach input data - currently xlsx or csv/txt/dat delimited - if changing base name (ie for calibration), first load evap and stagedischarge from StateTL_inputdata.xlsx
+datestart=2018;					%start for data and processing, may be full year or some period as year/mo/day; mo/day will be overriden by fullyear option = 1
+rundays=20;                          %days to run from datestart(plus 30 days spinup); will be overriden by fullyear option = 1
 fullyear=1;                          %overrides smaller period and uses year specified in date above but runs for full calendar year (plus 9 days spinup - ie 374 or 375 total days)
 readinputfile=0;				%0,1,2 - 1 reads from inputfile and saves mat file; 2 reads but doesnt save (ie for calibration), otherwise reads mat file;
 readstagedischarge=0;				%1 rereads stagedischarge data and also default methods; but if rereading subreach data dont have to reread (ie for calibration)
@@ -45,6 +45,6 @@ outputhr=0;  					%output on hour timestep
 outputday=1;  					%output on day timestep
 
 WDcaliblist=17;				     %WD to calibrate if running calibloop, if multiple seperate by commas
-calibstartdate=2018,4,01;			%calib startdate year,month,day
-calibenddate=2018,4,18;			%calib enddate year,month,day
+calibstart=3,15;			     %calib start month,day
+calibend=11,15;			           %calib end month,day
 calibavggainloss='mean'; 			%currently 'mean' or 'linreg' - method to set average gain/loss/error correction for period- mean seems to do about as well as linear regression
