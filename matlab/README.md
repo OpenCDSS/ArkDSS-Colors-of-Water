@@ -69,7 +69,7 @@ Primary processes and components that have so-far been built include:
 * j349 64bit gfortran exe with dimensions up to 1 year (366 days plus 9 day spinup)
 * options for single or multiple linearization method and “fast” binary file output
 * filling routine to fill missing telemetry data or extend data into future
-* enable command line arguments to control data folder and calibration options
+* enable command line arguments to control data folder, calibration, and other options
 
 ## Usage Notes
 An initial set of command line arguments have been enabled to control the StateTL model engine that will override equivalent lines in the control file.  Command line option arguments include -f -c -b -r -s -d -nd -w -nw to trigger folder, calibration, build base files, save, display, and write options.  For the first four of these commands, additional arguments can be defined that must follow the given '-' command.  Example usage includes:
@@ -97,11 +97,15 @@ rebuild -r command used to rebuild binary files including evaporation and long t
 
 ```StateTL -r 2018``` ```StateTL -r 2018,03,15,11,15```
 
-save -s command saves final mat files from calibration or control loops (currently used for plotting)
-display -d command displays logfile output to screen
-display -nd command does not allow display of logfile output to screen
-display -w command writes logfile output to logfile
-display -nw command does not allow write of logfile output to logfile
+save ```-s``` command saves final mat files from calibration or control loops (currently used for plotting)
+
+display ```-d``` command displays logfile output to screen
+
+display ```-nd``` command does not allow display of logfile output to screen
+
+display ```-w``` command writes logfile output to logfile
+
+display ```-nw``` command does not allow write of logfile output to logfile
 
 example expected command line arguments for calibration:
 
