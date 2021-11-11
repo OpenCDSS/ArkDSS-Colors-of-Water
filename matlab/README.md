@@ -103,9 +103,11 @@ music `-m` command produces a short sound clip when StateTL finishes
 
 example expected command line arguments for calibration:
 
-`StateTL -b 2018` - build new binary base files for full year 2018
+`StateTL -r 2018` - initially rebuild new binary files for 2018 (or when modify river network)
 
-`StateTL -f \calibration\Par.1 -c 2018,WD17` - calibrate year 2018 for WD17 with input/output into Par.1 folder
+`StateTL -b 2018` - build new binary files for 2018 (when evaluating a new year but didnt modify network)
+
+`StateTL -f \calibration\Par.1 -c 2018,WD17 -p` - calibrate year 2018 for WD17 with input/output into Par.1 folder, -p is optional to plot calibration figures
 
 
 
