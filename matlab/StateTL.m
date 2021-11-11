@@ -189,9 +189,10 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%
 
+datadir=basedir;
+datafiledir=basedir;
+
 if isempty(varargin)
-    datadir=basedir;
-    datafiledir=basedir;
     logmc=[logmc;'Data directory not defined, all files in: ' basedir];
 else
     logmcv='Additional options were defined by command line arguments:';
