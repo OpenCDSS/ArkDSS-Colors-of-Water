@@ -97,13 +97,6 @@ rebuild `-r` command to rebuild base files including evaporation and long term s
 
 save `-s` command saves final mat files from calibration or control loops (currently used for plotting)
 
-display `-d` command displays logfile output to screen
-
-display `-nd` command does not allow display of logfile output to screen
-
-display `-w` command writes logfile output to logfile
-
-display `-nw` command does not allow write of logfile output to logfile
 
 example expected command line arguments for calibration:
 

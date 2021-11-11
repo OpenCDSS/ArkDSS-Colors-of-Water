@@ -6,13 +6,16 @@
 % cd C:\Projects\Ark\ColorsofWater\matlab
 % deployed as function - but when using as .m, may want to remove start/end function/end statements
 
-function StateTL(varargin)  %end near 3923
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% function statement for when deployed
+function StateTL(varargin)  %end near line 4000
 
 % % comment next lines if using as function
 % clear all
-% %varargin=[];
-% %varargin={'foldertest4'};
-% varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
+% varargin=[];
+% varargin=[{'-f'} {'foldertest1'}];
+% %varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
+% varargin=[{'-f'} {'caltest5'} {'-c'} {'2018'} {'-s'} {'-d'}];
 
 runstarttime=now;
 basedir=cd;basedir=[basedir '\'];
@@ -56,6 +59,9 @@ inadv3b_increaseint=0;    %currently using over 3a; similar step as 3a / only us
 minc=1;              %minimum flow applied to celerity, dispersion, and evaporation calculations (dont want to have a zero celerity for reverse operations etc) / this is also seperately in j349/musk functions
 minj349=1;           %minimum flow for j349 application - TLAP uses 1.0
 gainchangelimit=0.1;
+plotcalib=1;         %some additional plots to look at calibration
+    printplots=1;         %for calib plots only, save to calib folder and close
+
 
 evapnew=1;           %1=use new evap method (statewide et dataset) or else old single curve
     evapstartyear=2000;
@@ -69,6 +75,8 @@ useregrfillforgages=0;  %will fill gages with data from closest stations using r
 trendregwindow=14*24;  %hrs to estimate trend for end filling
 avgwindow=[7*24 30*24]; %2 values - 1) hrs to start to apply dry/avg/wet average within weighting, 2) hrs to start to apply straight up average     
 dayvshrthreshold=[0.05 0.15];  %2 percent difference thresholds to apply daily improved data to hourly telemetry data, <first - dont adjust, >=first-adjust hourly data so daily mean equals daily data, >=second-replace hourly data with daily data 
+outputcalregr=1;  %output calibration stats file if doing calibration loop
+calibmovingavgdays=14;  %running average window size in days if using movingavg for calibration; 14days will avg 1 week before and after point
 
 structureurl='https://dwr.state.co.us/Rest/GET/api/v2/structures/';  %currently used to get structure coordinates just for evaporation
 telemetryhoururl='https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour/';  %for gages and ditch telemetry
@@ -77,7 +85,11 @@ surfacewaterdayurl='https://dwr.state.co.us/Rest/GET/api/v2/surfacewater/surface
 divrecdayurl='https://dwr.state.co.us/Rest/GET/api/v2/structures/divrec/divrecday/';   %for release/diversion records
 logwdidlocations=1;  %for log also document all wdid locations when pulled for evap
 load([basedir 'StateTL_llave.mat']);
-saveriv=1;savewc=1; %initial settings to save output from river and wc loops
+
+if ~isdeployed
+ endmusic=1;
+end
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %READ INITIAL RUN INFO
@@ -435,6 +447,12 @@ else
                 writemessage=0;
                 logmc=[logmc;'write command option: writemessage=0'];
 
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % option-m plays music after run - even in deployed (needs handel.mat)
+            case '-m'
+                endmusic=1;
+                logmc=[logmc;'write command option: endmusic=1'];
+
             otherwise
                 logmc=[logmc;['Warning command line option: ' varargin{i} ' could not be interpreted and was skipped']];
 
@@ -517,7 +535,10 @@ if readinputfile>0
 logm=['reading subreach info from file: ' inputfilename];
 domessage(logm,logfilename,displaymessage,writemessage)
 
-if inputfilename(end-3:end)=='xlsx'
+if strcmp(inputfilename(end-3:end),'xlsx') || strcmp(inputfilename(end-2:end),'xls')
+    if ~isfile(inputfilename) && strcmp(inputfilename(end-2:end),'xls')
+       inputfilename=[inputfilename 'x']; %perhaps entered as xls rather than xlsx
+    end
     inforaw=readcell([inputfilename],'Sheet','SR');
 else
     inforaw=readcell([inputfilename]);
@@ -561,6 +582,7 @@ for i=1:inforawcol
     elseif strcmpi(inforaw{infoheaderrow,i},'CELERITY-B'); infocol.celerityb=i;
     elseif strcmpi(inforaw{infoheaderrow,i},'CelerityMethod'); infocol.celeritymethod=i;
     elseif strcmpi(inforaw{infoheaderrow,i},'DispersionMethod'); infocol.dispersionmethod=i;
+    elseif strcmpi(inforaw{infoheaderrow,i},'URFThreshold'); infocol.urfthreshold=i;
     elseif strcmpi(inforaw{infoheaderrow,i},'SDNUM'); infocol.sdnum=i;
     elseif strcmpi(inforaw{infoheaderrow,i},'CLOSURE'); infocol.closure=i;
     elseif strcmpi(inforaw{infoheaderrow,i},'GAININITIAL'); infocol.gaininitial=i;
@@ -628,7 +650,8 @@ for i=infoheaderrow+1:inforawrow
         v.ca=inforaw{i,infocol.celeritya};if ischar(v.ca); v.ca=str2num(v.ca); end
         v.cb=inforaw{i,infocol.celerityb};if ischar(v.cb); v.cb=str2num(v.cb); end 
         v.cm=inforaw{i,infocol.celeritymethod};if ischar(v.cm); v.cm=str2num(v.cm); end
-        v.dm=inforaw{i,infocol.dispersionmethod};if ischar(v.dm); v.dm=str2num(v.dm); end 
+        v.dm=inforaw{i,infocol.dispersionmethod};if ischar(v.dm); v.dm=str2num(v.dm); end
+        v.ut=inforaw{i,infocol.urfthreshold};if ischar(v.ut); v.ut=str2num(v.ut); end
         v.sd=inforaw{i,infocol.sdnum};if ischar(v.sd); v.sd=str2num(v.sd); end
         v.cls=inforaw{i,infocol.closure};if ischar(v.cls); v.cls=str2num(v.cls); end
         v.gi=inforaw{i,infocol.gaininitial};if ischar(v.gi); v.gi=str2num(v.gi); end
@@ -701,13 +724,13 @@ for i=infoheaderrow+1:inforawrow
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).celerityb(v.sr)=v.cb;
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).celeritymethod(v.sr)=v.cm;
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).dispersionmethod(v.sr)=v.dm;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).urfthreshold(v.sr)=v.ut;
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).sdnum(v.sr)=v.sd;
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).closure(v.sr)=v.cls;
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).gaininitial(v.sr)=v.gi;
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).widtha(v.sr)=v.wa;
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).widthb(v.sr)=v.wb;
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).evapfactor(v.sr)=v.ef;
-  
         
         
         if v.rs==1  % releasestructures - structures with Type:7 records that define releases to ds or us exchange
@@ -3270,6 +3293,7 @@ end %runwcloop
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CAPTURE LOOP TO CHARACTERIZE AVAILABLE/CAPTURE AMT
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
 
 if runcaptureloop>0
     logm=['Starting capture loop to characterize release capture amounts versus release/available amounts at: '  datestr(now)];
@@ -3440,6 +3464,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CALIBRATION LOOP TO COMPARE PREDICTED GAGE HYDROGRAPHS TO ACTUAL
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
 
 if runcalibloop>0
     logm=['Starting simulation loop for use in calibration at: '  datestr(now)];
@@ -3458,10 +3483,15 @@ if runcalibloop>0
         logm=['for calibration loop, calibdateend:' datestr(calibenddate) ' not within current data period, so ending calibration period at:' datestr(rdates(calibendid))];
         domessage(logm,logfilename,displaymessage,writemessage)
     end
-    if ~(strcmp(calibavggainloss,'mean') | strcmp(calibavggainloss,'linreg'))
-        logm=['for calibration loop, could not figure out how to average gagediff etc given listed option:' calibavggainloss ' (looking for mean or linreg)'];
+    if ~(strcmp(calibavggainloss,'mean') | strcmp(calibavggainloss,'linreg') | strcmp(calibavggainloss,'movingavg'))
+        logm=['for calibration loop, could not figure out how to average gagediff etc given listed option:' calibavggainloss ' (looking for movingavg mean or linreg)'];
         domessage(logm,logfilename,displaymessage,writemessage)
         error(logm)
+    end
+    if strcmp(calibavggainloss,'movingavg')
+        calibmovingavgwindow=ceil(calibmovingavgdays*24/rhours); %running average window size in hrs; currently using 2-weeks
+        logm=['for calibration loop, with option: ' calibavggainloss ' using averaging window of: ' num2str(calibmovingavgdays) ' to average gain/loss term'];
+        domessage(logm,logfilename,displaymessage,writemessage)
     end
 
 for wd=WDcaliblist
@@ -3483,35 +3513,35 @@ for wd=WDcaliblist
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %for calibration loop - take average or linear regression of gagediffportion and sraddamt and other gain/loss/error terms over defined period
         x=(1:(calibendid-calibstid+1))';
-        
+
         gagediffportion=SR.(ds).(wds).(rs).gagediffportion;
         y=gagediffportion(calibstid:calibendid,:);
-        [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss);
+        [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,calibmovingavgwindow);
         gagediffportion(calibstid:calibendid,:)=yfit;
         SR.(ds).(wds).(rs).gagediffportioncal=gagediffportion;SR.(ds).(wds).(rs).gagediffportionm=m;SR.(ds).(wds).(rs).gagediffportionb=b;SR.(ds).(wds).(rs).gagediffportionR2=R2;
         
         if inadv3a_increaseint == 1
             sraddamt=SR.(ds).(wds).(rs).sraddamt;
             y=sraddamt(calibstid:calibendid,:);
-            [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss);
+            [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,calibmovingavgwindow);
             sraddamt(calibstid:calibendid,:)=yfit;
             SR.(ds).(wds).(rs).sraddamtcal=sraddamt;SR.(ds).(wds).(rs).sraddamtm=m;SR.(ds).(wds).(rs).sraddamtb=b;SR.(ds).(wds).(rs).sraddamtR2=R2;
         elseif inadv3b_increaseint == 1
             sraddamtds=SR.(ds).(wds).(rs).sraddamtds;
             sraddamtus=SR.(ds).(wds).(rs).sraddamtus;
             y=sraddamtds(calibstid:calibendid,:);
-            [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss);
+            [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,calibmovingavgwindow);
             sraddamtds(calibstid:calibendid,:)=yfit;
             SR.(ds).(wds).(rs).sraddamtdscal=sraddamtds;SR.(ds).(wds).(rs).sraddamtdsm=m;SR.(ds).(wds).(rs).sraddamtdsb=b;SR.(ds).(wds).(rs).sraddamtdsR2=R2;
             y=sraddamtus(calibstid:calibendid,:);
-            [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss);
+            [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,calibmovingavgwindow);
             sraddamtus(calibstid:calibendid,:)=yfit;
             SR.(ds).(wds).(rs).sraddamtuscal=sraddamtus;SR.(ds).(wds).(rs).sraddamtusm=m;SR.(ds).(wds).(rs).sraddamtusb=b;SR.(ds).(wds).(rs).sraddamtusR2=R2;
         end
         if adjustlastsrtogage==1
             gagedifflast=SR.(ds).(wds).(rs).gagedifflast;
             y=gagedifflast(calibstid:calibendid,1);
-            [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss);
+            [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,calibmovingavgwindow);
             gagedifflast(calibstid:calibendid,1)=yfit;
             SR.(ds).(wds).(rs).gagedifflastcal=gagedifflast;SR.(ds).(wds).(rs).gagedifflastm=m;SR.(ds).(wds).(rs).gagedifflastb=b;SR.(ds).(wds).(rs).gagedifflastR2=R2;
         end
@@ -3860,6 +3890,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % OUTPUT - comparison of gage and simulated amounts at gage
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
 
 if outputcal==1 & runcalibloop>0
     logm=['Starting output of files listing just at gage locations at: ' datestr(now)];
@@ -3878,6 +3909,10 @@ if outputcal==1 & runcalibloop>0
         titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
         writecell([titlelocline,titledatesday'],[outputfilebase '_calday.csv']);
     end
+    if outputcalregr==1
+        titleregrline=[{'m-hour'},{'R2-hour'},{'SEE-hour'},{'m-day'},{'R2-day'},{'SEE-day'}];
+        writecell([titlelocline(1:end-1),titleregrline],[outputfilebase '_calstats.csv']);
+    end
     iadd=0;
     for wd=WDcaliblist
         wds=['WD' num2str(wd)];
@@ -3886,8 +3921,29 @@ if outputcal==1 & runcalibloop>0
             j=wdsids(i);
             loclinegage(2*(i+iadd)-1,:)=[SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4),{1}];  %includes both gage and simulated on subseqent lines
             loclinegage(2*(i+iadd),:)=  [SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4),{2}];
-            outputlinegage(2*(i+iadd)-1,:)=SR.(ds).Gageloc.flowgage(calibstid:calibendid,j)';
-            outputlinegage(2*(i+iadd),:)=SR.(ds).Gageloc.flowcal(calibstid:calibendid,j)';
+            x=SR.(ds).Gageloc.flowgage(calibstid:calibendid,j);
+            y=SR.(ds).Gageloc.flowcal(calibstid:calibendid,j);
+            outputlinegage(2*(i+iadd)-1,:)=x';
+            outputlinegage(2*(i+iadd),:)=y';
+            if outputcalregr==1
+                [yfit,m,b,R2,SEE]=regr(x,y,'leastsquares');
+                loclinegageregr(i,:)=[SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4)];
+                outputlinegageregr(i,1)=m;
+                outputlinegageregr(i,2)=R2;
+                outputlinegageregr(i,3)=SEE;
+                if plotcalib==1
+                    figure; hold on;
+                    plot(x,y,'b.');
+                    plot([min(x) max(x)],[m*min(x) m*max(x)])
+                    text(.7*max(x),.9*max(y),['R2:' num2str(R2) '-m:' num2str(m)])
+                    tit=[loclinegageregr{i,1} '-' loclinegageregr{i,2}];
+                    title(['Gage vs Sim Hourly Data- ' tit]);
+                    if printplots==1
+                        eval(['print -dpng -r200 ' datadir 'calibhour_fig' num2str(i) '_' tit])
+                        close
+                    end
+                end
+            end
         end
         iadd=i;
     end
@@ -3896,16 +3952,43 @@ if outputcal==1 & runcalibloop>0
         domessage(logm,logfilename,displaymessage,writemessage)
         writecell([loclinegage,num2cell(outputlinegage)],[outputfilebase '_calhr.csv'],'WriteMode','append');
     end
-    if outputday==1
+    if outputday==1 || outputcalregr==1
         logm=['writing daily output files for gage and simulated (calibration) amounts, starting: ' datestr(now)];
         domessage(logm,logfilename,displaymessage,writemessage)
         for i=1:length(daymat(:,1))
             dayids=find(yr==daymat(i,1) & mh==daymat(i,2) & dy==daymat(i,3));
             outputlinedaygage(:,i)=mean(outputlinegage(:,dayids),2);
         end
-        writecell([loclinegage,num2cell(outputlinedaygage)],[outputfilebase '_calday.csv'],'WriteMode','append');        
+        if outputday==1
+            writecell([loclinegage,num2cell(outputlinedaygage)],[outputfilebase '_calday.csv'],'WriteMode','append');
+        end
+        if outputcalregr==1
+            for i=1:length(wdsids)
+                x=outputlinedaygage(2*(i)-1,:)';
+                y=outputlinedaygage(2*(i),:)';
+                [yfit,m,b,R2,SEE]=regr(x,y,'leastsquares');
+                outputlinegageregrday(i,1)=m;
+                outputlinegageregrday(i,2)=R2;
+                outputlinegageregrday(i,3)=SEE;
+                if plotcalib==1
+                    figure; hold on;
+                    plot(x,y,'b.');
+                    plot([min(x) max(x)],[m*min(x) m*max(x)])
+                    text(.7*max(x),.9*max(y),['R2:' num2str(R2) '-m:' num2str(m)])
+                    tit=[loclinegageregr{i,1} '-' loclinegageregr{i,2}];
+                    title(['Gage vs Sim Daily Data- ' tit]);
+                    if printplots==1
+                        eval(['print -dpng -r200 ' datadir 'calibday_fig' num2str(i) '_' tit])
+                        close
+                    end
+                end
+            end
+            writecell([loclinegageregr,num2cell(outputlinegageregr),num2cell(outputlinegageregrday)],[outputfilebase '_calstats.csv'],'WriteMode','append');
+        end
     end
 end
+
+%%
 
 %%%%%%%%%%%%%%%%%%%%%
 % END of mainline script
@@ -3914,11 +3997,19 @@ logm=['Done Running StateTL endtime: ' datestr(now) ' elapsed (DD:HH:MM:SS): ' d
 if displaymessage~=1;disp(logm);end
 domessage(logm,logfilename,displaymessage,writemessage)
 
-% if runcalibloop~=1
+if endmusic==1
+    load handel.mat;
+%     sound(y, Fs);
+%     sound(y, 2*Fs);
+    sound(y(1:floor(length(y)/2)), Fs);
+end
+
+% if ~isdeployed
 % msgbox(logm,'StateTL - Colors of Water Model Engine')
 % end
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% deployed as function with following end statement
 
 end %StateTL as deployed function
 
@@ -4043,6 +4134,7 @@ filenamesfilename='StateTL_filenames.dat';  %changed this from just filenames
 
 qckmultnum=10; %j349 currently set to take table of 10 Q/C/K values (changed from 8 to 10)
 nursf=20; %number of flow urfs to force (max 20), 0 to not force
+minj349=1; %this is repeated from above, may want to pass into function
 
 channellength=SR.(ds).(wds).(rs).channellength(sr);
 alluviumlength=SR.(ds).(wds).(rs).alluviumlength(sr);
@@ -4050,8 +4142,10 @@ transmissivity=SR.(ds).(wds).(rs).transmissivity(sr);
 storagecoefficient=SR.(ds).(wds).(rs).storagecoefficient(sr);
 aquiferwidth=SR.(ds).(wds).(rs).aquiferwidth(sr);
 closure=SR.(ds).(wds).(rs).closure(sr);
+urfthreshold=SR.(ds).(wds).(rs).urfthreshold(sr);
 
-if j349multurf==0   %single urf linearization
+
+if j349multurf==0 || urfthreshold==-999  %single urf linearization
     if length(celerity)>1
         %     if j349multurf=>0
         %         celeritymult=celerity;
@@ -4069,17 +4163,32 @@ if j349multurf==0   %single urf linearization
     Qmax=-999;
 
 else   %multiple urf linearization
+    celerityts=1; %indicating time series of celerity values
     if Qmin==-999
         Qmin=min(Qus);Qmax=max(Qus);  %what if bad spikes in Q?
         if Qmin==Qmax
             Qmax=Qmin+1;
         end
     end
-    Qmulta=(Qmax-Qmin)/(qckmultnum-1);
-    Qmult=[Qmin:Qmulta:Qmax];
-    celerityts=1; %indicating time series of celerity values
+    qcdrepl=0;
+    if Qmax<=urfthreshold  %if Qmax below urfthreshold (ie threshold prob set too high) run as single urf
+        Qmult=urfthreshold;
+        j349multurf=0;
+        celerityts=0;
+    elseif Qmin>=urfthreshold  %Qmin larger than threshold
+        Qmulta=(Qmax-Qmin)/(qckmultnum-2);
+        Qmult=[urfthreshold Qmin:Qmulta:Qmax];
+    else
+        Qmulta=(Qmax-urfthreshold)/(qckmultnum-2);
+        Qmult=[minj349 urfthreshold:Qmulta:Qmax];
+        qcdrepl=1;
+    end
     [celeritymult,dispersionmult]=calcceleritydisp(Qmult,SR.(ds).(wds).(rs).celeritya(sr),SR.(ds).(wds).(rs).celerityb(sr),SR.(ds).(wds).(rs).dispersiona(sr),SR.(ds).(wds).(rs).dispersionb(sr),SR.(ds).(wds).(rs).celeritymethod(sr),SR.(ds).(wds).(rs).dispersionmethod(sr),celerityts);
-    
+    if qcdrepl==1
+        celeritymult(1)=celeritymult(2);
+        dispersionmult(1)=dispersionmult(2);
+    end
+
     %the following numbers would be concerning... but, this is currently required because larger numbers mess up formating - could fix that if larger numbers really required
     if max(dispersionmult)>=10000
         exceedids=find(dispersionmult>=10000);
@@ -4363,14 +4472,23 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % function just to find mean, linear regression, or least squares regression
 %
-function [yfit,m,b,R2,SEE]=regr(x,y,meth)
+function [yfit,m,b,R2,SEE]=regr(x,y,meth,windowsize)
 
 if strcmp(meth,'linreg')
    X=[ones(length(x),1) x];M=X\y;m=M(2,:);b=M(1,:);yfit=m.*x+b;R2=1-sum((y-yfit).^2)./sum((y-mean(y)).^2);SEE=(sum((x-y).^(2))./(length(x)-1)).^(0.5);
-elseif strcmp(meth,'leastsquares')
+elseif strcmp(meth,'leastsquares') %x and y need to be in columns not rows
    m=x\y;yfit=m.*x;R2 = 1 - sum((y - yfit).^2)./sum((y - mean(y)).^2);SEE=(sum((x-y).^(2))./(length(x)-1)).^(0.5);b=zeros(1,length(m));
 elseif strcmp(meth,'mean')
     b=mean(y);yfit=b.*ones(size(y));m=zeros(1,length(b));R2=zeros(1,length(b));SEE=zeros(1,length(b));
+elseif strcmp(meth,'movingavg')    
+%    %using filter - easy but isnt quite centered
+%    yfit=filter(ones(1,windowSize)/windowSize,1,y);
+    %centered moving average
+    halfx=floor(windowsize/2);
+    for i=1:length(y)
+        yfit(i,:)=mean(y(max(1,i-halfx):min(length(y),i+halfx),:));
+    end
+    b=mean(y);m=zeros(1,length(b));R2=zeros(1,length(b));SEE=zeros(1,length(b));
 else
     error(['could not figure out regression method given listed option:' meth ' (looking for mean, linreg, or leastsquares)'])    
 end

@@ -14,25 +14,25 @@ srmethod='default';        		%will pick j349 or muskingum-cunge based on input d
 %srmethod='j349';       			%dynamic j349/Livinston method - only pick one of two methods (comment other)
 %srmethod='muskingum';   			%percent loss TL plus muskingum-cunge for travel time
 j349fast=1;                          %1 for j349 reduces output written by j349, and also uses one single file for input/output, for use in deployment
-j349multurf=0;                       %1 for j349 multiple urf method to do flow routing using variable celerity/dispersion (0 uses single celerity/dispersion for time series) 
-inputfilename='StateTL_inputdata.csv'; %filename used for subreach input data - currently xlsx or csv/txt/dat delimited - if changing base name (ie for calibration), first load evap and stagedischarge from StateTL_inputdata.xlsx
+j349multurf=1;                       %1 for j349 multiple urf method to do flow routing using variable celerity/dispersion (0 uses single celerity/dispersion for time series) 
+inputfilename='StateTL_inputdata.xlsx'; %filename used for subreach input data - currently xlsx or csv/txt/dat delimited - if changing base name (ie for calibration), first load evap and stagedischarge from StateTL_inputdata.xlsx
 datestart=2018;					%start for data and processing, may be full year or some period as year/mo/day; mo/day will be overriden by fullyear option = 1
 rundays=20;                          %days to run from datestart(plus 30 days spinup); will be overriden by fullyear option = 1
 fullyear=1;                          %overrides smaller period and uses year specified in date above but runs for full calendar year (plus 9 days spinup - ie 374 or 375 total days)
-readinputfile=0;				%0,1,2 - 1 reads from inputfile and saves mat file; 2 reads but doesnt save (ie for calibration), otherwise reads mat file;
+readinputfile=1;				%0,1,2 - 1 reads from inputfile and saves mat file; 2 reads but doesnt save (ie for calibration), otherwise reads mat file;
 readstagedischarge=0;				%1 rereads stagedischarge data and also default methods; but if rereading subreach data dont have to reread (ie for calibration)
 readevap=0;					%1 rereads evap; if evapnew=1 repulls locations using HBrest and evap for full time periods, must do if adding/modifing locations or wdids; but if rereading subreach data dont have to reread; 
 pullstationdata=0;				%0,1,2 - read station (gage and telemetry based) flow data; 1 rebuilds and reads from REST, 2 only pull new/modified from REST, 3 loads from saved mat file
 pulllongtermstationdata=0;			%1 reads daily station data from 2000 through previous year to establish dry/wet/avgs for filling; only runs if pullstationdata is 1 or 2
 pullreleaserecs=0;				%0,1,2 - 0 load from saved mat file, 1 if want to repull all from REST(ie for new period), 2 if only pull new/modified from REST for same period
 runriverloop=1;				    	%0,1,2 - 1 runs gageflow loop for full river amounts (ie not individual water classes), 2 won't save mat file, 0 uses mat file
-runwcloop=0;					%0,1,2 - 1 runs water class release loop - have to have run river loop before (saved .mat file) or during, 2 won't save mat file, 0 uses mat file
+runwcloop=1;					%0,1,2 - 1 runs water class release loop - have to have run river loop before (saved .mat file) or during, 2 won't save mat file, 0 uses mat file
 doexchanges=0;					%1 run upstream exchanges - this only operates within wcloop
-runcaptureloop=0;				%1 runs loop to characterize release capture amounts into headgates vs available amount, 0 wont run it
+runcaptureloop=1;				%1 runs loop to characterize release capture amounts into headgates vs available amount, 0 wont run it
 runcalibloop=0;					%1 runs loop to simulate river flows from gage amount at top of wd down without restarting each gage location with gage amount, 0 wont run it
 
 copydatafiles=1;                     %1 copies datafiles from main matlab folder into command line specified folder (to avoid potential issues with multiple instances)
-savefinalmatfile=0;                  %saves final file after capture or calibration loop, big and only need if want StateTLplot for cal after clearing
+savefinalmatfile=1;                  %saves final file after capture or calibration loop, big and only need if want StateTLplot for cal after clearing
 logfilename='StateTL_runlog.txt';  	%log filename if writing
 displaymessage=1;  				%1=display messages to matlab workspace screen
 writemessage=1; 				%1=write messages to logfile
@@ -46,5 +46,5 @@ outputday=1;  					%output on day timestep
 
 WDcaliblist=17;				     %WD to calibrate if running calibloop, if multiple seperate by commas
 calibstart=3,15;			     %calib start month,day
-calibend=11,15;			           %calib end month,day
-calibavggainloss='mean'; 			%currently 'mean' or 'linreg' - method to set average gain/loss/error correction for period- mean seems to do about as well as linear regression
+calibend=11,15;			          %calib end month,day
+calibavggainloss='movingavg'; 	     %currently 'mean' or 'linreg' or 'movingavg' - method to set average gain/loss/error correction for period- mean seems to do about as well as linear regression
