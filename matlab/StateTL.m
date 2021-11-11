@@ -8,14 +8,17 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % function statement for when deployed
-function StateTL(varargin)  %end near line 4000
+% if using as a function from matlab - be sure to type clear all first
+function StateTL(varargin)  %end near line 4050
+%%% StateTL('-f','caltest6','-c','2018','-s','-d','-p')
 
 % % comment next lines if using as function
 % clear all
 % varargin=[];
 % varargin=[{'-f'} {'foldertest1'}];
 % %varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
-% varargin=[{'-f'} {'caltest5'} {'-c'} {'2018'} {'-s'} {'-d'}];
+% varargin=[{'-f'} {'caltest7'} {'-c'} {'2018'} {'-s'} {'-d'} {'-p'}];
+
 
 runstarttime=now;
 basedir=cd;basedir=[basedir '\'];
@@ -59,8 +62,6 @@ inadv3b_increaseint=0;    %currently using over 3a; similar step as 3a / only us
 minc=1;              %minimum flow applied to celerity, dispersion, and evaporation calculations (dont want to have a zero celerity for reverse operations etc) / this is also seperately in j349/musk functions
 minj349=1;           %minimum flow for j349 application - TLAP uses 1.0
 gainchangelimit=0.1;
-plotcalib=1;         %some additional plots to look at calibration
-    printplots=1;         %for calib plots only, save to calib folder and close
 
 
 evapnew=1;           %1=use new evap method (statewide et dataset) or else old single curve
@@ -77,6 +78,7 @@ avgwindow=[7*24 30*24]; %2 values - 1) hrs to start to apply dry/avg/wet average
 dayvshrthreshold=[0.05 0.15];  %2 percent difference thresholds to apply daily improved data to hourly telemetry data, <first - dont adjust, >=first-adjust hourly data so daily mean equals daily data, >=second-replace hourly data with daily data 
 outputcalregr=1;  %output calibration stats file if doing calibration loop
 calibmovingavgdays=14;  %running average window size in days if using movingavg for calibration; 14days will avg 1 week before and after point
+printcalibplots=1;         %for calib plots only, save to calib folder and close
 
 structureurl='https://dwr.state.co.us/Rest/GET/api/v2/structures/';  %currently used to get structure coordinates just for evaporation
 telemetryhoururl='https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour/';  %for gages and ditch telemetry
@@ -451,7 +453,13 @@ else
             % option-m plays music after run - even in deployed (needs handel.mat)
             case '-m'
                 endmusic=1;
-                logmc=[logmc;'write command option: endmusic=1'];
+                logmc=[logmc;'command option: endmusic=1'];
+
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % option-m plays music after run - even in deployed (needs handel.mat)
+            case '-p'
+                plotcalib=1;
+                logmc=[logmc;'command option: plotcalib=1;'];
 
             otherwise
                 logmc=[logmc;['Warning command line option: ' varargin{i} ' could not be interpreted and was skipped']];
@@ -3932,14 +3940,29 @@ if outputcal==1 & runcalibloop>0
                 outputlinegageregr(i,2)=R2;
                 outputlinegageregr(i,3)=SEE;
                 if plotcalib==1
+                    tit=[loclinegageregr{i,1} '-' loclinegageregr{i,2}];
+                    figure; hold on;
+                    figmin=min([min(x),min(y)]);
+                    figmax=max([max(x),max(y)]);
+                    plot([calibstid:1:calibendid]',x,'b','LineWidth',1); hold on;
+                    plot([calibstid:1:calibendid]',y,'r','LineWidth',1)
+                    set(gca,'XLim',[calibstid calibendid],'YLim',[figmin figmax],'Box','on')
+                    title(['Gage and Sim Hourly Data-' tit ' blue=gage/red=sim'])
+                    xlabel('Hours since start of year')
+                    ylabel('Observed Simulated Flow Rate (cfs)')
+                    if printcalibplots==1
+                        eval(['print -dpng -r200 ' datadir 'calibhour1_fig' num2str(i) '_' tit])
+                        close
+                    end
                     figure; hold on;
                     plot(x,y,'b.');
                     plot([min(x) max(x)],[m*min(x) m*max(x)])
                     text(.7*max(x),.9*max(y),['R2:' num2str(R2) '-m:' num2str(m)])
-                    tit=[loclinegageregr{i,1} '-' loclinegageregr{i,2}];
-                    title(['Gage vs Sim Hourly Data- ' tit]);
-                    if printplots==1
-                        eval(['print -dpng -r200 ' datadir 'calibhour_fig' num2str(i) '_' tit])
+                    title(['Gage(x) vs Sim(y) Hourly Data-' tit]);
+                    xlabel('Observed (Gage) Hourly Data (cfs)')
+                    ylabel('Simulated Hourly Data (cfs)')
+                    if printcalibplots==1
+                        eval(['print -dpng -r200 ' datadir 'calibhour2_fig' num2str(i) '_' tit])
                         close
                     end
                 end
@@ -3972,13 +3995,29 @@ if outputcal==1 & runcalibloop>0
                 outputlinegageregrday(i,3)=SEE;
                 if plotcalib==1
                     figure; hold on;
+                    figmin=min([min(x),min(y)]);
+                    figmax=max([max(x),max(y)]);
+                    plot(x,'b','LineWidth',1); hold on;
+                    plot(y,'r','LineWidth',1)
+                    set(gca,'YLim',[figmin figmax],'Box','on')
+                    title(['Gage and Sim Daily Data-' tit ' blue=gage/red=sim'])
+                    xlabel('Days since start of calibration')
+                    ylabel('Observed Simulated Flow Rate (cfs)')
+                    if printcalibplots==1
+                        eval(['print -dpng -r200 ' datadir 'calibday1_fig' num2str(i) '_' tit])
+                        close
+                    end
+
+                    figure; hold on;
                     plot(x,y,'b.');
                     plot([min(x) max(x)],[m*min(x) m*max(x)])
                     text(.7*max(x),.9*max(y),['R2:' num2str(R2) '-m:' num2str(m)])
                     tit=[loclinegageregr{i,1} '-' loclinegageregr{i,2}];
-                    title(['Gage vs Sim Daily Data- ' tit]);
-                    if printplots==1
-                        eval(['print -dpng -r200 ' datadir 'calibday_fig' num2str(i) '_' tit])
+                    title(['Gage(x) vs Sim(y) Daily Data-' tit]);
+                    xlabel('Observed (Gage) Daily Data (cfs)')
+                    ylabel('Simulated Daily Data (cfs)')
+                    if printcalibplots==1
+                        eval(['print -dpng -r200 ' datadir 'calibday2_fig' num2str(i) '_' tit])
                         close
                     end
                 end
