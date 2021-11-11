@@ -97,9 +97,9 @@ rebuild `-r` command to rebuild base files including evaporation and long term s
 
 save `-s` command saves final mat files from calibration or control loops (currently used for plotting)
 
-plot `-p` command plots several calibration relaged plots (currently only for calibration option)
+plot `-p` command plots several calibration related plots (only when runcalibloop=1)
 
-music `-m` command produces a short sound clip when StateTL finishes 
+music `-m` command produces a short sound clip when StateTL finishes
 
 example expected command line arguments for calibration:
 

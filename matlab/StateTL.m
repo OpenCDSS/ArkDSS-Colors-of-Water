@@ -88,8 +88,10 @@ divrecdayurl='https://dwr.state.co.us/Rest/GET/api/v2/structures/divrec/divrecda
 logwdidlocations=1;  %for log also document all wdid locations when pulled for evap
 load([basedir 'StateTL_llave.mat']);
 
-if ~isdeployed
- endmusic=1;
+if isdeployed
+   endmusic=0;
+else
+   endmusic=1;    
 end
 
 
