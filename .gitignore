@@ -1,3 +1,5 @@
 # List files that will not be stored in the git repository
 __pycache__/
 .idea
+venv/
+pyvenv.cfg
