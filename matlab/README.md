@@ -47,6 +47,7 @@ The original model engine code was functional in 2019.  This code (as slightly m
 4. late July 2021 - To improve efficiency for calibration, nested loops were re-separated so that the river flow loop could operate without the water class loop (which is the most time consuming but not needed for calibration).  This broke the action to increase intermediate (between gage) river flows when intermediate negative native flows were encountered, but the initial/current perspective of the COW team was that we should allow potentially negative native flows due to both inaccuracies in calculations and a common practice in Div2 to exchange on reservoir releases.  Loops still operate on a reach basis for all water classes rather than running a complete analysis for each water class as originally done.
 5. October 2021 - initiation of version management using github and recommended CDSS practices
 6. November 2021 - enable data folders and command line arguments
+7. December 2021 - utilize daily diversion records for node flows
 
 ## Primary Processes Built
 Primary processes and components that have so-far been built include:
@@ -70,6 +71,7 @@ Primary processes and components that have so-far been built include:
 * options for single or multiple linearization method and “fast” binary file output
 * filling routine to fill missing telemetry data or extend data into future
 * enable command line arguments to control data folder, calibration, and other options
+* use daily diversion records when no telemetry or to QC telemetry values
 
 ## Usage Notes
 An initial set of command line arguments have been enabled to control the StateTL model engine that will override equivalent lines in the control file.  Command line option arguments include `-f -c -b -r -s -d -nd -w -nw` to trigger folder, calibration, build base files, save, display, and write options.  For the first four of these commands, additional arguments can be defined that must follow the given '-' command.  Example usage includes:
