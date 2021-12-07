@@ -1245,7 +1245,7 @@ if pullstationdata==1
             wds=['WD' num2str(wd)];
             for r=SR.(ds).(wds).R
                 rs=['R' num2str(r)];
-                Station.(ds).(wds).(rs)=rmfield(Station.(ds).(wds).(rs),{'Qmeas','modifieddate','Qfill'});
+                Station.(ds).(wds).(rs)=rmfield(Station.(ds).(wds).(rs),{'Qmeas','Qmeasflag','modifieddate','Qqc','Qqcflag','Qfill','Qfillflag','Qdaily','Qstatdaily','Qdivdaily'});
             end
         end
     else 
