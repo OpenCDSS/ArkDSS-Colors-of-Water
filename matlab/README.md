@@ -45,14 +45,14 @@ The original model engine code was functional in 2019.  This code (as slightly m
 2. May 2021 - renamed StateTL and significant development by DWR staff
 3. June 2021 - To attempt to deal with inadvertent diversion issue, river and water class loops were integrated/nested loop and operated reach by reach so that could iterate back on river flows based on sum of water classes releases (ie when negative native flows were found)
 4. late July 2021 - To improve efficiency for calibration, nested loops were re-separated so that the river flow loop could operate without the water class loop (which is the most time consuming but not needed for calibration).  This broke the action to increase intermediate (between gage) river flows when intermediate negative native flows were encountered, but the initial/current perspective of the COW team was that we should allow potentially negative native flows due to both inaccuracies in calculations and a common practice in Div2 to exchange on reservoir releases.  Loops still operate on a reach basis for all water classes rather than running a complete analysis for each water class as originally done.
-5. October 2021 - initiation of version management using github and recommended CDSS practices
-6. November 2021 - enable data folders and command line arguments
-7. December 2021 - utilize daily diversion records for node flows
+5. October 2021 (Issue #5) - initiation of version management using github and recommended CDSS practices
+6. November 2021 (Issue #14) - enable data folders and command line arguments
+7. December 2021 (Issue #18) - utilize daily diversion records for node flows
 
 ## Primary Processes Built
 Primary processes and components that have so-far been built include:
 * pull gage and diversion (release - Type 7) records using REST services
-* QC hourly telemetry data using daily 'improved' data
+* QC hourly telemetry data using daily 'improved' data (Issue #9 Issue #18)
 * fill missing station (gage and telemetry) data and extending data into future
 * routing - from branch above (ie upper Ark above Pueblo Res) and mid-branch (ie Fountain Creek into main branch)
 * methods - j349 and muskingum (%TL + muskingum routing)
@@ -68,10 +68,10 @@ Primary processes and components that have so-far been built include:
 * Output - currently 22 files (11 hourly / 11 daily) oriented as matrices
 * Utilizes new statewide ET dataset (different evap for every subreach based on loc/elev)
 * j349 64bit gfortran exe with dimensions up to 1 year (366 days plus 9 day spinup)
-* options for single or multiple linearization method and “fast” binary file output
-* filling routine to fill missing telemetry data or extend data into future
-* enable command line arguments to control data folder, calibration, and other options
-* use daily diversion records when no telemetry or to QC telemetry values
+* options for single or multiple linearization method and “fast” binary file output (Issue #7)
+* filling routine to fill missing telemetry data or extend data into future (Issue #9)
+* enable command line arguments to control data folder, calibration, and other options (Issue #14) 
+* use daily diversion records when no telemetry or to QC telemetry values (Issue #18)
 
 ## Usage Notes
 An initial set of command line arguments have been enabled to control the StateTL model engine that will override equivalent lines in the control file.  Command line option arguments include `-f -c -b -r -s -d -nd -w -nw` to trigger folder, calibration, build base files, save, display, and write options.  For the first four of these commands, additional arguments can be defined that must follow the given '-' command.  Example usage includes:

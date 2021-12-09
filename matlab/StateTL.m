@@ -9,17 +9,18 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % function statement for when deployed
 % if using as a function from matlab - be sure to type clear all first
-function StateTL(varargin)  %end near line 4400
-clear SR WC
-% %%% StateTL('-f','caltest6','-c','2018','-s','-d','-p')
+% function StateTL(varargin)  %end near line 4400
+% clear SR WC
+% % %%% StateTL('-f','caltest6','-c','2018','-s','-d','-p')
 
-% % comment next lines if using as function
-% clear all
-% varargin=[];
-% % varargin=[{'-f'} {'foldertest1'}];
-% % varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
+% comment next lines if using as function
+clear all
+varargin=[];
+% varargin=[{'-f'} {'foldertest1'}];
+% varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
 % varargin=[{'-f'} {'caltest3'} {'-c'} {'2018'} {'-s'} {'-d'} {'-p'} {'-m'}];
-% %varargin=[{'-r'} {'2019'}];
+% varargin=[{'-r'} {'2017'}];
+% varargin=[{'-b'} {'2018'}];
 
 runstarttime=now;
 basedir=cd;basedir=[basedir '\'];
@@ -3348,7 +3349,8 @@ if r==Rtb && isfield(SR.(ds).(wds),ws) && isfield(SR.(ds).(wds).(ws),'parkwdidid
     psr=SR.(ds).WDID{parkwdidid,5};   
     lsr=SR.(ds).(wds).(rs).subreachid(sr);
 %    parklsr=SR.(ds).(['WD' num2str(SR.(ds).WDID{wdidtoid,3})]).(['R' num2str(SR.(ds).WDID{wdidtoid,4})]).subreachid(SR.(ds).WDID{wdidtoid,5}); %this should also work - keep in case above breaks down
-    parktype=SR.(ds).(pwds).park{7};  %this was needed when broke from routing loop
+    parklistid=find(strcmp(SR.(ds).(pwds).park(:,1),ws));
+    parktype=SR.(ds).(pwds).park{parklistid,7};  %this was needed when broke from routing loop
     if parktype==2  %for us exchange through internal confluence, placing routed exchange amount at end of US WDreach - cant do this like this like regular us exchange since upper tribs already executed
         parklsr=SR.(ds).(pwds).(['R' num2str(SR.(ds).(pwds).R(end))]).subreachid(end);
         SR.(ds).(pwds).(prs).(ws).Qusnoderelease(:,psr)=zeros(rsteps,1);
@@ -4403,7 +4405,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % deployed as function with following end statement
 
-end %StateTL as deployed function
+%  end %StateTL as deployed function
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % function to calculate celerity and dispersion based on Q
@@ -4765,8 +4767,8 @@ if j349fast==1
    Qds=fread(fid,inf,'float32'); %even though compiled 64bit, seems output as 32bit REAL*4 rather than REAL*8
    %hopefully its the right length etc..
    if length(Qds)~=rsteps
-        errordlg(['ERROR: Qds read from j349 binary file not same length as rsteps for D:' ds ' WD:' wds ' R:' rs ' SR:' num2str(sr)])
-        error(['ERROR: Qds read from j349 binary file not same length as rsteps for D:' ds ' WD:' wds ' R:' rs ' SR:' num2str(sr)])
+        errordlg(['ERROR: Qds read from j349 binary file not same length (' num2str(length(Qds)) ') as rsteps(' num2str(rsteps) ') for D:' ds ' WD:' wds ' R:' rs ' SR:' num2str(sr)])
+        error(['ERROR: Qds read from j349 binary file not same length (' num2str(length(Qds)) ') as rsteps(' num2str(rsteps) ') for D:' ds ' WD:' wds ' R:' rs ' SR:' num2str(sr)])
    end
 else
 
