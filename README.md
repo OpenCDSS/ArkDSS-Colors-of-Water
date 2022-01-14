@@ -26,7 +26,7 @@ The following are folders in the repository.
 
 To ensure you have the proper python libraries installed in your python setup use the following commands, using the command line, **before** the first time the python script is run.
 (Make sure you are in the directory of the requirements.txt or environment.yml file)
-- Python using pip: (This will import the necessary packages into the current python environment (system or virtual))
+- Python using pip: (This will import the necessary packages into the current python environment (recommended to use a virtual environment))
   - pip install -r requirements.txt
 - Anaconda using Anaconda Prompt: (This will create a new Anaconda environment with necessary python version and python packages)
   - conda env create -n **environmentname** -f /**path/to/dir**/environment.yml
@@ -46,9 +46,9 @@ From the command line, run the following code from the matlab directory:
 ## Running Calibration ##
 
 From the command line, navigate to the 'python' directory under the ArkDSS-Colors-of-Water directory and run the following line of code:
-- python run_arkdss_calibration.py
+- python StateTL_calibration.py
 
-The program will take at least several minutes to run. A simple statement saying, 'This test has completed. ' indicates the simulations have.
+The program will take at least several minutes to run. A simple statement saying, 'This test has completed. ' indicates the script has successfully completed running.
 
 -----
 
