@@ -1,0 +1,5 @@
+﻿WD,parameter          ,symbol,value,minimum,maximum,vary
+17,Transmissivity     ,T01   ,10000,10000  ,50000  ,TRUE
+17,Storage coefficient,SC01  ,0.15 ,0.1    ,0.2    ,TRUE
+17,Aquifer width      ,AW01  ,750  ,750    ,3000   ,TRUE
+  

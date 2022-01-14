@@ -1,0 +1,8 @@
+# This is a preliminary working file and will change as we add more functionality
+[Settings]
+vals_per_param = 3
+calib_dir = tests
+results_dir = results
+results_file = results.dat
+log_file = logfile.data
+keep_previous = delete
