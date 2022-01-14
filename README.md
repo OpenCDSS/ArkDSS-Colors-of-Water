@@ -28,8 +28,12 @@ To ensure you have the proper python libraries installed in your python setup us
 (Make sure you are in the directory of the requirements.txt or environment.yml file)
 - Python using pip: (This will import the necessary packages into the current python environment (recommended to use a virtual environment))
   - pip install -r requirements.txt
+- To update Python with the newly included packages using pip:
+  - pip install -I -r requirements.txt
 - Anaconda using Anaconda Prompt: (This will create a new Anaconda environment with necessary python version and python packages)
   - conda env create -n **environmentname** -f /**path/to/dir**/environment.yml
+- To update Anaconda with the newly included packages using the Anaconda Prompt:
+  - conda env update -f environment.yml
 
 -----
 
