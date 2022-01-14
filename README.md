@@ -33,7 +33,7 @@ To ensure you have the proper python libraries installed in your python setup us
 - Anaconda using Anaconda Prompt: (This will create a new Anaconda environment with necessary python version and python packages)
   - conda env create -n **environmentname** -f /**path/to/dir**/environment.yml
 - To update Anaconda with the newly included packages using the Anaconda Prompt:
-  - conda env update -f environment.yml
+  - conda env update -f /**path/to/dir**/environment.yml
 
 -----
 
