@@ -1,12 +1,20 @@
 # -*- coding: utf-8 -*-
 
 """
-Created at 9:07 AM on 11/19/2021.
+Created: 11/19/2021
+Modified: 01/19/2022
 Created by: Rick Lyons
 
-Run simulations for calibrating the Arkansas River for Colorado ArkDSS
+Description:
+Run calibration for the ArkDSS Colors of Water project
+There are severral options for calibrators--parameter study, etc...
+matk is used for parameter study and later (to do) Monte Carlo analysis (more comprehensive)
 
+Two external files are required, in the same folder, to run this script:
+"StateTL_calibration_control.txt", which contains paths and options for the script
+"StateTL_calibration_inputdata.csv" which contains parameter information to calibrate
 """
+
 import os
 import shutil
 import subprocess
@@ -27,25 +35,32 @@ plt.style.use('default')
 
 
 def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
-    # Read calibration inputdata file
-    df = pd.read_csv(data_dir)
+    # Read calibration_inputdata; remove spaces around delimeter
+    df = pd.read_csv(data_dir, sep='\s*[,]\s*', engine='python')
+    # Remove empty lines (Nans) from DataFrame
+    df.dropna(how='all', inplace=True)
+
     # Create list of unique parameter symbols
     symbols_list = df.symbol.unique().tolist()
     # Create dictionary from DataFrame
     parameters = df.to_dict('index')
 
     # Read Matlab input file
-    csv = pd.read_csv(f'{matlab_dir}/{input_csv}')
+    csv_df = pd.read_csv(f'{matlab_dir}/{input_csv}')
     # Create copy of csv input file
-    tpl = csv.copy()
+    tpl = csv_df.copy()
     # Loop through keys in parameter dictionary
     for key in parameters.keys():
-        # items equals nested dictionary
+        # items created from nested dictionary
         items = parameters[key]
-        tpl.loc[tpl['WD'] == items['WD'], items['parameter']] = f'~{items["symbol"]}~'
+        # Check for -1 in 'Reach' column to give same symbol to all reaches
+        if items['Reach'] == -1:
+            # set template file with symbol from calibration inputdata
+            tpl.loc[tpl.WD == items['WD'], items['parameter']] = f'~{items["symbol"]}~'
+        # tpl.loc[tpl['WD'] == items['WD'], items['parameter']] = f'~{items["symbol"]}~'
         # Find row in tpl DataFrame that matches the values for 'WD' and 'Reach' in nested dictionary
         # and replace value in 'parameter' cell with value from nested dictionary in 'symbol' cell
-        # tpl.loc[(tpl['WD'] == items['WD']) & (tpl['Reach'] == items['Reach']), items['parameter']] = f'~{items["symbol"]}~'
+        tpl.loc[(tpl.WD == items['WD']) & (tpl.Reach == items['Reach']), items['parameter']] = f'~{items["symbol"]}~'
 
     with open(f'{matlab_dir}/{output_tpl}', 'w') as f:
         f.write('ptf ~\n')
