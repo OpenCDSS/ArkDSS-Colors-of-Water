@@ -1,5 +1,10 @@
-﻿WD,parameter,symbol,value,minimum,maximum,vary
-17,Transmissivity,T01,10000,10000,50000,TRUE
-17,Storage coefficient,SC01,0.15,0.1,0.2,TRUE
-17,Aquifer width,AW01,750,750,3000,TRUE
-  ,,,,,,
+﻿Div,WD,Reach,parameter,symbol,value,minimum,maximum,vary
+2,17,1,Transmissivity,T01,10000,5000,50000,TRUE
+2,17,2,Transmissivity,T01,10000,5000,50000,TRUE
+2,17,3,Transmissivity,T01,10000,5000,50000,TRUE
+2,17,4,Transmissivity,T02,10000,5000,50000,TRUE
+2,17,5,Transmissivity,T02,10000,5000,50000,TRUE
+2,17,6,Transmissivity,T02,10000,5000,50000,TRUE
+2,17,7,Transmissivity,T02,10000,5000,50000,TRUE
+2,17,8,Transmissivity,T02,10000,5000,50000,TRUE
+2,17,-1,Storage coefficient,SC01,0.15,0.1,0.2,FALSE
