@@ -2,14 +2,14 @@
 
 """
 Created: 11/19/2021
-Modified: 01/19/2022
+Modified: 01/07/2022
 Created by: Rick Lyons
 
 Description:
 Run calibration for the ArkDSS Colors of Water project
-There are severral options for calibrators--parameter study, etc...
+There are two options for calibrators--matk parameter study and pySOT
 matk is used for parameter study and later (to do) Monte Carlo analysis (more comprehensive)
-
+(To do) pySOT is used for metaheuristic DYCORS analysis (more efficient)
 Two external files are required, in the same folder, to run this script:
 "StateTL_calibration_control.txt", which contains paths and options for the script
 "StateTL_calibration_inputdata.csv" which contains parameter information to calibrate
@@ -35,9 +35,26 @@ plt.style.use('default')
 
 
 def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
-    # Read calibration_inputdata; remove spaces around delimeter
-    df = pd.read_csv(data_dir, sep='\s*[,]\s*', engine='python')
-    # Remove empty lines (Nans) from DataFrame
+    # Set data type for DataFrame
+    dtype = {
+        'Div': int,
+        'WD': int,
+        'Reach': int,
+        'parameter': str,
+        'symbol': str,
+        'value': float,
+        'minimum': float,
+        'maximum': float,
+        'vary': str
+    }
+    # Read calibration inputdata file
+    df = pd.read_csv(data_dir,
+                     sep='\s*[,]\s*',
+                     engine='python',
+                     dtype=dtype,
+                     comment='#'
+                     )
+    # Remove empty lines (NaNs) from DataFrame
     df.dropna(how='all', inplace=True)
 
     # Create list of unique parameter symbols
@@ -46,9 +63,9 @@ def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
     parameters = df.to_dict('index')
 
     # Read Matlab input file
-    csv_df = pd.read_csv(f'{matlab_dir}/{input_csv}')
+    inputs_df = pd.read_csv(f'{matlab_dir}/{input_csv}')
     # Create copy of csv input file
-    tpl = csv_df.copy()
+    tpl = inputs_df.copy()
     # Loop through keys in parameter dictionary
     for key in parameters.keys():
         # items created from nested dictionary
@@ -57,7 +74,6 @@ def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
         if items['Reach'] == -1:
             # set template file with symbol from calibration inputdata
             tpl.loc[tpl.WD == items['WD'], items['parameter']] = f'~{items["symbol"]}~'
-        # tpl.loc[tpl['WD'] == items['WD'], items['parameter']] = f'~{items["symbol"]}~'
         # Find row in tpl DataFrame that matches the values for 'WD' and 'Reach' in nested dictionary
         # and replace value in 'parameter' cell with value from nested dictionary in 'symbol' cell
         tpl.loc[(tpl.WD == items['WD']) & (tpl.Reach == items['Reach']), items['parameter']] = f'~{items["symbol"]}~'
@@ -69,7 +85,7 @@ def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
 
 
 def run_extern(params, base_dir, matlab_dir, input_file, template_file):
-    # Set the par directory path
+    # Set the par & to_file directory path
     par_dir = Path.cwd()
     to_file = par_dir / input_file
 
@@ -138,14 +154,14 @@ def main():
     # Read config file
     config.read(ctrl_dir)
     # Create dictionary from 'Settings' group
-    par = dict(config.items('Settings'))
+    settings = dict(config.items('Settings'))
     # Parse values
-    vals_per_param = int(par['vals_per_param'])
-    calib_dir = par['calib_dir']
-    results_dir = par['results_dir']
-    results_file = par['results_file']
-    log_file = par['log_file']
-    keep_previous = par['keep_previous']
+    vals_per_param = int(settings['vals_per_param'])
+    calib_dir = settings['calib_dir']
+    results_dir = settings['results_dir']
+    results_file = settings['results_file']
+    log_file = settings['log_file']
+    keep_previous = settings['keep_previous']
 
     # Define model locations
     workdir_base = f'{calib_dir}/par'
@@ -154,8 +170,9 @@ def main():
     outfile = f'{calib_dir}/{results_dir}/{results_file}'
     logfile = f'{calib_dir}/{results_dir}/{log_file}'
 
-    # Create template file and return parameter dictionary and the number of parameters to vary
+    # Create template file and return parameter dictionary and number of parameters to vary
     parameters, num_params = create_template_file(matlab_dir, input_file, template_file, data_dir)
+    
     # Create list of number of variations per parameter
     nvals_list = [vals_per_param] * num_params
 
@@ -184,6 +201,7 @@ def main():
 
     # Create sample set from p.add_par
     s = p.parstudy(nvals=nvals_list)
+    # print(f'nvals_list: {nvals_list}')
     print(f'Here are the sample values:\n{s.samples.values}')
 
     # Run model with parameter samples
