@@ -1,8 +1,15 @@
 # This is a preliminary working file and will change as we add more functionality
 [Settings]
-vals_per_param = 3
+vals_per_param = 2
 calib_dir = tests
 results_dir = results
 results_file = results.dat
 log_file = logfile.data
 keep_previous = delete
+
+[Parameters]
+# <symbol> = <number of variations>
+T01 = 5
+T02 = 2
+SC01 = 1
+AW01 = 4
