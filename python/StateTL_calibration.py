@@ -16,6 +16,7 @@ Two external files are required, in the same folder, to run this script:
 """
 
 import os
+import sys
 import shutil
 import subprocess
 import numpy as np
@@ -51,14 +52,13 @@ def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
     df = pd.read_csv(data_dir,
                      sep='\s*[,]\s*',
                      engine='python',
-                     dtype=dtype,
-                     comment='#'
+                     dtype=dtype
                      )
     # Remove empty lines (NaNs) from DataFrame
     df.dropna(how='all', inplace=True)
 
     # Create list of unique parameter symbols
-    symbols_list = df.symbol.unique().tolist()
+    parameter_list = df.symbol.unique().tolist()
     # Create dictionary from DataFrame
     parameters = df.to_dict('index')
 
@@ -76,15 +76,15 @@ def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
             tpl.loc[tpl.WD == items['WD'], items['parameter']] = f'~{items["symbol"]}~'
         # Find row in tpl DataFrame that matches the values for 'WD' and 'Reach' in nested dictionary
         # and replace value in 'parameter' cell with value from nested dictionary in 'symbol' cell
-        tpl.loc[(tpl.WD == items['WD']) & (tpl.Reach == items['Reach']), items['parameter']] = f'~{items["symbol"]}~'
+        tpl.loc[(tpl.Div == items['Div']) & (tpl.WD == items['WD']) & (tpl.Reach == items['Reach']), items['parameter']] = f'~{items["symbol"]}~'
 
     with open(f'{matlab_dir}/{output_tpl}', 'w') as f:
         f.write('ptf ~\n')
         tpl.to_csv(f, index=False, line_terminator='\n')
-    return parameters, len(symbols_list)
+    return parameters, parameter_list
 
 
-def run_extern(params, base_dir, matlab_dir, input_file, template_file):
+def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_dir):
     # Set the par & to_file directory path
     par_dir = Path.cwd()
     to_file = par_dir / input_file
@@ -95,11 +95,14 @@ def run_extern(params, base_dir, matlab_dir, input_file, template_file):
     # cd into matlab directory to run model
     os.chdir(matlab_dir)
     # Create command line string to run model
-    run_line = f'StateTL.exe -f \\tests\\{par_dir.name} -c'
+    run_line = f'StateTL.exe -f \\{calib_dir}\\{par_dir.name} -c'
     # print(f'Line passing to matlab exe:\n{run_line}')
     # Run model
     print(f'running StateTL from folder: {par_dir.name}')
-    ierr = subprocess.run(run_line).returncode
+    # ierr = subprocess.run(run_line).returncode
+    subprocess.run(run_line).returncode
+    # with open(f'..\\{calib_dir}\\{par_dir.name}\\calibration.out', 'w') as output:
+    #     subprocess.run(run_line, stdout=output, check=True)
     print(f'{par_dir.name} run completed!')
     # print(f'{par_dir.name} ierr: {ierr}')
 
@@ -151,17 +154,27 @@ def main():
     # Read calibration control file & set values
     # Set config to use 
     config = configparser.ConfigParser()
+    # Keep parameters in original case
+    config.optionxform = lambda option: option
     # Read config file
     config.read(ctrl_dir)
+
     # Create dictionary from 'Settings' group
     settings = dict(config.items('Settings'))
     # Parse values
-    vals_per_param = int(settings['vals_per_param'])
     calib_dir = settings['calib_dir']
     results_dir = settings['results_dir']
     results_file = settings['results_file']
     log_file = settings['log_file']
     keep_previous = settings['keep_previous']
+    method = settings['method']
+    # Create dictionary from method
+    methods = ['Parameter Sensitivity', 'Monte Carlo', 'Latin Hypercube']
+    if not config.has_section(method):
+        print(f'ERROR: Your method "{method}" is not valid. The available methods include {methods}. ', end='')
+        print('Check your control file.')
+        sys.exit(1)
+    method_dict = dict(config.items(method))
 
     # Define model locations
     workdir_base = f'{calib_dir}/par'
@@ -170,39 +183,73 @@ def main():
     outfile = f'{calib_dir}/{results_dir}/{results_file}'
     logfile = f'{calib_dir}/{results_dir}/{log_file}'
 
-    # Create template file and return parameter dictionary and number of parameters to vary
-    parameters, num_params = create_template_file(matlab_dir, input_file, template_file, data_dir)
-    
-    # Create list of number of variations per parameter
-    nvals_list = [vals_per_param] * num_params
-
-    # Gather names of all folders in tests directory
+    # Gather names of all folders in calib_dir directory
     if keep_previous == 'delete':
         folders = glob(str(folders_to_delete))
-        # Delete existing folders in tests directory
+        # Delete existing folders in calib_dir
         for folder in folders:
             shutil.rmtree(folder)
 
-    # Create parstudy results directory
+    # Create results directory if it doesn't exist already
     if not os.path.exists(results_loc):
         os.makedirs(results_loc)
 
+    # Create template file and return parameter dictionary
+    # and number of parameters to vary
+    parameters, parameter_list = create_template_file(matlab_dir, input_file,
+                                                      template_file, data_dir)
+
     # Create MATK object
-    p = matk(model=run_extern, model_args=(base_dir, matlab_dir, input_file, template_file))
+    p = matk(model=run_extern,
+             model_args=(base_dir, matlab_dir, input_file, template_file, calib_dir))
 
-    # Create parameters
-    for key in parameters.keys():
-        items = parameters[key]
-        p.add_par(items['symbol'],
-                  value=items['value'],
-                  min=items['minimum'],
-                  max=items['maximum'],
-                  vary=items['vary'])
+    # Check method type
+    methods = ['Parameter Sensitivity', 'Monte Carlo', 'Latin Hypercube']
 
-    # Create sample set from p.add_par
-    s = p.parstudy(nvals=nvals_list)
-    # print(f'nvals_list: {nvals_list}')
-    print(f'Here are the sample values:\n{s.samples.values}')
+    if method == 'Parameter Sensitivity':
+        # Create list of number of variations per parameter, by position
+        nvals_list = []
+        for i, item in enumerate(parameter_list):
+            try:
+                nvals_list.append(int(method_dict[item]))
+            except Exception:
+                print(f'Error: {item} in {calib_data_file}')
+                print(f'       is missing in {calib_ctrl_file}')
+                sys.exit(1)
+        extra_symbols = [item for item in config.options(method) if item not in parameter_list]
+        if extra_symbols:
+            print(f"WARNING: These symbols {extra_symbols} are not being used in the {method}!")
+        print(f'parameter_list: {parameter_list}')
+        print(f'nvals_list: {nvals_list}')
+
+        # Create parameters
+        for key in parameters.keys():
+            items = parameters[key]
+            p.add_par(items['symbol'],
+                      value=items['value'],
+                      min=items['minimum'],
+                      max=items['maximum'],
+                      vary=items['vary'])
+
+        # Create sample set from p.add_par
+        s = p.parstudy(nvals=nvals_list)
+        # print(f'nvals_list: {nvals_list}')
+        print(f'Here are the sample values:\n{s.samples.values}')
+
+    # Check method type
+    elif method == 'Monte Carlo':
+        pass
+
+    # Check method type
+    elif method == 'Latin Hypercube':
+        pass
+    else:
+        print(
+            f'ERROR: Your method block "[{method}]" is not valid. The available method blocks include {methods}. ',
+            end=''
+        )
+        print('Check your control file.')
+        sys.exit(1)
 
     # Run model with parameter samples
     s.run(cpus=os.cpu_count(),
@@ -214,6 +261,11 @@ def main():
 
     end = time()
     print(f'Total running time: {(end - start) / 60} mins')
+
+    # # Plot results
+    # plt.plot(s.samples.values, s.simvalues, 'r')
+    # # plt.ylabel("Model Response")
+    # plt.show()
 
 
 if __name__ == '__main__':

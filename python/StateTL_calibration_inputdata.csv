@@ -9,3 +9,4 @@
 2,17,8,Transmissivity,T02,10000,5000,25000,TRUE
 2,17,-1,Storage coefficient,SC01,0.15,0.1,0.2,TRUE
 2,17,-1,Aquifer width,AW01,750,1000,3000,TRUE
+2,17,6,Aquifer width,AW02,750,100,1000,TRUE
