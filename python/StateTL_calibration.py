@@ -204,7 +204,7 @@ def main():
              model_args=(base_dir, matlab_dir, input_file, template_file, calib_dir))
 
     # Check method type
-    methods = ['Parameter Sensitivity', 'Monte Carlo', 'Latin Hypercube']
+    methods = ['Parameter Sensitivity', 'Monte Carlo', 'Latin Hypercube Sampling']
 
     if method == 'Parameter Sensitivity':
         # Create list of number of variations per parameter, by position
@@ -241,8 +241,18 @@ def main():
         pass
 
     # Check method type
-    elif method == 'Latin Hypercube':
-        pass
+    elif method == 'Latin Hypercube Sampling':
+        # Create parameters
+        for key in parameters.keys():
+            items = parameters[key]
+            p.add_par(items['symbol'],
+                      value=items['value'],
+                      min=items['minimum'],
+                      max=items['maximum'],
+                      vary=items['vary'])
+        # Create lhs sample set
+        s = p.lhs(siz=int(method_dict['sample_size']))
+        print(f'Here are the sample values:\n{s.samples.values}')
     else:
         print(
             f'ERROR: Your method block "[{method}]" is not valid. The available method blocks include {methods}. ',
