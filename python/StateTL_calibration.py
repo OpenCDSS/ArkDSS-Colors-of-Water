@@ -207,6 +207,7 @@ def main():
     methods = ['Parameter Sensitivity', 'Monte Carlo', 'Latin Hypercube Sampling']
 
     if method == 'Parameter Sensitivity':
+        print(f'Running {method}!')
         # Create list of number of variations per parameter, by position
         nvals_list = []
         for i, item in enumerate(parameter_list):
@@ -242,6 +243,7 @@ def main():
 
     # Check method type
     elif method == 'Latin Hypercube Sampling':
+        print(f'Running {method}!')
         # Create parameters
         for key in parameters.keys():
             items = parameters[key]

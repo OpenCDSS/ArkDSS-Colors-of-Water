@@ -10,14 +10,14 @@ method = Latin Hypercube Sampling
 [Parameter Sensitivity]
 # <symbol> = <number of variations>
 T01 = 1
-T02 = 1
+T02 = 2
 SC01 = 1
-AW01 = 4
-AW02 = 5
+AW01 = 3
+AW02 = 1
 
 # ToDo: Needs testing
 [Latin Hypercube Sampling]
-sample_size = 10
+sample_size = 20
 # T01 = 'norm'
 # T02 = 2
 # SC01 = None
