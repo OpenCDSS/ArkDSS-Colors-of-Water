@@ -5,21 +5,21 @@ results_dir = results
 results_file = results.dat
 log_file = logfile.data
 keep_previous = delete
-method = Parameter Sensitivity
+method = Latin Hypercube Sampling
 
 [Parameter Sensitivity]
 # <symbol> = <number of variations>
 T01 = 1
-T02 = 1
+T02 = 2
 SC01 = 1
-AW01 = 4
-AW02 = 5
+AW01 = 3
+AW02 = 1
 
-
-# Nothing is implemented below here.
-#[Latin Hypercube Sampling]
-# <symbol> = <number of variations>
-# 01 = 5
-# 02 = 2
-# C01 = 1
-# W01 = 4
+# ToDo: Needs testing
+[Latin Hypercube Sampling]
+sample_size = 20
+# T01 = 'norm'
+# T02 = 2
+# SC01 = None
+# AW01 = None
+# AW02 = 'norm'
