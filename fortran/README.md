@@ -33,6 +33,7 @@ The original USGS fortran code was updated to compile in the 64bit gfortran comp
 1. Added 'fast' option to reduce output to Qds in a binary rather than text file.  A bug in the multiple linearization method was also fixed and Q/celerity/dispersion input dimension increased from 8 to 10.  The fast option is turned on in the input text file in column C of row 3; an example input text file is included that shows fast option as well as multiple linearization input.
 1. Code modified to resolve warnings when compiled in 64bit gfortran. Fortran file dated 11/1/2021 1:13 PM
 1. Modified code so that input and output(2) filenames can be provided through command line arguments rather than through a file.  Increased dimensioning of these filenames to 200 characters to allow folder references from within filename. 11/3/2021 5:06 PM
+1. Modified code so that a routed downstream hydrograph can be supplied in the input file. 12/20/2021 2:07 PM
 
 ## Usage Notes
 An example input datafile is included to show current/new input data options and formatting.

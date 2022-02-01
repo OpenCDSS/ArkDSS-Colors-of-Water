@@ -59,6 +59,9 @@ C        ZDSQO--ALLOWS FOR INPUT OF DS OBSERVED FLOW FOR HYDRGRAPH COMPARISON.  
 C        ZOUTPUT--ALLOWS FOR NO PRINT IF DAILY(HOURLY, ETC.) VALUES.             G. KUHN, 3-18-87
 C        ZFAST - option to speed up execution using binary for Qds output         kt fast option
 C        ZCMDOPT - command line option if '-f' then filenames via cmd line        kt cmd arg
+C        NEW - if ZFLOW(1) AND ZROUTE(2) options zero (i.e. IDDATA.EQ.3)          kt provide DSQ option
+C              then can/must provide routed downstream hydrograph (like ZFLOW)    kt provide DSQ option
+C              but program will then operate bank storage to adjust DSQ to DSQ1   kt provide DSQ option
 C                                                                       00003400
 C     SELECTED ARRAYS IN TIME DIMENSION                                 00003500
 C        USQ   - UPSTREAM DISCHARGE HYDROGRAPH.                         00003600
@@ -232,8 +235,11 @@ C                                                                       00015300
 C             COMPUTE DOWNSTREAM DISCHARGE HYDROGRAPH                   00015400
 C                BASE FLOW, DIVERSIONS AND DEPLETIONS ARE INCLUDED,     00015500
 C                BANK STORAGE DISCHARGE IS NOT.                         00015600
-      CALL CVOLUT (DSQ,USQ,UR,N1ST,NLST,NRO,NURS,QLIN,ITT,NRESP)        00015700
-      DO 80 NT=N1ST,NLST                                                00015800
+      IF (ZROUTE) GO TO 75                                                        kt provide DSQ option
+      CALL READQB (DSQ)                                                           kt provide DSQ option
+      GO TO 78                                                                    kt provide DSQ option 
+   75 CALL CVOLUT (DSQ,USQ,UR,N1ST,NLST,NRO,NURS,QLIN,ITT,NRESP)        00015700
+   78 DO 80 NT=N1ST,NLST                                                00015800
       DSQ(NT)=DSQ(NT)+DSQB-USQB                                         00015900
       IF (DSQ(NT).LT.DSQB) DSQ(NT)=DSQB                                 00016000
       DSQ1(NT)=DSQ(NT)+SQLOSS(NT)                                       00016100
@@ -569,7 +575,7 @@ C
       ZCARDS=.FALSE.                                                    00044200
       ZWARN=.FALSE.                                                     00044300
       IF (IDDATA.EQ.1) ZFLOW=.TRUE.                                     00044400
-      IF (IDDATA.NE.1) ZROUTE=.TRUE.                                    00044500
+      IF (IDDATA.EQ.2) ZROUTE=.TRUE.                                    00044500  kt provide DSQ option
       IF (ISOURC.EQ.2) ZDISK=.TRUE.                                     00044600
       IF (ISOURC.NE.2) ZCARDS=.TRUE.                                    00044700
       IF (IFAST.EQ.1) ZFAST=.TRUE.                                      00044400  kt fast option
@@ -913,7 +919,7 @@ C             INITIALIZE                                                00069800
       IF (NSR.EQ.0) GO TO 20                                            00071700
       RNSR=1./FLOAT(NSR)                                                00071800
    20 ITER=1                                                            00071900
-      IF (ZROUTE) ITER=10                                               00072000
+      IF (.NOT.ZFLOW) ITER=10                                           00072000  kt changed from ZROUTE for provide DSQ option
 C                                                                       00072100
 C             ITERATE                                                   00072200
       DO 120 I=1,ITER                                                   00072300
@@ -927,8 +933,13 @@ C             ITERATE                                                   00072200
 C                                                                       00073100
 C             COMPUTE BANK STORAGE DISCHARGE                            00073200
       CALL RATNG (DSQ1,DSS,DSQB,DS)                                     00073300
+      IF (ZROUTE) GO TO 26                                                        kt spike fix, applies with provide DSQ option
+      DO 24 NT=N2ND,NLST                                                          kt spike fix, applies with provide DSQ option
+      DELS(NT)=DSS(NT)-DSS(NT-1)                                                  kt spike fix, applies with provide DSQ option
+   24 CONTINUE 
+      GO TO 51                                                                    kt spike fix, applies with provide DSQ option
 C      IF (NSR.LT.1) GO TO 30                                            00073400  kt warning fix
-      NSRM = MAX(NSR,1)                                                           kt warning fix
+   26 NSRM = MAX(NSR,1)                                                           kt warning fix, added linenum
       DO 50 N=1,NSRM                                                    00073500  kt warning fix, changed NSR to NSRM
    30 CALL MEANS (N,S)                                                  00073600
       DO 40 NT=N2ND,NLST                                                00073700
@@ -941,12 +952,12 @@ C        THIS AND '51' ADDED 12-13-85 IN ORDER TO RUN ON PRIMOS REV 9.4.4--GKUHN
    51 IF (NSR.EQ.0) GO TO 60                                            00074000
       CALL MULT (DELS,N1ST,NLST,RNSR)                                   00074100
    60 DELS(1)=(DSAV1+DSAV2+DSAV3+DELS(2)+DELS(3)+DELS(4))/6.            00074200
-      CALL CONVOL (Q,DELS,DUSRF,N1ST,NLST,NUR1,0)                       00074300
+   65 CALL CONVOL (Q,DELS,DUSRF,N1ST,NLST,NUR1,0)                       00074300
       LAST=NLST                                                         00074400
       IF (.NOT.ZEND) LAST=NLST+NATAIL                                   00074500
       CALL MULTB (Q,N1ST,LAST,TTEMP2)                                   00074600  kt changed to larger dim B function
 C                                                                       00074700
-      IF (ZROUTE) GO TO 80                                              00074800
+      IF (.NOT.ZFLOW) GO TO 80                                          00074800  kt changed from ZROUTE for provide DSQ option
 C             ADJUST FOR WATER RETAINED BY SOIL                         00074900
       DO 70 NT=N1ST,NLST                                                00075000
       IF (Q(NT).LE.0.0) GO TO 70                                        00075100
@@ -968,6 +979,21 @@ C             COMPUTE ADJUSTMENTS FOR DOWNSTREAM HYDROGRAPH             00075600
       IF (MT.GT.NLST) GO TO 100                                         00076600
       DSQ1(MT)=DSQ1(MT)-FLOW                                            00076700
       IF (DSQ1(MT).LT.0.0) DSQ1(MT)=0.0                                 00076800
+C      IF (MT.GT.2) THEN                                                          kt spike fix
+C        IF (DSQ1(MT).GT.DSQ1(MT-1)) THEN                                         kt spike fix
+C          IF (DSQ(MT).LT.DSQ(MT-1)) THEN                                         kt spike fix
+C            DSQ1(MT)=DSQ1(MT-1)                                                  kt spike fix
+C          ELSE IF (DSQ(MT).EQ.DSQ(MT-1)) THEN                                    kt spike fix
+C            IF (DSQ(MT).LT.DSQ(MT-2)) DSQ1(MT)=DSQ1(MT-1)                        kt spike fix
+C          END IF                                                                 kt spike fix
+C        ELSE IF (DSQ1(MT).LT.DSQ1(MT-1)) THEN                                    kt spike fix
+C          IF (DSQ(MT).GT.DSQ(MT-1)) THEN                                         kt spike fix
+C            DSQ1(MT)=DSQ1(MT-1)                                                  kt spike fix
+C          ELSE IF (DSQ(MT).EQ.DSQ(MT-1)) THEN                                    kt spike fix
+C            IF (DSQ(MT).GT.DSQ(MT-2)) DSQ1(MT)=DSQ1(MT-1)                        kt spike fix
+C          END IF                                                                 kt spike fix
+C        END IF                                                                   kt spike fix
+C      END IF                                                                     kt spike fix
   100 SDSQ12=SDSQ12+DSQ1(NT)                                            00076900
       SQA2=SQA2+FLOWA                                                   00077000
       SQI2=SQI2+QI(NT)*CONST1                                           00077100
@@ -2178,7 +2204,7 @@ C             PRINT HEADER INFORMATION                                  00185800
 C             PRINT DATE INFORMATION                                    00186600
    20 WRITE (10,290) IMON(N1ST),IDAY(N1ST),IYEAR(N1ST),IMON(NLST),IDAY(N00186700
      1LST),IYEAR(NLST)                                                   00186800
-      IF (ZROUTE) GO TO 40                                              00186900
+      IF (.NOT.ZFLOW) GO TO 40                                          00186900  kt changed from ZROUTE for provide DSQ option
 C             PRINT TIME ARRAY DATA FOR FLOW OPTION                     00187000
       WRITE (10,270)                                                    00187100
       DO 30 NT=N1ST,NLST                                                00187200
@@ -2216,9 +2242,9 @@ C
 C  60 WRITE (10,340) IMON(NT),IDAY(NT),IYEAR(NT),IHOUR(NT),USQ(NT),DSQ(N00188800
 C    1T),USS(NT),DSS(NT),DELS(NT),SQLOSS(NT),QI(NT),DSQ1(NT),IWARN(NT)   00188900
 C
-   58 IF (.NOT.ZFAST) GO TO 60
-      WRITE (12) DSQ1(NT)
-      GO TO 61
+   58 IF (.NOT.ZFAST) GO TO 60                                                    kt fast option
+      WRITE (12) DSQ1(NT)                                                         kt fast option
+      GO TO 61                                                                    kt fast option
 
    60 WRITE (10,341) IMON(NT),IDAY(NT),IYEAR(NT),IHOUR(NT),USQ(NT),
      *DSQO(NT),DSQ1(NT),IWARN(NT),DSQ(NT),QI(NT),SQLOSS(NT),USS(NT),
@@ -2328,12 +2354,12 @@ C      IF (QIVOL) 160,170,170                                            0019530
 C             PRINT VOLUME DATA  AND MASS BALANCE                       00196000
       IF (ZFAST) GO TO 181                                                        kt fast option
       WRITE (10,250)                                                    00196100
-      IF (ZROUTE) WRITE (10,220) USQVOL,DSQVOL,DSQ1VO,UBQVOL,DBQVOL,USQR00196200
-     1EL,QLSTOT,DSQREL,VOLOUT,VOLSTO,QILSVO,VOLIN,QIVOL,QLSVOL           00196300
+      IF (.NOT.ZFLOW) WRITE (10,220) USQVOL,DSQVOL,DSQ1VO,UBQVOL,DBQVOL,00196200  kt changed from ZROUTE for provide DSQ option
+     1USQREL,QLSTOT,DSQREL,VOLOUT,VOLSTO,QILSVO,VOLIN,QIVOL,QLSVOL      00196300  kt changed from ZROUTE for provide DSQ option
 C
-      IF (ZROUTE) WRITE (10,218) USREL1                                   PRJ 2/85
-       IF (ZROUTE) WRITE(10,221) WELCUM                                   PRJ 2/8/85
-       IF (ZROUTE) WRITE(10,222)QLSCUM, QLEXWE, EXWEPC                         PRJ 2/11/85
+      IF (.NOT.ZFLOW) WRITE (10,218) USREL1                                  PRJ 2/85  kt changed from ZROUTE for provide DSQ option
+      IF (.NOT.ZFLOW) WRITE(10,221) WELCUM                                 PRJ 2/8/85  kt changed from ZROUTE for provide DSQ option
+      IF (.NOT.ZFLOW) WRITE(10,222)QLSCUM, QLEXWE, EXWEPC                 PRJ 2/11/85  kt changed from ZROUTE for provide DSQ option
 C
       IF (ZFLOW) WRITE (10,230) USQVOL,DSQVOL,UBQVOL,DBQVOL,USQREL,DSQRE00196400
      1L,VOLOUT,VOLSTO,QILSVO,VOLIN,QIVOL                                 00196500
