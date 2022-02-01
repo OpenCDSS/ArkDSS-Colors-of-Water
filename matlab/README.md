@@ -35,9 +35,9 @@ reservoir, or final structure at or beyond stateline (currently not a gage)
 
 
 ## Other Files Needed
-For repository storage size and security reasons, several other files are needed to initially run StateTL including a large file that contains the ET/evaporation data for Division 2 and the compiled StateTL and j349 fortran codes and associated dlls .  These files can be downloaded from the COW shared drive (Discovery > 4. Model Engine > StateTLfiles_notingit).
+For repository storage size and security reasons, several other files are needed to initially run StateTL including a large file that contains the ET/evaporation data for Division 2 and the current state 'Surface Water Framework' geodatabase.  These files can be downloaded from the COW shared drive (Discovery > 4. Model Engine > StateTLfiles_notingit) or an ftp site.
 
-When StateTL runs it builds a number of binary files that are saved.  If indicated in the StateTL_control.txt file, when the program is ran again these binary files can be used directly rather than rebuilding (ie for files that pull from REST services or rebuild evaporation) as long as changes aren't made (ie adding WDID's) that would require new files.  So files such as the ET/evaporation file may not be needed if processed binaries are already produced or are shared instead.
+When StateTL runs it builds a number of binary files that are saved.  If indicated in the StateTL_control.txt file, when the program is ran again these binary files can be used directly rather than rebuilding (ie for files that pull from REST services or rebuild evaporation) as long as changes aren't made (ie adding WDID's) that would require new files.
 
 ## Summary of Major Changes
 The original model engine code was functional in 2019.  This code (as slightly modified in 2020) was stored as the original base in github.  Significant advancement on this code occurred in May through October 2021 but versioning was not maintained in git (versions were stored locally and on the COW shared drive in the discover folder).  The progression of locally stored versions was added into git in October 2021 just in case some element of previous versions may be needed (additional intermediate versions not added to git are available on the COW shared drive).  The last of these versions was dated 10/6/2021; and from this point forward versioning will be managed within git and will follow CDSS recommended methods for versioning including relating development to issues in git.  The following describes some larger changes.
@@ -48,6 +48,7 @@ The original model engine code was functional in 2019.  This code (as slightly m
 5. October 2021 (Issue #5) - initiation of version management using github and recommended CDSS practices
 6. November 2021 (Issue #14) - enable data folders and command line arguments
 7. December 2021 (Issue #18) - utilize daily diversion records for node flows
+8. February 2022 (Issue #21) - a number of revisions and enhancements to prepare for actual calibration work
 
 ## Primary Processes Built
 Primary processes and components that have so-far been built include:
@@ -88,14 +89,17 @@ calibration `-c` command full (year,startmo,startday,endmo,endday,water district
 
 `StateTL -c` `StateTL -c 2018` `StateTL -c 2018,03,15,11,15` `StateTL -c WD17` `StateTL -c 2018,WD17` 
 
-
 build `-b` command to build base binary files without rebuilding evaporation or long term station data (ie to work with a new year but river network has not been altered)
 
-`StateTL -b 2018` `StateTL -b 2018,03,15,11,15`
+`StateTL -b` `StateTL -b 2018` `StateTL -b 2018,03,15,11,15`
 
 rebuild `-r` command to rebuild base files including evaporation and long term station data (ie after river network has been altered)
 
-`StateTL -r 2018` `StateTL -r 2018,03,15,11,15`
+'`StateTL -r` `StateTL -r 2018` `StateTL -r 2018,03,15,11,15`
+
+gage `-g` command to output gage/observations for use in calibration
+
+'`StateTL -g` `StateTL g 2018` `StateTL -g 2018,03,15,11,15`
 
 save `-s` command saves final mat files from calibration or control loops (currently used for plotting)
 
@@ -105,11 +109,15 @@ music `-m` command produces a short sound clip when StateTL finishes
 
 example expected command line arguments for calibration:
 
-`StateTL -r 2018` - initially rebuild new binary files for 2018 (or when modify river network)
+`StateTL -r` - initially rebuild new binary files, with multiyrstation=1 this will include hourly station data for all years in multiyrlist 
 
-`StateTL -b 2018` - build new binary files for 2018 (when evaluating a new year but didnt modify network)
+`StateTL -g` - output gage data, with multiyrstation=1 this will output gage data files for all years in multiyrlist 
 
 `StateTL -f \calibration\Par.1 -c 2018,WD17 -p` - calibrate year 2018 for WD17 with input/output into Par.1 folder, -p is optional to plot calibration figures
+
+or more simply:
+
+`StateTL -f \calibration\Par.1 -c 2018` - calibrate year 2018 for all water districts in WDcaliblist
 
 
 

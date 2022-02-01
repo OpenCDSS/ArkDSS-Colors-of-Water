@@ -9,27 +9,36 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 Div=2;						%Division - currently can only run one at a time but eventually run multiple (seperate by commas)
-WDlist=112,11,10,171,172,17,67;		%WD run list in order; from upper tribs first to lower/mainstem, seperate by commas
+WDlist=171,172,173,174,17,67;		%WD run list in order; from upper tribs first to lower/mainstem, seperate by commas
 srmethod='default';        		%will pick j349 or muskingum-cunge based on input data table
+%srmethod='bank';    		           % 
 %srmethod='j349';       			%dynamic j349/Livinston method - only pick one of two methods (comment other)
 %srmethod='muskingum';   			%percent loss TL plus muskingum-cunge for travel time
 j349fast=1;                          %1 for j349 reduces output written by j349, and also uses one single file for input/output, for use in deployment
 j349multurf=1;                       %1 for j349 multiple urf method to do flow routing using variable celerity/dispersion (0 uses single celerity/dispersion for time series) 
+j349musk=1;                          %1 for j349 uses muskinghum routing rather than j349/urf routing
 inputfilename='StateTL_inputdata.csv'; %filename used for subreach input data - currently xlsx or csv/txt/dat delimited - if changing base name (ie for calibration), first load evap and stagedischarge from StateTL_inputdata.xlsx
-datestart=2018;					%start for data and processing, may be full year or some period as year/mo/day; mo/day will be overriden by fullyear option = 1
-rundays=20;                          %days to run from datestart(plus 30 days spinup); will be overriden by fullyear option = 1
+datestart=2019;					%start for data and processing, may be full year or some period as year/mo/day; mo/day will be overriden by fullyear option = 1
+rundays=30;                          %days to run from datestart(plus 30 days spinup); will be overriden by fullyear option = 1
 fullyear=1;                          %overrides smaller period and uses year specified in date above but runs for full calendar year (plus 9 days spinup - ie 374 or 375 total days)
-readinputfile=1;				%0,1,2 - 1 reads from inputfile and saves mat file; 2 reads but doesnt save (ie for calibration), otherwise reads mat file;
+readinputfile=0;				%0,1,2 - 1 reads from inputfile and saves mat file; 2 reads but doesnt save (ie for calibration), otherwise reads mat file;
+newnetwork=0;                        %1 if modified network or node locations, will repull locational data for channel and alluvium lengths and evaporation
 readstagedischarge=0;				%1 rereads stagedischarge data and also default methods; but if rereading subreach data dont have to reread (ie for calibration)
 readevap=0;					%1 rereads evap; if evapnew=1 repulls locations using HBrest and evap for full time periods, must do if adding/modifing locations or wdids; but if rereading subreach data dont have to reread; 
 pullstationdata=0;				%0,1,2 - read station (gage and telemetry based) flow data; 1 rebuilds and reads from REST, 2 only pull new/modified from REST, 3 loads from saved mat file
 pulllongtermstationdata=0;			%1 reads daily station data from 2000 through previous year to establish dry/wet/avgs for filling; only runs if pullstationdata is 1 or 2
 pullreleaserecs=0;				%0,1,2 - 0 load from saved mat file, 1 if want to repull all from REST(ie for new period), 2 if only pull new/modified from REST for same period
-runriverloop=1;				    	%0,1,2 - 1 runs gageflow loop for full river amounts (ie not individual water classes), 2 won't save mat file, 0 uses mat file
+runriverloop=0;				    	%0,1,2 - 1 runs gageflow loop for full river amounts (ie not individual water classes), 2 won't save mat file, 0 uses mat file
 runwcloop=0;					%0,1,2 - 1 runs water class release loop - have to have run river loop before (saved .mat file) or during, 2 won't save mat file, 0 uses mat file
 doexchanges=0;					%1 run upstream exchanges - this only operates within wcloop
 runcaptureloop=0;				%1 runs loop to characterize release capture amounts into headgates vs available amount, 0 wont run it
+runobsloop=0;                        %1 outputs the observed gage flows in WDs in WDcaliblist; to set observation targes for use in calibration 
 runcalibloop=0;					%1 runs loop to simulate river flows from gage amount at top of wd down without restarting each gage location with gage amount, 0 wont run it
+
+stubcelerity=2;                      %for stubs (ie extra lengths to point on river) single/constant celerity (ft/s)
+stubdispersion=200;                  %for stubs single/constant dispersion value (ft/s2)
+multiyrstation=1;                    %1 for pullstationdata to pull multiple years of station data (primarily for calibration) - after build data this way keep on to use
+multiyrlist=2011,2020;               %for above list first and last year seperated by commas
 
 copydatafiles=1;                     %1 copies datafiles from main matlab folder into command line specified folder (to avoid potential issues with multiple instances)
 savefinalmatfile=0;                  %saves final file after capture or calibration loop, big and only need if want StateTLplot for cal after clearing
@@ -41,11 +50,13 @@ outputfilebase='StateTL_out';  	     %output filename base - will add srmethod +
 outputgage=0;  					%output river amounts by reach
 outputwc=0;  					%output waterclass amounts by reach
 outputcal=0;  					%output calibration amounts by gage location
-outputhr=0;  					%output on hour timestep
+outputnet=0;                         %output river network spatial data
+outputhr=1;  					%output on hour timestep
 outputday=1;  					%output on day timestep
 
-WDcaliblist=17;				     %WD to calibrate if running calibloop, if multiple seperate by commas
+WDcaliblist=17,67;				%WD to calibrate if running calibloop, if multiple seperate by commas
 calibstart=3,15;			     %calib start month,day
 calibend=11,15;			          %calib end month,day
-calibavggainloss='movingavg'; 	     %currently 'mean' or 'linreg' or 'movingavg' - method to set average gain/loss/error correction for period- mean seems to do about as well as linear regression
+calibtype='reach';                   %'reach' or 'wd' - if 'reach' top of each reach will start with gage measurements (ie isolating reach calib errors to reach) otherwise only top of wd will use gage and lower gages will be simulated progression  
+calibavggainloss='movingmedian'; 	 %currently 'movingmedian' 'movingavg' 'mean' or 'linreg' - method to set average gain/loss/error correction for period- mean seems to do about as well as linear regression
 plotcalib=0;                         %1 plots some calibration plots into data folder
