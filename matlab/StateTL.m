@@ -19,12 +19,13 @@ varargin=[];
 % varargin=[{'-f'} {'foldertest1'}];
 % varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
 % varargin=[{'-f'} {'caltestc3_1722020'} {'-c'} {'2020'} {'-s'} {'-d'} {'-p'} {'-m'}];
-% varargin=[{'-f'} {['caltestx_' num2str(mmm)]} {'-c'} {'2018'} {'-p'} ];
+% varargin=[{'-f'} {['cal2test']} {'-c'} {'2018'} {'-p'} ];
+varargin=[{'-f'} {['cal9test']} {'-c'} {'2018'}];
 % varargin=[{'-f'} {'caltest6_wd17stil715'} {'-c'} {'2018,3,15,7,15,WD171,172,17'} {'-s'} {'-d'} {'-p'} {'-m'}];
 % varargin=[{'-r'} {'2019'}];
 % varargin=[{'-b'} {'2019'}];
 % varargin=[{'-f'} {'obstest1'} {'-g'} {'2018,3,15,7,15,WD171,172,17'}];
-% varargin=[{'-g'} {'2019'}];
+% varargin=[{'-g'} {'2015'}];
 % varargin=[{'-g'}];
 % varargin=[{'-r'}];
 
@@ -36,8 +37,8 @@ basedir=cd;basedir=[basedir '\'];
 %Run control options (on=1) fed through control file need to be in this list -
 %watch out - if change variable names in code also need to change them here!
 %currently - if leave out one of these from control file will assign it a zero value
-controlvars={'srmethod','j349fast','j349multurf','j349musk','inputfilename','rundays','fullyear','readinputfile','newnetwork','readevap','readstagedischarge','pullstationdata','multiyrstation','pulllongtermstationdata','pullreleaserecs','runriverloop','runwcloop','doexchanges','runcaptureloop','runobsloop','runcalibloop','stubcelerity','stubdispersion'};
-controlvars=[controlvars,{'copydatafiles','savefinalmatfile','logfilename','displaymessage','writemessage','outputfilebase','outputgage','outputwc','outputcal','outputhr','outputday','outputnet','calibavggainloss','calibtype','plotcalib'}];
+controlvars={'srmethod','j349fast','j349multurf','j349musk','inputfilename','rundays','fullyear','readinputfile','newnetwork','readevap','readstagedischarge','pullstationdata','multiyrstation','pulllongtermstationdata','pullreleaserecs','runriverloop','runwcloop','doexchanges','runcaptureloop','rungageloop','runcalibloop','stubcelerity','stubdispersion'};
+controlvars=[controlvars,{'copydatafiles','savefinalmatfile','logfilename','displaymessage','writemessage','outputfilebase','outputriv','outputwc','outputcal','outputcalregr','outputnet','outputgain','outputhr','outputday','outputmat','calibavggainloss','calibtype','gainsavgwindowdays','plotcalib'}];
 controlfilename='StateTL_control.txt';
 
 
@@ -86,9 +87,6 @@ useregrfillforgages=0;  %will fill gages with data from closest stations using r
 trendregwindow=14*24;  %hrs to estimate trend for end filling
 avgwindow=[7*24 30*24]; %2 values - 1) hrs to start to apply dry/avg/wet average within weighting, 2) hrs to start to apply straight up average     
 dayvshrthreshold=[0.01 0.25];  %2 percent difference thresholds to apply daily improved data to hourly telemetry data, <first - dont adjust, >=first-adjust hourly data so daily mean equals daily data, >=second-replace hourly data with daily data 
-outputcalregr=1;  %output calibration stats file if doing calibration loop
-calibmovingavgdays=14;  %running average window size in days if using movingavg for calibration; 14days will avg 1 week before and after point; also using in bank storage method to average gains for evaporation calc
-   movingavgwindow=ceil(calibmovingavgdays*24/rhours); %running average window size in hrs; currently using 2-weeks
 filllongtermwithzero=2;  %1 fills zeros in year with some diversion recs with zeros, 2 fills all other years too (except for beyond nov of previous yr)
 printcalibplots=1;         %for calib plots only, save to calib folder and close
 
@@ -200,6 +198,8 @@ end
 if calibend(1,1)~=0
     calibenddate=datenum(yearstart,calibend(1),calibend(2));
 end
+
+movingavgwindow=ceil(gainsavgwindowdays*24/rhours); %running average window size in hrs; currently using 2-weeks
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % interpretation of command line arguments if given
@@ -319,10 +319,10 @@ else
                 doexchanges=0;
                 runcaptureloop=0;
                 runcalibloop=1;
-                runobsloop=0;
+                rungageloop=0;
                 displaymessage=0;
                 writemessage=1;
-                outputgage=0;
+                outputriv=0;
                 outputwc=0;
                 outputcal=1;
 
@@ -334,16 +334,16 @@ else
                 logmc=[logmc;'calibration command option: doexchanges=0'];
                 logmc=[logmc;'calibration command option: runcaptureloop=0'];
                 logmc=[logmc;'calibration command option: runcalibloop=1'];
-                logmc=[logmc;'calibration command option: runobsloop=1'];
+                logmc=[logmc;'calibration command option: rungageloop=1'];
                 logmc=[logmc;'calibration command option: displaymessage=0'];
                 logmc=[logmc;'calibration command option: writemessage=1'];
-                logmc=[logmc;'calibration command option: outputgage=0'];
+                logmc=[logmc;'calibration command option: outputriv=0'];
                 logmc=[logmc;'calibration command option: outputwc=0'];
                 else
                 cmdlineargs=[cmdlineargs {'g'}];
                     %for observation loop
-                    runobsloop=1;
-                    logmc=[logmc;'observations command option: runobsloop=1'];
+                    rungageloop=1;
+                    logmc=[logmc;'observations command option: rungageloop=1'];
                     readinputfile=0;
                     newnetwork=0;
                     runriverloop=0;
@@ -353,7 +353,7 @@ else
                     runcalibloop=0;
                     displaymessage=0;
                     writemessage=1;
-                    outputgage=0;
+                    outputriv=0;
                     outputwc=0;
                     outputcal=0;
 
@@ -367,7 +367,7 @@ else
                     logmc=[logmc;'observation command option: runcalibloop=0'];
                     logmc=[logmc;'observation command option: displaymessage=0'];
                     logmc=[logmc;'observation command option: writemessage=1'];
-                    logmc=[logmc;'observation command option: outputgage=0'];
+                    logmc=[logmc;'observation command option: outputriv=0'];
                     logmc=[logmc;'observation command option: outputwc=0'];
                     logmc=[logmc;'observation command option: outputcal=0'];
 
@@ -474,7 +474,7 @@ else
                     doexchanges=0;
                     runcaptureloop=0;
                     runcalibloop=0;
-                    outputgage=0;
+                    outputriv=0;
                     outputwc=0;
                     outputcal=0;
 
@@ -483,7 +483,7 @@ else
                     logmc=[logmc;'build/rebuild command option: doexchanges=0'];
                     logmc=[logmc;'build/rebuild command option: runcaptureloop=0'];
                     logmc=[logmc;'build/rebuild command option: runcalibloop=0'];
-                    logmc=[logmc;'build/rebuild command option: outputgage=0'];
+                    logmc=[logmc;'build/rebuild command option: outputriv=0'];
                     logmc=[logmc;'build/rebuild command option: outputwc=0'];
                     logmc=[logmc;'build/rebuild command option: outputcal=0'];
                 end
@@ -576,6 +576,7 @@ else
 end
 
 if newnetwork==1 && readinputfile==0
+    readinputfile=1;
     logmc=[logmc;'change command option: since netnetwork=1 then readinputfile=1'];
 end
 
@@ -634,12 +635,38 @@ rdates=[datestart*ones(spinupdays*24/rhours,1);rundates;rundates(end)*ones(spind
 rdatesstr=cellstr(datestr(rdates,31));
 rdatesday=floor(rdates);
 rjulien=rdatesday-(datenum(ryear,1,1)-1);
-dateend=datestart+(rdays-spinupdays)-1;
+dateend=datestart+(rdays-spinupdays-spindowndays)-1;
 datedays=[datestart:dateend];
 
 nowvec=datevec(now);
 %avgdates=[datenum(avgstartyear,1,1):datenum(nowvec(1)-1,12,31)];
 avgdates=[datenum(avgstartyear,1,1):datenum(nowvec(1),12,31)];
+
+
+if runcalibloop>0 || rungageloop>0
+    %averages of gagediff etc taken with calibration period that is potentially within larger run period
+    calibstid=find(rdatesday==calibstartdate);
+    calibendid=find(rdatesday==calibenddate);
+    calibstidday=find(datedays==calibstartdate);
+    calibendidday=find(datedays==calibenddate);
+
+    if isempty(calibstid)
+        calibstid=datestid;
+        calibstidday=1;
+        logm=['for observation/calibration loop, calibdatestart:' datestr(calibstartdate) ' not within current data period, so starting calibration period at:' datestr(rdates(calibstid))];
+        domessage(logm,logfilename,displaymessage,writemessage)
+    end
+    if isempty(calibendid)
+        calibendid=dateendid;
+        calibendidday=length(datedays);
+        logm=['for observation/calibration loop, calibdateend:' datestr(calibenddate) ' not within current data period, so ending calibration period at:' datestr(rdates(calibendid))];
+        domessage(logm,logfilename,displaymessage,writemessage)
+    end
+    calibstid=calibstid(1);
+    calibendid=calibendid(end);
+end
+
+
 
 
 
@@ -1010,121 +1037,6 @@ SR.(ds).SRfull=SR.(ds).SR;
 SR.(ds).SR=SRsortedbywdidlist;
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% calculation of bankurf for new matlab based bank storage
-% new - calculating both using j349 method and glover bank storage method (see BuRec EM31 document)
-% new - now having bankurf as value in ft2/s ready to multiply by delta stage (H-head)
-% cumvalue in ft2 for storage volume limitations
-
-%initial glover type bank storage parameters
-K=1000; %hydraulic conductivity in ft/day
-Dbank=10;   %average thickness of bank materials in ft
-T=K*Dbank/(3600*24); %transmissibility of bank materials in ft2/s
-t=[.5:1:(rsteps-0.5)]*3600;
-
-
-logm=['calculating bank storage urfs'];
-domessage(logm,logfilename,displaymessage,writemessage)
-for wd=SR.(ds).WD
-    wds=['WD' num2str(wd)];
-    for r=SR.(ds).(wds).R
-        rs=['R' num2str(r)];
-        for sr=SR.(ds).(wds).(rs).SR
-            XL=SR.(ds).(wds).(rs).aquiferwidth(sr); %J349 XL = aquifer width
-
-
-            % Glover bank storage F=H L T / sqrt(pi T/SS t) - infinite / *(1-exp(-(2*XL)2/(4 T/SS t)) for aquifer boundary case
-%             W=XL/1.5;  %for glover solution currently seem like may need to decrease XL to be more similar to j349
-%             T=SR.(ds).(wds).(rs).transmissivity(sr)/(3600*24);  %actual T in ft/s - j349 appears to have units screwed up
-%             bankurfg= 2*SR.(ds).(wds).(rs).alluviumlength(sr)*5280*T ./ sqrt(pi()* T /SR.(ds).(wds).(rs).storagecoefficient(sr)*t).*(1-exp(-1*(2*W)^2 ./ (4*T/SR.(ds).(wds).(rs).storagecoefficient(sr)*t))); %ft2/s
-%             bankurfgcum=cumsum(bankurfg); %ft2/s
-            
-
-            %j349 bank storage
-
-            ALPHA=(SR.(ds).(wds).(rs).transmissivity(sr)/24.)*rhours/SR.(ds).(wds).(rs).storagecoefficient(sr); %ALPHA as written in J349 (wrong units)
-
-%            T=SR.(ds).(wds).(rs).transmissivity(sr);
-%             XL=XL*XLmult(mmm);
-%             T=T*Tmult(mmm);
-%            ALPHA=(T/24.)*rhours/SR.(ds).(wds).(rs).storagecoefficient(sr);
-
-%            actualT=SR.(ds).(wds).(rs).transmissivity(sr)/(3600*24);
-%            actualK=actualT/Dbank*3600*24;  %in ft/day
-%            ALPHA=(T)*rhours*3600/SR.(ds).(wds).(rs).storagecoefficient(sr); %if reexpressed correctly as actual T
-            
-            for NT=1:rsteps
-                TIME=NT-.5;
-                N=0;
-                D=0;
-                X1=1;
-                %%%%%%%%%%%%%%%%
-                % J349 Case 1
-                % DUSRF(NT)=-1./sqrt(pi()*ALPHA*TIME);
-
-                %%%%%%%%%%%%%%%%
-                % J349 Case 2
-                while X1>0.001
-                    N=N+1;
-                    DD=D;
-                    C1=(2*N-1)*pi()/(2.*XL);
-                    D=D+exp(-C1^2*ALPHA*TIME);
-                    X1=abs(DD-D);
-                    DUSRF(NT)=(2./XL)*D;
-                    if N>100
-                        disp(['Warning: bank urf broke out at NT:' num2str(NT) ' X1:' num2str(X1) ])
-                        break
-                    end
-                end
-            end
-
-            %OK - only way could figure out with correct units was to unitize first ordinate and use first ordinate of glover solution to scale
-            bankurf=DUSRF/DUSRF(1);
-%            bankurf=bankurf*bankurfg(1);
-            bankurf=bankurf*2*SR.(ds).(wds).(rs).alluviumlength(sr)*5280*T ./ sqrt(pi()* T /SR.(ds).(wds).(rs).storagecoefficient(sr)*1800); %1800=t(sec) at 0.5hr
-            bankurfcum=cumsum(bankurf); %ft2/s
-
-            if urfwrapbacktype>0
-%                 %glover based urfs
-%                 cburf=bankurfgcum/bankurfgcum(end);
-%                 urfwrapids=find(cburf>=urfwrapback);
-%                 if isempty(urfwrapids)
-%                     urfwrapid=length(bankurf);
-%                 else
-%                     urfwrapid=urfwrapids(1);  %ie includes first one over limit
-%                 end
-%                 bankurfg=bankurfg(1:urfwrapid);  %has values rather than unitized
-%                 bankurfgcum=bankurfgcum(1:urfwrapid);
-
-               %j349 based urfs 
-                cburf=bankurfcum/bankurfcum(end);
-                urfwrapids=find(cburf>=urfwrapback);
-                if isempty(urfwrapids)
-                    urfwrapid=length(bankurf);
-                else
-                    urfwrapid=urfwrapids(1);  %ie includes first one over limit
-                end
-                bankurf=bankurf(1:urfwrapid);
-                bankurfcum=bankurfcum(1:urfwrapid);
-%                 urfwraptot=cburf(urfwrapid);
-%                 urfwrapamt=1-urfwraptot;
-%                 if urfwrapbacktype==2
-%                     bankurf=bankurf(1:urfwrapid)/urfwraptot;
-%                 else
-%                     bankurf=bankurf(1:urfwrapid)+urfwrapamt/urfwrapid;
-%                 end
-%                 bankurf=bankurf/sum(bankurf);
-            end
-           
-            SR.(ds).(wds).(rs).bankurf{sr}=bankurf';
-            SR.(ds).(wds).(rs).bankurfcum{sr}=bankurfcum'*(rhours*3600); %ft2
-%             SR.(ds).(wds).(rs).bankurfg{sr}=bankurfg';
-%             SR.(ds).(wds).(rs).bankurfgcum{sr}=bankurfgcum'*(rhours*3600); %ft2
-            
-        end
-    end
-end
-
 %%%%%%%%%%%%%%%%%%%%%%%%
 %WARNING / WATCH
 %quick fix - for moment if using csv, still get evap (old) and stagedischarge out of xlsx
@@ -1148,7 +1060,6 @@ else
     load([datafiledir 'StateTL_data_subreach.mat']);
         
 end
-
 
 if newnetwork==1
 
@@ -1716,6 +1627,136 @@ end
 
 end
 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% calculation of bankurf for new matlab based bank storage
+% new - calculating both using j349 method and glover bank storage method (see BuRec EM31 document)
+% new - now having bankurf as value in ft2/s ready to multiply by delta stage (H-head)
+% cumvalue in ft2 for storage volume limitations
+
+if readinputfile>0 || newnetwork==1
+
+%initial glover type bank storage parameters
+% K=1000; %hydraulic conductivity in ft/day
+% Dbank=10;   %average thickness of bank materials in ft
+% T=K*Dbank/(3600*24); %transmissibility of bank materials in ft2/s
+t=[.5:1:(rsteps-0.5)]*3600;
+
+
+logm=['calculating bank storage urfs'];
+domessage(logm,logfilename,displaymessage,writemessage)
+for wd=SR.(ds).WD
+    wds=['WD' num2str(wd)];
+    for r=SR.(ds).(wds).R
+        rs=['R' num2str(r)];
+        for sr=SR.(ds).(wds).(rs).SR
+
+            T=SR.(ds).(wds).(rs).transmissivity(sr);
+            SY=SR.(ds).(wds).(rs).storagecoefficient(sr);
+            XL=SR.(ds).(wds).(rs).aquiferwidth(sr); %J349 XL = aquifer width
+
+            if T<=0 || SY<=0 || XL<=0  %can indicate solid rock etc with T=0
+                SR.(ds).(wds).(rs).bankurf{sr}=0;
+                SR.(ds).(wds).(rs).bankurfcum{sr}=0;
+            else
+
+            %j349 bank storage
+            ALPHA=(T/24.)*rhours/SY; %ALPHA as written in J349 (believe in wrong units)
+
+%             XL=XL*XLmult(mmm);
+%             T=T*Tmult(mmm);
+%            ALPHA=(T/24.)*rhours/SR.(ds).(wds).(rs).storagecoefficient(sr);
+%            actualT=SR.(ds).(wds).(rs).transmissivity(sr)/(3600*24);
+%            actualK=actualT/Dbank*3600*24;  %in ft/day
+%            ALPHA=(T)*rhours*3600/SR.(ds).(wds).(rs).storagecoefficient(sr); %if reexpressed correctly as actual T
+            
+            for NT=1:rsteps
+                TIME=NT-.5;
+                N=0;
+                D=0;
+                X1=1;
+                %%%%%%%%%%%%%%%%
+                % J349 Case 1
+                % DUSRF(NT)=-1./sqrt(pi()*ALPHA*TIME);
+
+                %%%%%%%%%%%%%%%%
+                % J349 Case 2
+                while X1>0.001
+                    N=N+1;
+                    DD=D;
+                    C1=(2*N-1)*pi()/(2.*XL);
+                    D=D+exp(-C1^2*ALPHA*TIME);
+                    X1=abs(DD-D);
+                    DUSRF(NT)=(2./XL)*D;
+                    if N>100
+                        disp(['Warning: bank urf broke out at NT:' num2str(NT) ' X1:' num2str(X1) ])
+                        break
+                    end
+                end
+            end
+
+
+            % Glover bank storage F=H L T / sqrt(pi T/SS t) - infinite / *(1-exp(-(2*XL)2/(4 T/SS t)) for aquifer boundary case
+%             W=XL/1.5;  %for glover solution currently seem like may need to decrease XL to be more similar to j349
+%             T=SR.(ds).(wds).(rs).transmissivity(sr)/(3600*24);  %actual T in ft/s - j349 appears to have units screwed up
+%             bankurfg= 2*SR.(ds).(wds).(rs).alluviumlength(sr)*5280*T ./ sqrt(pi()* T /SR.(ds).(wds).(rs).storagecoefficient(sr)*t).*(1-exp(-1*(2*W)^2 ./ (4*T/SR.(ds).(wds).(rs).storagecoefficient(sr)*t))); %ft2/s
+%             bankurfgcum=cumsum(bankurfg); %ft2/s
+            T=T/(rhours*3600*24); %transmissibility of bank materials in ft2/s
+            gloveralpha=2*SR.(ds).(wds).(rs).alluviumlength(sr)*5280*T ./ sqrt(pi()* T/SY *1800); %1800=t(sec) at 0.5hr
+
+
+            %OK - only way could figure out with correct units was to unitize first ordinate and use first ordinate of glover solution to scale
+            bankurf=DUSRF/DUSRF(1);         %unitize j349 curve
+            bankurf=bankurf*gloveralpha;    %j349 curve scaled to glover alpha
+            bankurfcum=cumsum(bankurf);     %ft2/s
+
+            if urfwrapbacktype>0
+%                 %glover based urfs
+%                 cburf=bankurfgcum/bankurfgcum(end);
+%                 urfwrapids=find(cburf>=urfwrapback);
+%                 if isempty(urfwrapids)
+%                     urfwrapid=length(bankurf);
+%                 else
+%                     urfwrapid=urfwrapids(1);  %ie includes first one over limit
+%                 end
+%                 bankurfg=bankurfg(1:urfwrapid);  %has values rather than unitized
+%                 bankurfgcum=bankurfgcum(1:urfwrapid);
+
+               %j349 based urfs 
+                cburf=bankurfcum/bankurfcum(end);
+                urfwrapids=find(cburf>=urfwrapback);
+                if isempty(urfwrapids)
+                    urfwrapid=length(bankurf);
+                else
+                    urfwrapid=urfwrapids(1);  %ie includes first one over limit
+                end
+                bankurf=bankurf(1:urfwrapid);
+                bankurfcum=bankurfcum(1:urfwrapid);
+%                 urfwraptot=cburf(urfwrapid);
+%                 urfwrapamt=1-urfwraptot;
+%                 if urfwrapbacktype==2
+%                     bankurf=bankurf(1:urfwrapid)/urfwraptot;
+%                 else
+%                     bankurf=bankurf(1:urfwrapid)+urfwrapamt/urfwrapid;
+%                 end
+%                 bankurf=bankurf/sum(bankurf);
+            end
+           
+            SR.(ds).(wds).(rs).bankurf{sr}=bankurf';
+            SR.(ds).(wds).(rs).bankurfcum{sr}=bankurfcum'*(rhours*3600); %ft2
+
+            end
+            
+        end
+    end
+end
+
+    if readinputfile<2  %not save if readinputfile==2 (ie for calibration), saves both reattached evap and network
+        save([datafiledir 'StateTL_data_subreach.mat'],'SR');
+    end
+
+end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -4643,23 +4684,9 @@ end
 % OBSERVATION LOOP JUST TO OUTPUT GAGE VALUES FOR CALIBRATION
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%
-if runobsloop>0
+if rungageloop>0
     logm=['Starting observation loop for use in calibration at: '  datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
-
-    %averages of gagediff etc taken with calibration period that is potentially within larger run period
-    calibstid=find(rdates==calibstartdate);
-    calibendid=find(rdates==calibenddate);
-    if isempty(calibstid)
-        calibstid=datestid;
-        logm=['for observation/calibration loop, calibdatestart:' datestr(calibstartdate) ' not within current data period, so starting calibration period at:' datestr(rdates(calibstid))];
-        domessage(logm,logfilename,displaymessage,writemessage)
-    end
-    if isempty(calibendid)
-        calibendid=dateendid;
-        logm=['for observation/calibration loop, calibdateend:' datestr(calibenddate) ' not within current data period, so ending calibration period at:' datestr(rdates(calibendid))];
-        domessage(logm,logfilename,displaymessage,writemessage)
-    end
 
 j=0;jids=[];
 if ~isfield(SR.(ds),'Gageloc')  %river loop wasnt run first
@@ -4726,52 +4753,12 @@ end
 
 for i=1:length(jids)
     j=jids(i);
-    loclinegage(i,:)=[SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4)];
-    outputlinegage(i,:)=SR.(ds).Gageloc.flowgage(calibstid:calibendid,j)';
+    loclinegage(:,i)=[SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4)]';
+    outputlinegage(:,i)=SR.(ds).Gageloc.flowgage(calibstid:calibendid,j);
     if sum(strcmp(cmdlineargs,'m'))>0  %get multiyear gage data
         for myr=multiyrs
             myrstr=['Y' num2str(myr)];
-            outputlinegagemulti.(myrstr)(i,:)=SR.(ds).Gageloc.(myrstr).flowgage(calibstid:calibendid,j)';
-        end
-    end
-end
-
-titlelocline=[{'WDID'},{'Abbrev'},{'Div'},{'WD'},{'Reach'},{'Reachnum'}];
-
-if outputhr==1
-    titledates=cellstr(datestr(rdates(calibstid:calibendid),'mm/dd/yy HH:'));
-    logm=['writing hourly output files for gage/observation amounts (hourly is a bit slow), starting: ' datestr(now)];
-    domessage(logm,logfilename,displaymessage,writemessage)
-    writecell([[titlelocline,titledates'];[loclinegage,num2cell(outputlinegage)]],[outputfilebase '_gagehr.csv']);
-    if sum(strcmp(cmdlineargs,'m'))>0  %get multiyear gage data
-        for myr=multiyrs
-            myrstr=['Y' num2str(myr)];
-            writecell([[titlelocline,titledates'];[loclinegage,num2cell(outputlinegagemulti.(myrstr))]],[outputfilebase '_' myrstr 'gagehr.csv']);
-        end
-    end
-end
-
-if outputday==1
-    [yr,mh,dy,hr,mi,sec] = datevec(rdates(calibstid:calibendid));
-    daymat=unique([yr,mh,dy],'rows','stable');
-    titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
-    for i=1:length(daymat(:,1))
-        dayids=find(yr==daymat(i,1) & mh==daymat(i,2) & dy==daymat(i,3));
-        outputlinedaygage(:,i)=mean(outputlinegage(:,dayids),2);
-        if sum(strcmp(cmdlineargs,'m'))>0  %get multiyear gage data
-            for myr=multiyrs
-                myrstr=['Y' num2str(myr)];
-                outputlinedaygagemulti.(myrstr)(:,i)=mean(outputlinegagemulti.(myrstr)(:,dayids),2);
-            end
-        end
-    end
-    logm=['writing daily output files for gage and simulated (calibration) amounts, starting: ' datestr(now)];
-    domessage(logm,logfilename,displaymessage,writemessage)
-    writecell([[titlelocline,titledatesday'];[loclinegage,num2cell(outputlinedaygage)]],[outputfilebase '_gageday.csv']);
-    if sum(strcmp(cmdlineargs,'m'))>0  %get multiyear gage data
-        for myr=multiyrs
-            myrstr=['Y' num2str(myr)];
-            writecell([[titlelocline,titledatesday'];[loclinegage,num2cell(outputlinedaygagemulti.(myrstr))]],[outputfilebase '_' myrstr 'gageday.csv']);
+            outputlinegagemulti.(myrstr)(:,i)=SR.(ds).Gageloc.(myrstr).flowgage(calibstid:calibendid,j);
         end
     end
 end
@@ -4787,26 +4774,13 @@ if runcalibloop>0
     logm=['Starting simulation loop for use in calibration at: '  datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
 
-    %averages of gagediff etc taken with calibration period that is potentially within larger run period
-    calibstid=find(rdates==calibstartdate);
-    calibendid=find(rdates==calibenddate);
-    if isempty(calibstid)
-        calibstid=datestid;
-        logm=['for calibration loop, calibdatestart:' datestr(calibstartdate) ' not within current data period, so starting calibration period at:' datestr(rdates(calibstid))];
-        domessage(logm,logfilename,displaymessage,writemessage)
-    end
-    if isempty(calibendid)
-        calibendid=dateendid;
-        logm=['for calibration loop, calibdateend:' datestr(calibenddate) ' not within current data period, so ending calibration period at:' datestr(rdates(calibendid))];
-        domessage(logm,logfilename,displaymessage,writemessage)
-    end
     if ~(strcmp(calibavggainloss,'mean') | strcmp(calibavggainloss,'linreg') | strcmp(calibavggainloss,'movingavg') | strcmp(calibavggainloss,'movingmedian'))
         logm=['for calibration loop, could not figure out how to average gagediff etc given listed option:' calibavggainloss ' (looking for movingavg movingmedian mean or linreg)'];
         domessage(logm,logfilename,displaymessage,writemessage)
         error(logm)
     end
     if strcmp(calibavggainloss,'movingavg') | strcmp(calibavggainloss,'movingmedian')
-        logm=['for calibration loop, with option: ' calibavggainloss ' using window of: ' num2str(calibmovingavgdays) ' days for gain/loss term'];
+        logm=['for calibration loop, with option: ' calibavggainloss ' using window of: ' num2str(gainsavgwindowdays) ' days for gain/loss term'];
         domessage(logm,logfilename,displaymessage,writemessage)
     end
 
@@ -5012,10 +4986,371 @@ end  %runcalibloop
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% OUTPUT
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+
+if outputcal==1 || rungageloop>0 || outputgain==1 || outputriv==1 || outputwc==1
+    if outputhr==1
+        titledates=cellstr(datestr(rdates,'mm/dd/yy HH:'));
+    end
+    if outputday==1
+        titledatesday=cellstr(datestr(datedays,'mm/dd/yy'));
+        for i=1:length(datedays)
+            dayids{i}=find(rdatesday==datedays(i));
+        end
+        dayids1=dayids{1};
+        if length(dayids1)>24
+            dayids{1}=dayids1(end-23:end);
+        end
+        dayids1=dayids{end};
+        if length(dayids1)>24
+            dayids{end}=dayids1(1:24);
+        end
+    end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% OUTPUT - gage/observation amounts
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+if rungageloop>0
+logm=['writing output files for gage and simulated (calibration) amounts, starting: ' datestr(now)];
+domessage(logm,logfilename,displaymessage,writemessage)
+
+    if outputmat==1
+        titlelocline=[{'WDID'},{'Abbrev'},{'Div'},{'WD'},{'Reach'},{'ReachNum'}];
+    else
+        titlelocline=[{'Date'},{'Abbrev'},{'Value'}];
+    end
+
+    if outputhr==1
+        if sum(strcmp(cmdlineargs,'m'))==0
+            outputlinegagemulti.(['Y' num2str(yearstart)])=outputlinegage;
+        end
+        for myr=multiyrs
+            myrstr=['Y' num2str(myr)];
+            titledatesm=cellstr(datestr(Station.(myrstr).date.rdates,'mm/dd/yy HH:'));
+        if outputmat==1
+            outputcell=[[titlelocline';titledatesm(calibstid:calibendid,1)],[loclinegage;num2cell(outputlinegagemulti.(myrstr))]];
+        else
+            outputcell=titlelocline;
+            for i=1:length(outputlinegage(1,:))
+                loccol=repmat(loclinegage(2,i),calibendid-calibstid+1,1);
+                outputcell=[outputcell;[titledatesm(calibstid:calibendid,1) loccol num2cell(outputlinegagemulti.(myrstr)(:,i))]];
+            end
+
+        end
+        writecell(outputcell,[outputfilebase '_' myrstr 'gagehr.csv']);
+        end
+
+    end
+    if outputday==1
+        for myr=multiyrs
+            myrstr=['Y' num2str(myr)];
+            titledatesdaym=cellstr(datestr(Station.(myrstr).date.datedays,'mm/dd/yy'));
+            k=0;
+            for i=calibstidday:calibendidday
+                k=k+1;
+                outputlinedaygage(k,:)=mean(outputlinegagemulti.(myrstr)(dayids{i}-calibstid+1,:));
+            end
+            if outputmat==1
+                outputcell=[[titlelocline';titledatesdaym(calibstidday:calibendidday,1)],[loclinegage;num2cell(outputlinedaygage)]];
+            else
+                outputcell=titlelocline;
+                for i=1:length(outputlinedaygage(1,:))
+                    loccol=repmat(loclinegage(2,i),calibendidday-calibstidday+1,1);
+                    outputcell=[outputcell;[titledatesdaym(calibstidday:calibendidday,1) loccol num2cell(outputlinedaygage(:,i))]];
+                end
+
+            end
+            writecell(outputcell,[outputfilebase '_' myrstr 'gageday.csv']);
+        end
+    end
+
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% OUTPUT - gain/loss/error by reach (not subreach)
+% currently set to WDcaliblist
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+
+if outputgain==1 && runriverloop>0
+    if outputmat==1
+        titlelocline=[{'WDID-top'},{'Abbrev-top'},{'Div'},{'WD'},{'Reach'},{'subreachnum'}];
+    else
+        titlelocline=[{'Date'},{'WD-Reach'},{'Value'}];
+    end
+
+    k=0;
+    for wd=WDcaliblist
+        wds=['WD' num2str(wd)];
+        for r=SR.(ds).(wds).R
+            k=k+1;
+            rs=['R' num2str(r)];
+            gagelocid=SR.(ds).(wds).(rs).gagelocid;
+            loclinegain(:,k)=[SR.(ds).Gageloc.loc(gagelocid,5:6),SR.(ds).Gageloc.loc(gagelocid,1:4)]';
+            outputlinegain(:,k)=SR.(ds).(wds).(rs).gagediff+SR.(ds).(wds).(rs).gagedifflast;
+            if runcalibloop>0 && outputcal==1
+                outputlinegaincal(:,k)=sum(SR.(ds).(wds).(rs).gagediffportioncal,2)+SR.(ds).(wds).(rs).gagedifflastcal;
+            end
+        end
+    end
+
+    if outputhr==1
+        if outputmat==1
+            outputcell=[[titlelocline';titledates],[loclinegain;num2cell(outputlinegain)]];
+        else
+            outputcell=titlelocline;
+            for i=1:length(outputlinegain(1,:))
+                loccol=repmat({[loclinegain{4,i} '-' loclinegain{5,i}]},rsteps,1);
+                outputcell=[outputcell;[titledates loccol num2cell(outputlinegain(:,i))]];
+            end
+
+        end
+        writecell(outputcell,[outputfilebase '_gainhr.csv']);
+        if runcalibloop>0 && outputcal==1
+            if outputmat==1
+                outputcell=[[titlelocline';titledates],[loclinegain;num2cell(outputlinegaincal)]];
+            else
+                outputcell=titlelocline;
+                for i=1:length(outputlinegaincal(1,:))
+                    loccol=repmat({[loclinegain{4,i} '-' loclinegain{5,i}]},rsteps,1);
+                    outputcell=[outputcell;[titledates loccol num2cell(outputlinegaincal(:,i))]];
+                end
+
+            end
+            writecell(outputcell,[outputfilebase '_gaincalhr.csv']);
+        end
+    end
+    if outputday==1
+        for i=1:length(datedays)
+            outputlinedaygain(i,:)=mean(outputlinegain(dayids{i},:));
+        end
+        if outputmat==1
+            outputcell=[[titlelocline';titledatesday],[loclinegain;num2cell(outputlinedaygain)]];
+        else
+            outputcell=titlelocline;
+            for i=1:length(outputlinedaygain(1,:))
+                loccol=repmat({[loclinegain{4,i} '-' loclinegain{5,i}]},length(datedays),1);
+                outputcell=[outputcell;[titledatesday loccol num2cell(outputlinedaygain(:,i))]];
+            end
+        end
+        writecell(outputcell,[outputfilebase '_gainday.csv']);
+        if runcalibloop>0 && outputcal==1
+            for i=1:length(datedays)
+                outputlinedaygain(i,:)=mean(outputlinegaincal(dayids{i},:));
+            end
+            if outputmat==1
+                outputcell=[[titlelocline';titledatesday],[loclinegain;num2cell(outputlinedaygain)]];
+            else
+                outputcell=titlelocline;
+                for i=1:length(outputlinedaygain(1,:))
+                    loccol=repmat({[loclinegain{4,i} '-' loclinegain{5,i}]},length(datedays),1);
+                    outputcell=[outputcell;[titledatesday loccol num2cell(outputlinedaygain(:,i))]];
+                end
+            end
+            writecell(outputcell,[outputfilebase '_gaincalday.csv']);
+        end
+    end
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% OUTPUT - simulation/calibration results 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+if runcalibloop>0 && outputcal==1 
+    logm=['Starting output of simulation results at gage locations at: ' datestr(now)];
+    domessage(logm,logfilename,displaymessage,writemessage)
+    
+    if plotcalib==1 && outputday==1
+        k=0;
+        [dyr,dm,dd] = datevec(datedays(calibstidday:calibendidday));
+
+        for i=dm(1):dm(end)
+            k=k+1;
+            dids=find(dm==i);
+            dxtic(k)=dids(1);
+            dxticlabel{k}=[num2str(i) '/' num2str(dd(dids(1)))];
+        end
+        k=0;
+        for i=dm(1):dm(end)
+            k=k+1;
+            dids=find(rmonth(calibstid:calibendid,1)==i);
+            hrxtic(k)=dids(1);
+            hrxticlabel{k}=[num2str(i) '/' num2str(rundays(calibstid+dids(1)-1,1))];
+        end
+    end
+
+    iadd=0;
+    for wd=WDcaliblist
+        wds=['WD' num2str(wd)];
+        wdsids=intersect(find(strcmp(SR.(ds).Gageloc.loc(:,1),ds)),find(strcmp(SR.(ds).Gageloc.loc(:,2),wds)));
+        wdsids=intersect(wdsids,find(strcmp(SR.(ds).Gageloc.loc(:,7),'1')));
+
+        for i=1:length(wdsids)
+            j=wdsids(i);
+%             loclinegage(2*(i+iadd)-1,:)=[SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4),{1}];  %includes both gage and simulated on subseqent lines
+%             loclinegage(2*(i+iadd),:)=  [SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4),{2}];
+            loclinegage(:,i+iadd)=[SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4)]';
+            x=SR.(ds).Gageloc.flowgage(calibstid:calibendid,j);
+            y=SR.(ds).Gageloc.flowcal(calibstid:calibendid,j);
+%             outputlinegage(:,2*(i+iadd)-1)=x;
+%             outputlinegage(:,2*(i+iadd))=y;
+            outputlinegage(:,i+iadd)=x;
+            outputlinecal(:,i+iadd)=y;
+            if outputcalregr==1
+                [yfit,m,b,R2,SEE]=regr(x,y,'leastsquares');
+                loclinegageregr(i+iadd,:)=[SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4)];
+                outputlinegageregr(i+iadd,1)=m;
+                outputlinegageregr(i+iadd,2)=R2;
+                outputlinegageregr(i+iadd,3)=SEE;
+                if plotcalib==1
+                    tit=[loclinegageregr{i+iadd,1} '-' loclinegageregr{i+iadd,2}];
+                    figure; hold on;
+                    figmin=min([min(x),min(y)]);
+                    figmax=max([max(x),max(y),1]);
+                    plot(x,'b','LineWidth',1); hold on;
+                    plot(y,'r','LineWidth',1)
+                    set(gca,'XLim',[1 length(x)],'YLim',[figmin figmax],'Box','on')
+                    title(['Gage and Sim Hourly Data-' tit ' blue=gage/red=sim'])
+                    ylabel('Observed Simulated Flow Rate (cfs)')
+                    if outputday==1  %since only do tic calc in daily above
+                        set(gca,'XTick',hrxtic,'XTickLabel',hrxticlabel)
+                        xlabel(['Dates in ' num2str(yearstart)])
+                    else
+                        xlabel('Hours since start of calibration')
+                    end
+
+                    if printcalibplots==1
+                        eval(['print -dpng -r200 ' datadir 'calibhour1_fig' num2str(i+iadd) '_' tit])
+                        close
+                    end
+                    figure; hold on;
+                    plot(x,y,'b.');
+                    plot([min(x) max(x)],[m*min(x) m*max(x)])
+                    text(.7*max(x),.9*max(y),['R2:' num2str(R2) '-m:' num2str(m)])
+                    title(['Gage(x) vs Sim(y) Hourly Data-' tit]);
+                    xlabel('Observed (Gage) Hourly Data (cfs)')
+                    ylabel('Simulated Hourly Data (cfs)')
+                    if printcalibplots==1
+                        eval(['print -dpng -r200 ' datadir 'calibhour2_fig' num2str(i+iadd) '_' tit])
+                        close
+                    end
+                end
+            end
+        end
+        iadd=i;
+    end
+
+    if outputmat==1
+        titlelocline=[{'WDID'},{'Abbrev'},{'Div'},{'WD'},{'Reach'},{'ReachNum'}];
+    else
+        titlelocline=[{'Date'},{'Abbrev'},{'Value'}];
+    end
+
+    if outputhr==1
+%       writecell([loclinegage,num2cell(outputlinegage)],[outputfilebase '_calhr.csv'],'WriteMode','append');
+        if outputmat==1
+            outputcell=[[titlelocline';titledates(calibstid:calibendid,1)],[loclinegage;num2cell(outputlinecal)]];
+        else
+            outputcell=titlelocline;
+            for i=1:length(outputlinecal(1,:))
+                loccol=repmat(loclinegage(2,i),calibendid-calibstid+1,1);
+                outputcell=[outputcell;[titledates(calibstid:calibendid,1) loccol num2cell(outputlinecal(:,i))]];
+            end
+
+        end
+        writecell(outputcell,[outputfilebase '_calhr.csv']);
+    end
+
+    if outputday==1 || outputcalregr==1
+        clear outputlinedaygage
+        k=0;
+        for i=calibstidday:calibendidday
+            k=k+1;
+            outputlinedaygage(k,:)=mean(outputlinegage(dayids{i}-calibstid+1,:));
+            outputlinedaycal(k,:)=mean(outputlinecal(dayids{i}-calibstid+1,:));
+        end
+        if outputday==1
+            if outputmat==1
+                outputcell=[[titlelocline';titledatesday(calibstidday:calibendidday,1)],[loclinegage;num2cell(outputlinedaycal)]];
+            else
+                outputcell=titlelocline;
+                for i=1:length(outputlinedaycal(1,:))
+                    loccol=repmat(loclinegage(2,i),calibendidday-calibstidday+1,1);
+                    outputcell=[outputcell;[titledatesday(calibstidday:calibendidday,1) loccol num2cell(outputlinedaycal(:,i))]];
+                end
+
+            end
+            writecell(outputcell,[outputfilebase '_calday.csv']);
+        end
+
+        if outputcalregr==1
+        iadd=0;
+        for wd=WDcaliblist
+        wds=['WD' num2str(wd)];
+        wdsids=intersect(find(strcmp(SR.(ds).Gageloc.loc(:,1),ds)),find(strcmp(SR.(ds).Gageloc.loc(:,2),wds)));
+        wdsids=intersect(wdsids,find(strcmp(SR.(ds).Gageloc.loc(:,7),'1')));
+            for i=1:length(wdsids)
+%                 x=outputlinedaygage(2*(i+iadd)-1,:)';
+%                 y=outputlinedaygage(2*(i+iadd),:)';
+                x=outputlinedaygage(:,i+iadd);
+                y=outputlinedaycal(:,i+iadd);
+                [yfit,m,b,R2,SEE]=regr(x,y,'leastsquares');
+                outputlinegageregrday(i+iadd,1)=m;
+                outputlinegageregrday(i+iadd,2)=R2;
+                outputlinegageregrday(i+iadd,3)=SEE;
+                if plotcalib==1
+                    tit=[loclinegageregr{i+iadd,1} '-' loclinegageregr{i+iadd,2}];
+                    figure; hold on;
+                    figmin=min([min(x),min(y)]);
+                    figmax=max([max(x),max(y),1]);
+                    plot(x,'b','LineWidth',1); hold on;
+                    plot(y,'r','LineWidth',1)
+                    set(gca,'YLim',[figmin figmax],'Box','on')
+                    title(['Gage and Sim Daily Data-' tit ' blue=gage/red=sim'])
+                    set(gca,'XTick',dxtic,'XTickLabel',dxticlabel)
+                    xlabel(['Dates in ' num2str(yearstart)])
+                    ylabel('Observed Simulated Flow Rate (cfs)')
+                    if printcalibplots==1
+                        eval(['print -dpng -r200 ' datadir 'calibday1_fig' num2str(i+iadd) '_' tit])
+                        close
+                    end
+                    figure; hold on;
+                    plot(x,y,'b.');
+                    plot([min(x) max(x)],[m*min(x) m*max(x)])
+                    text(.7*max(x),.9*max(y),['R2:' num2str(R2) '-m:' num2str(m)])
+                    
+                    title(['Gage(x) vs Sim(y) Daily Data-' tit]);
+                    xlabel('Observed (Gage) Daily Data (cfs)')
+                    ylabel('Simulated Daily Data (cfs)')
+                    if printcalibplots==1
+                        eval(['print -dpng -r200 ' datadir 'calibday2_fig' num2str(i+iadd) '_' tit])
+                        close
+                    end
+                end
+            end
+            iadd=i;
+        end
+
+        titleregrline=[{'m-hour'},{'R2-hour'},{'SEE-hour'},{'m-day'},{'R2-day'},{'SEE-day'}];
+        writecell([titlelocline,titleregrline],[outputfilebase '_calstats.csv']);
+        writecell([loclinegageregr,num2cell(outputlinegageregr),num2cell(outputlinegageregrday)],[outputfilebase '_calstats.csv'],'WriteMode','append');
+        end
+    end
+end
+
+end
+
+%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % OUTPUT - full river / gage loop amounts
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if outputgage==1
+if outputriv==1
     logm=['Starting output of files oriented by subreach/node at: '  datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
 
@@ -5233,182 +5568,6 @@ end
 
 end
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% OUTPUT - comparison of gage and simulated amounts at gage
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%
-
-if outputcal==1 & runcalibloop>0
-    logm=['Starting output of files listing just at gage locations at: ' datestr(now)];
-    domessage(logm,logfilename,displaymessage,writemessage)
-
-    titlelocline=[{'WDID'},{'Abbrev'},{'Div'},{'WD'},{'Reach'},{'ReachNum'},{'1-Gage/2-Sim'}];
-    if outputhr==1
-%        titledates=cellstr(datestr(rdates(datestid:dateendid),'mm/dd/yy HH:'));
-        titledates=cellstr(datestr(rdates(calibstid:calibendid),'mm/dd/yy HH:'));
-        writecell([titlelocline,titledates'],[outputfilebase '_calhr.csv']);
-        
-
-    end
-    if outputday==1
-%        [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:dateendid));
-        [yr,mh,dy,hr,mi,sec] = datevec(rdates(calibstid:calibendid));
-        daymat=unique([yr,mh,dy],'rows','stable');
-        titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
-        writecell([titlelocline,titledatesday'],[outputfilebase '_calday.csv']);
-        if plotcalib==1
-            k=0;
-            for i=daymat(1,2):daymat(end,2)
-                k=k+1;
-                dids=find(daymat(:,2)==i);
-                dxtic(k)=dids(1);
-                dxticlabel{k}=[num2str(i) '/' num2str(daymat(dids(1),3))];
-            end
-            k=0;
-            for i=mh(1):mh(end)
-                k=k+1;
-                dids=find(mh==i);
-                hrxtic(k)=dids(1);
-                hrxticlabel{k}=[num2str(i) '/' num2str(dy(dids(1)))];
-            end
-        end
-    end
-
-    if outputcalregr==1
-        titleregrline=[{'m-hour'},{'R2-hour'},{'SEE-hour'},{'m-day'},{'R2-day'},{'SEE-day'}];
-        writecell([titlelocline(1:end-1),titleregrline],[outputfilebase '_calstats.csv']);
-    end
-    iadd=0;
-    for wd=WDcaliblist
-        wds=['WD' num2str(wd)];
-        wdsids=intersect(find(strcmp(SR.(ds).Gageloc.loc(:,1),ds)),find(strcmp(SR.(ds).Gageloc.loc(:,2),wds)));
-        wdsids=intersect(wdsids,find(strcmp(SR.(ds).Gageloc.loc(:,7),'1')));
-
-        for i=1:length(wdsids)
-            j=wdsids(i);
-%             loclinegage(2*(i+iadd)-1,:)=[SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4),{1}];  %includes both gage and simulated on subseqent lines
-%             loclinegage(2*(i+iadd),:)=  [SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4),{2}];
-            loclinegage(i+iadd,:)=  [SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4),{2}];
-            x=SR.(ds).Gageloc.flowgage(calibstid:calibendid,j);
-            y=SR.(ds).Gageloc.flowcal(calibstid:calibendid,j);
-%             outputlinegage(2*(i+iadd)-1,:)=x';
-%             outputlinegage(2*(i+iadd),:)=y';
-            outputlinegage(i+iadd,:)=x';
-            outputlinecal(i+iadd,:)=y';
-            if outputcalregr==1
-                [yfit,m,b,R2,SEE]=regr(x,y,'leastsquares');
-                loclinegageregr(i+iadd,:)=[SR.(ds).Gageloc.loc(j,5:6),SR.(ds).Gageloc.loc(j,1:4)];
-                outputlinegageregr(i+iadd,1)=m;
-                outputlinegageregr(i+iadd,2)=R2;
-                outputlinegageregr(i+iadd,3)=SEE;
-                if plotcalib==1
-                    tit=[loclinegageregr{i+iadd,1} '-' loclinegageregr{i+iadd,2}];
-                    figure; hold on;
-                    figmin=min([min(x),min(y)]);
-                    figmax=max([max(x),max(y),1]);
-                    plot(x,'b','LineWidth',1); hold on;
-                    plot(y,'r','LineWidth',1)
-                    set(gca,'XLim',[1 length(x)],'YLim',[figmin figmax],'Box','on')
-                    title(['Gage and Sim Hourly Data-' tit ' blue=gage/red=sim'])
-                    ylabel('Observed Simulated Flow Rate (cfs)')
-                    if outputday==1  %since only do tic calc in daily above
-                        set(gca,'XTick',hrxtic,'XTickLabel',hrxticlabel)
-                        xlabel(['Dates in ' num2str(yearstart)])
-                    else
-                        xlabel('Hours since start of calibration')
-                    end
-
-                    if printcalibplots==1
-                        eval(['print -dpng -r200 ' datadir 'calibhour1_fig' num2str(i+iadd) '_' tit])
-                        close
-                    end
-                    figure; hold on;
-                    plot(x,y,'b.');
-                    plot([min(x) max(x)],[m*min(x) m*max(x)])
-                    text(.7*max(x),.9*max(y),['R2:' num2str(R2) '-m:' num2str(m)])
-                    title(['Gage(x) vs Sim(y) Hourly Data-' tit]);
-                    xlabel('Observed (Gage) Hourly Data (cfs)')
-                    ylabel('Simulated Hourly Data (cfs)')
-                    if printcalibplots==1
-                        eval(['print -dpng -r200 ' datadir 'calibhour2_fig' num2str(i+iadd) '_' tit])
-                        close
-                    end
-                end
-            end
-        end
-        iadd=i;
-    end
-    if outputhr==1
-        logm=['writing hourly output files for gage and simulated (calibration) amounts (hourly is a bit slow), starting: ' datestr(now)];
-        domessage(logm,logfilename,displaymessage,writemessage)
-%        writecell([loclinegage,num2cell(outputlinegage)],[outputfilebase '_calhr.csv'],'WriteMode','append');
-        writecell([loclinegage,num2cell(outputlinecal)],[outputfilebase '_calhr.csv'],'WriteMode','append');
-    end
-    if outputday==1 || outputcalregr==1
-        logm=['writing daily output files for gage and simulated (calibration) amounts, starting: ' datestr(now)];
-        domessage(logm,logfilename,displaymessage,writemessage)
-        for i=1:length(daymat(:,1))
-            dayids=find(yr==daymat(i,1) & mh==daymat(i,2) & dy==daymat(i,3));
-            outputlinedaygage(:,i)=mean(outputlinegage(:,dayids),2);
-            outputlinedaycal(:,i)=mean(outputlinecal(:,dayids),2);
-        end
-        if outputday==1
-%            writecell([loclinegage,num2cell(outputlinedaygage)],[outputfilebase '_calday.csv'],'WriteMode','append');
-            writecell([loclinegage,num2cell(outputlinedaycal)],[outputfilebase '_calday.csv'],'WriteMode','append');
-        end
-        if outputcalregr==1
-        iadd=0;
-        for wd=WDcaliblist
-        wds=['WD' num2str(wd)];
-        wdsids=intersect(find(strcmp(SR.(ds).Gageloc.loc(:,1),ds)),find(strcmp(SR.(ds).Gageloc.loc(:,2),wds)));
-        wdsids=intersect(wdsids,find(strcmp(SR.(ds).Gageloc.loc(:,7),'1')));
-            for i=1:length(wdsids)
-%                 x=outputlinedaygage(2*(i+iadd)-1,:)';
-%                 y=outputlinedaygage(2*(i+iadd),:)';
-                x=outputlinedaygage(i+iadd,:)';
-                y=outputlinedaycal(i+iadd,:)';
-                [yfit,m,b,R2,SEE]=regr(x,y,'leastsquares');
-                outputlinegageregrday(i+iadd,1)=m;
-                outputlinegageregrday(i+iadd,2)=R2;
-                outputlinegageregrday(i+iadd,3)=SEE;
-                if plotcalib==1
-                    tit=[loclinegageregr{i+iadd,1} '-' loclinegageregr{i+iadd,2}];
-                    figure; hold on;
-                    figmin=min([min(x),min(y)]);
-                    figmax=max([max(x),max(y),1]);
-                    plot(x,'b','LineWidth',1); hold on;
-                    plot(y,'r','LineWidth',1)
-                    set(gca,'YLim',[figmin figmax],'Box','on')
-                    title(['Gage and Sim Daily Data-' tit ' blue=gage/red=sim'])
-                    set(gca,'XTick',dxtic,'XTickLabel',dxticlabel)
-                    xlabel(['Dates in ' num2str(yearstart)])
-                    ylabel('Observed Simulated Flow Rate (cfs)')
-                    if printcalibplots==1
-                        eval(['print -dpng -r200 ' datadir 'calibday1_fig' num2str(i+iadd) '_' tit])
-                        close
-                    end
-                    figure; hold on;
-                    plot(x,y,'b.');
-                    plot([min(x) max(x)],[m*min(x) m*max(x)])
-                    text(.7*max(x),.9*max(y),['R2:' num2str(R2) '-m:' num2str(m)])
-                    
-                    title(['Gage(x) vs Sim(y) Daily Data-' tit]);
-                    xlabel('Observed (Gage) Daily Data (cfs)')
-                    ylabel('Simulated Daily Data (cfs)')
-                    if printcalibplots==1
-                        eval(['print -dpng -r200 ' datadir 'calibday2_fig' num2str(i+iadd) '_' tit])
-                        close
-                    end
-                end
-            end
-            iadd=i;
-        end
-            writecell([loclinegageregr,num2cell(outputlinegageregr),num2cell(outputlinegageregrday)],[outputfilebase '_calstats.csv'],'WriteMode','append');
-        end
-    end
-end
-%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % OUTPUT - output of river network file
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -5487,7 +5646,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % deployed as function with following end statement
 
-%  end %StateTL as deployed function
+% end %StateTL as deployed function
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % runbank - function that may replace j349 functionality

@@ -47,16 +47,20 @@ displaymessage=1;  				%1=display messages to matlab workspace screen
 writemessage=1; 				%1=write messages to logfile
 
 outputfilebase='StateTL_out';  	     %output filename base - will add srmethod + gage/wc/etc + hour/day + .csv
-outputgage=0;  					%output river amounts by reach
-outputwc=0;  					%output waterclass amounts by reach
-outputcal=0;  					%output calibration amounts by gage location
+outputriv=0;  					%output river amounts by node/subreach
+outputwc=0;  					%output waterclass amounts by node/subreach
 outputnet=0;                         %output river network spatial data
+outputcal=0;  					%output calibration amounts by gage location
+outputcalregr=0;                     %output calibration stats file if doing calibration loop
+outputgain=0;                        %output gain/loss/error term by reach (gage location)
 outputhr=1;  					%output on hour timestep
 outputday=1;  					%output on day timestep
+outputmat=0;                         %0 output is rows of date,id,value (larger size), 1 output is matrix with id in header, first column is date, and subsequent columns are values for each location/id
 
 WDcaliblist=17,67;				%WD to calibrate if running calibloop, if multiple seperate by commas
 calibstart=3,15;			     %calib start month,day
 calibend=11,15;			          %calib end month,day
 calibtype='reach';                   %'reach' or 'wd' - if 'reach' top of each reach will start with gage measurements (ie isolating reach calib errors to reach) otherwise only top of wd will use gage and lower gages will be simulated progression  
-calibavggainloss='movingmedian'; 	 %currently 'movingmedian' 'movingavg' 'mean' or 'linreg' - method to set average gain/loss/error correction for period- mean seems to do about as well as linear regression
+calibavggainloss='movingmedian'; 	%currently 'movingmedian' 'movingavg' 'mean' or 'linreg' - method to set average gain/loss/error correction for period- mean seems to do about as well as linear regression
+gainsavgwindowdays=14;               %window size in days if using movingavg or median for gains/losses in calibration; 14days will avg 1 week before and after point; also using in bank storage method to average gains for evaporation calc
 plotcalib=0;                         %1 plots some calibration plots into data folder
