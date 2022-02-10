@@ -9,25 +9,25 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % function statement for when deployed
 % if using as a function from matlab - be sure to type clear all first
-% function StateTL(varargin)  %end near line 5500
-% clear SR WC
-% %%% StateTL('-f','caltest6','-c','2018','-s','-d','-p')
+%function StateTL(varargin)  %end near line 5650
+%clear SR WC
+%%% StateTL('-f','caltest6','-c','2018','-s','-d','-p')
 
-% comment next lines if using as function
-clear all
-varargin=[];
-% varargin=[{'-f'} {'foldertest1'}];
-% varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
-% varargin=[{'-f'} {'caltestc3_1722020'} {'-c'} {'2020'} {'-s'} {'-d'} {'-p'} {'-m'}];
-% varargin=[{'-f'} {['cal2test']} {'-c'} {'2018'} {'-p'} ];
-varargin=[{'-f'} {['cal9test']} {'-c'} {'2018'}];
-% varargin=[{'-f'} {'caltest6_wd17stil715'} {'-c'} {'2018,3,15,7,15,WD171,172,17'} {'-s'} {'-d'} {'-p'} {'-m'}];
-% varargin=[{'-r'} {'2019'}];
-% varargin=[{'-b'} {'2019'}];
-% varargin=[{'-f'} {'obstest1'} {'-g'} {'2018,3,15,7,15,WD171,172,17'}];
-% varargin=[{'-g'} {'2015'}];
-% varargin=[{'-g'}];
-% varargin=[{'-r'}];
+% % comment next lines if using as function
+ clear all
+% varargin=[];
+% % varargin=[{'-f'} {'foldertest1'}];
+% % varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
+% % varargin=[{'-f'} {'caltestc3_1722020'} {'-c'} {'2020'} {'-s'} {'-d'} {'-p'} {'-m'}];
+% % varargin=[{'-f'} {['cal2test']} {'-c'} {'2018'} {'-p'} ];
+ varargin=[{'-f'} {['cal10test']} {'-c'} {'2018'}];
+% % varargin=[{'-f'} {'caltest6_wd17stil715'} {'-c'} {'2018,3,15,7,15,WD171,172,17'} {'-s'} {'-d'} {'-p'} {'-m'}];
+% % varargin=[{'-r'} {'2019'}];
+% % varargin=[{'-b'} {'2019'}];
+% % varargin=[{'-f'} {'obstest1'} {'-g'} {'2018,3,15,7,15,WD171,172,17'}];
+% % varargin=[{'-g'} {'2015'}];
+% % varargin=[{'-g'}];
+% % varargin=[{'-r'}];
 
 runstarttime=now;
 basedir=cd;basedir=[basedir '\'];
@@ -5020,7 +5020,7 @@ domessage(logm,logfilename,displaymessage,writemessage)
     if outputmat==1
         titlelocline=[{'WDID'},{'Abbrev'},{'Div'},{'WD'},{'Reach'},{'ReachNum'}];
     else
-        titlelocline=[{'Date'},{'Abbrev'},{'Value'}];
+        titlelocline=[{'Date'},{'WDID'},{'Value'}];
     end
 
     if outputhr==1
@@ -5035,7 +5035,7 @@ domessage(logm,logfilename,displaymessage,writemessage)
         else
             outputcell=titlelocline;
             for i=1:length(outputlinegage(1,:))
-                loccol=repmat(loclinegage(2,i),calibendid-calibstid+1,1);
+                loccol=repmat(loclinegage(1,i),calibendid-calibstid+1,1);
                 outputcell=[outputcell;[titledatesm(calibstid:calibendid,1) loccol num2cell(outputlinegagemulti.(myrstr)(:,i))]];
             end
 
@@ -5058,7 +5058,7 @@ domessage(logm,logfilename,displaymessage,writemessage)
             else
                 outputcell=titlelocline;
                 for i=1:length(outputlinedaygage(1,:))
-                    loccol=repmat(loclinegage(2,i),calibendidday-calibstidday+1,1);
+                    loccol=repmat(loclinegage(1,i),calibendidday-calibstidday+1,1);
                     outputcell=[outputcell;[titledatesdaym(calibstidday:calibendidday,1) loccol num2cell(outputlinedaygage(:,i))]];
                 end
 
@@ -5247,7 +5247,7 @@ if runcalibloop>0 && outputcal==1
     if outputmat==1
         titlelocline=[{'WDID'},{'Abbrev'},{'Div'},{'WD'},{'Reach'},{'ReachNum'}];
     else
-        titlelocline=[{'Date'},{'Abbrev'},{'Value'}];
+        titlelocline=[{'Date'},{'WDID'},{'Value'}];
     end
 
     if outputhr==1
@@ -5257,7 +5257,7 @@ if runcalibloop>0 && outputcal==1
         else
             outputcell=titlelocline;
             for i=1:length(outputlinecal(1,:))
-                loccol=repmat(loclinegage(2,i),calibendid-calibstid+1,1);
+                loccol=repmat(loclinegage(1,i),calibendid-calibstid+1,1);
                 outputcell=[outputcell;[titledates(calibstid:calibendid,1) loccol num2cell(outputlinecal(:,i))]];
             end
 
@@ -5279,7 +5279,7 @@ if runcalibloop>0 && outputcal==1
             else
                 outputcell=titlelocline;
                 for i=1:length(outputlinedaycal(1,:))
-                    loccol=repmat(loclinegage(2,i),calibendidday-calibstidday+1,1);
+                    loccol=repmat(loclinegage(1,i),calibendidday-calibstidday+1,1);
                     outputcell=[outputcell;[titledatesday(calibstidday:calibendidday,1) loccol num2cell(outputlinedaycal(:,i))]];
                 end
 
