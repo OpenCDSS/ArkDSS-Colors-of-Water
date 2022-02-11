@@ -15,6 +15,8 @@ Two external files are required, in the same folder, to run this script:
 "StateTL_calibration_inputdata.csv" which contains parameter information to calibrate
 """
 
+import warnings
+warnings.filterwarnings("ignore")
 import os
 import sys
 import shutil
@@ -49,16 +51,17 @@ def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
         'vary': str
     }
     # Read calibration inputdata file
-    df = pd.read_csv(data_dir,
-                     sep='\s*[,]\s*',
-                     engine='python',
-                     dtype=dtype
-                     )
+    df = pd.read_csv(
+        data_dir,
+        sep='\s*[,]\s*',
+        engine='python',
+        dtype=dtype
+    )
     # Remove empty lines (NaNs) from DataFrame
     df.dropna(how='all', inplace=True)
 
     # Create list of unique parameter symbols
-    parameter_list = df.symbol.unique().tolist()
+    parameter_list = df['symbol'].unique().tolist()
     # Create dictionary from DataFrame
     parameters = df.to_dict('index')
 
@@ -81,6 +84,18 @@ def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
     with open(f'{matlab_dir}/{output_tpl}', 'w') as f:
         f.write('ptf ~\n')
         tpl.to_csv(f, index=False, line_terminator='\n')
+
+    # Remove dictionaries with duplicate symbols in dictionary
+    # Keep only the first entry with the symbol
+    encountered_entries = set()
+    key_list = []
+    for k, v in parameters.items():
+        if (v['symbol']) in encountered_entries:
+            key_list.append(k)
+        else:
+            encountered_entries.add((v['symbol']))
+    parameters = {k: v for k, v in parameters.items() if k not in key_list}
+
     return parameters, parameter_list
 
 
@@ -144,7 +159,7 @@ def main():
     base_dir = Path.cwd().parent
     matlab_dir = base_dir / 'matlab'
     os.chdir(base_dir)
-    print(f'present working directory: {Path.cwd()}')
+    print(f'Working directory: {Path.cwd()}')
 
     # Set filenames
     input_file = 'StateTL_inputdata.csv'
@@ -174,7 +189,7 @@ def main():
     keep_previous = settings['keep_previous']
     method = settings['method']
     # Create dictionary from method
-    methods = ['Parameter Sensitivity', 'Monte Carlo', 'Latin Hypercube']
+    methods = ['Parameter Sensitivity', 'Latin Hypercube']
     if not config.has_section(method):
         print(f'ERROR: Your method "{method}" is not valid. The available methods include {methods}. ', end='')
         print('Check your control file.')
@@ -201,15 +216,27 @@ def main():
 
     # Create template file and return parameter dictionary
     # and number of parameters to vary
-    parameters, parameter_list = create_template_file(matlab_dir, input_file,
-                                                      template_file, data_dir)
-
+    parameters, parameter_list = create_template_file(
+        matlab_dir,
+        input_file,
+        template_file,
+        data_dir
+    )
+    print(f'There are {len(parameter_list)} parameters in your calibration.')
     # Create MATK object
-    p = matk(model=run_extern,
-             model_args=(base_dir, matlab_dir, input_file, template_file, calib_dir))
+    p = matk(
+        model=run_extern,
+        model_args=(
+            base_dir,
+            matlab_dir,
+            input_file,
+            template_file,
+            calib_dir
+        )
+    )
 
-    # Check method type
-    methods = ['Parameter Sensitivity', 'Monte Carlo', 'Latin Hypercube Sampling']
+    # Add observations
+    # observations = get_observations()
 
     if method == 'Parameter Sensitivity':
         print(f'Running {method}!')
@@ -231,11 +258,13 @@ def main():
         # Create parameters
         for key in parameters.keys():
             items = parameters[key]
-            p.add_par(items['symbol'],
-                      value=items['value'],
-                      min=items['minimum'],
-                      max=items['maximum'],
-                      vary=items['vary'])
+            p.add_par(
+                items['symbol'],
+                value=items['value'],
+                min=items['minimum'],
+                max=items['maximum'],
+                vary=items['vary']
+            )
 
         # Create sample set from p.add_par
         s = p.parstudy(nvals=nvals_list)
@@ -258,7 +287,7 @@ def main():
                       max=items['maximum'],
                       vary=items['vary'])
         # Ensure sample size is great than the number of parameters
-        if int(method_dict['sample_size']) < len(parameters.keys()):
+        if int(method_dict['sample_size']) <= len(parameters.keys()):
             print('ERROR: The sample_size for Latin Hypercube sampling must be greater', end=' ')
             print('than or equal the number of calibration parameters.')
             sys.exit(1)

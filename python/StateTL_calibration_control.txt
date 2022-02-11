@@ -15,11 +15,6 @@ SC01 = 1
 AW01 = 3
 AW02 = 1
 
-# ToDo: Needs testing
 [Latin Hypercube Sampling]
-sample_size = 11
-# T01 = 'norm'
-# T02 = 2
-# SC01 = None
-# AW01 = None
-# AW02 = 'norm'
+sample_size = 9
+
