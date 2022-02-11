@@ -4,17 +4,20 @@ calib_dir = tests
 results_dir = results
 results_file = results.dat
 log_file = logfile.data
+simulation_year = 2019
 keep_previous = delete
 method = Latin Hypercube Sampling
 
 [Parameter Sensitivity]
 # <symbol> = <number of variations>
 T01 = 1
-T02 = 2
+T02 = 1
 SC01 = 1
-AW01 = 3
+AW01 = 1
 AW02 = 1
+T03 = 1
+T04 = 1
 
 [Latin Hypercube Sampling]
-sample_size = 9
+sample_size = 20
 
