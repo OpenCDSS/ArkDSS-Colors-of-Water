@@ -109,24 +109,29 @@ def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_di
     # Change cwd back to current par folder
     os.chdir(par_dir)
 
-    try:
-        # Read output file of data
-        results_df = pd.read_csv('StateTL_out_calday.csv')
-        # Make list of unique WDIDs
-        WDID_list = results_df.iloc[:, 0].unique().tolist()
-        # Convert WDID integers to strings
-        WDID_columns = [str(i) for i in WDID_list]
-        # Create DataFrame to store RMSE values by WDID
-        RMSE_df = pd.DataFrame(index=WDID_columns)
-        for WDID in WDID_list:
-            # Extract Gauge & Sim data for current WDID
-            gauge_data = results_df[(results_df['WDID'] == WDID) & (results_df['1-Gage/2-Sim'] == 1)].to_numpy().flatten()[7:]
-            sim_data = results_df[(results_df['WDID'] == WDID) & (results_df['1-Gage/2-Sim'] == 2)].to_numpy().flatten()[7:]
-            # Place RMSE for WDID in DataFrame
-            RMSE_df.at[str(WDID), f'RMSE{par_dir.name}'] = np.sqrt(np.mean((sim_data - gauge_data)**2))
-    except Exception as err:
-        print(f'StateTL_out_calday.csv was not created in {par_dir.name}\n{err}\n')
-        RMSE_df = 1e999
+    """
+    This will change since Kelley is now providing us observations decoupled from model outputs.
+    """
+    # try:
+    #     # Read output file of data
+    #     results_df = pd.read_csv('StateTL_out_calday.csv')
+    #     # Make list of unique WDIDs
+    #     WDID_list = results_df.iloc[:, 0].unique().tolist()
+    #     # Convert WDID integers to strings
+    #     WDID_columns = [str(i) for i in WDID_list]
+    #     # Create DataFrame to store RMSE values by WDID
+    #     RMSE_df = pd.DataFrame(index=WDID_columns)
+    #     for WDID in WDID_list:
+    #         # Extract Gauge & Sim data for current WDID
+    #         gauge_data = results_df[(results_df['WDID'] == WDID) & (results_df['1-Gage/2-Sim'] == 1)].to_numpy().flatten()[7:]
+    #         sim_data = results_df[(results_df['WDID'] == WDID) & (results_df['1-Gage/2-Sim'] == 2)].to_numpy().flatten()[7:]
+    #         # Place RMSE for WDID in DataFrame
+    #         RMSE_df.at[str(WDID), f'RMSE{par_dir.name}'] = np.sqrt(np.mean((sim_data - gauge_data)**2))
+    # except Exception as err:
+    #     print(f'StateTL_out_calday.csv was not created in {par_dir.name}\n{err}\n')
+    #     RMSE_df = 1e999
+
+    RMSE_df = 1e999
 
     return RMSE_df
 
@@ -214,8 +219,8 @@ def main():
             try:
                 nvals_list.append(int(method_dict[item]))
             except Exception:
-                print(f'Error: {item} in {calib_data_file}')
-                print(f'       is missing in {calib_ctrl_file}')
+                print(f'Error: {item} in {calib_data_file}', end=' ')
+                print(f'is missing in {calib_ctrl_file}')
                 sys.exit(1)
         extra_symbols = [item for item in config.options(method) if item not in parameter_list]
         if extra_symbols:
@@ -252,6 +257,11 @@ def main():
                       min=items['minimum'],
                       max=items['maximum'],
                       vary=items['vary'])
+        # Ensure sample size is great than the number of parameters
+        if int(method_dict['sample_size']) < len(parameters.keys()):
+            print('ERROR: The sample_size for Latin Hypercube sampling must be greater', end=' ')
+            print('than or equal the number of calibration parameters.')
+            sys.exit(1)
         # Create lhs sample set
         s = p.lhs(siz=int(method_dict['sample_size']))
         print(f'Here are the sample values:\n{s.samples.values}')

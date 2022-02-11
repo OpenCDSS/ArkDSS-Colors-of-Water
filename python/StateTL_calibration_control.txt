@@ -17,7 +17,7 @@ AW02 = 1
 
 # ToDo: Needs testing
 [Latin Hypercube Sampling]
-sample_size = 20
+sample_size = 11
 # T01 = 'norm'
 # T02 = 2
 # SC01 = None
