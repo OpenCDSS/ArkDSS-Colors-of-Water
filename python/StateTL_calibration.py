@@ -40,6 +40,7 @@ plt.style.use('default')
 def get_simulation_year(ctrl_file, ctrl_key):
 
     """
+    Not using since we can control simulation year with command line argument
     :param ctrl_file: string - pointing to the StateTL_control.txt
     :return: int - simulation year
     """
@@ -51,8 +52,8 @@ def get_simulation_year(ctrl_file, ctrl_key):
             sim_year = int(line.split(';')[0].split('=')[1])
             break
 
-    # ToDo: put in exception error if control file is changed and there is not datestart input key
-    # ToDo: generalize to accomodate "may be full year or year/mo/day; mo/day will be overriden by fullyear option = 1"
+    # put in exception error if control file is changed and there is not datestart input key
+    # generalize to accomodate "may be full year or year/mo/day; mo/day will be overriden by fullyear option = 1"
 
     return sim_year
 
@@ -132,7 +133,7 @@ def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
     return parameters, parameter_list
 
 
-def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_dir):
+def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_dir, sim_year):
     # Set the par & to_file directory path
     par_dir = Path.cwd()
     to_file = par_dir / input_file
@@ -143,7 +144,7 @@ def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_di
     # cd into matlab directory to run model
     os.chdir(matlab_dir)
     # Create command line string to run model
-    run_line = f'StateTL.exe -f \\{calib_dir}\\{par_dir.name} -c'
+    run_line = f'StateTL.exe -f \\{calib_dir}\\{par_dir.name} -c {sim_year}'
     # print(f'Line passing to matlab exe:\n{run_line}')
     # Run model
     print(f'running StateTL from folder: {par_dir.name}')
@@ -156,6 +157,9 @@ def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_di
 
     # Change cwd back to current par folder
     os.chdir(par_dir)
+
+    simulation_values = get_observations('StateTL_out_calhr.csv')
+    sim_values_dict = dict(zip(simulation_values['obs'].to_list(), simulation_values['Value'].to_list()))
 
     """
     This will change since Kelley is now providing us observations decoupled from model outputs.
@@ -179,9 +183,9 @@ def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_di
     #     print(f'StateTL_out_calday.csv was not created in {par_dir.name}\n{err}\n')
     #     RMSE_df = 1e999
 
-    RMSE_df = 1e999
+    # RMSE_df = 1e999
 
-    return RMSE_df
+    return sim_values_dict
 
 
 def main():
@@ -204,10 +208,10 @@ def main():
     data_dir = base_dir / 'python' / calib_data_file
     ctrl_dir = base_dir / 'python' / calib_ctrl_file
 
-    matlab_ctrl_file = 'matlab/StateTL_control.txt'
-    # Read MATLAB control file to get simulation year for setting up observations for the correct year
-    simulation_year = get_simulation_year(matlab_ctrl_file, 'datestart')
-    observation_file = f'matlab/StateTL_out_Y{simulation_year}gagehr.csv'
+    # matlab_ctrl_file = 'matlab/StateTL_control.txt'
+    # # Read MATLAB control file to get simulation year for setting up observations for the correct year
+    # simulation_year = get_simulation_year(matlab_ctrl_file, 'datestart')
+    # observation_file = f'matlab/StateTL_out_Y{simulation_year}gagehr.csv'
 
     # Read calibration control file & set values
     # Set config to use
@@ -224,6 +228,7 @@ def main():
     results_dir = settings['results_dir']
     results_file = settings['results_file']
     log_file = settings['log_file']
+    simulation_year = settings['simulation_year']
     keep_previous = settings['keep_previous']
     method = settings['method']
     # Create dictionary from method
@@ -233,6 +238,8 @@ def main():
         print('Check your control file.')
         sys.exit(1)
     method_dict = dict(config.items(method))
+
+    observation_file = f'matlab/StateTL_out_Y{simulation_year}gagehr.csv'
 
     # Define model locations
     workdir_base = f'{calib_dir}/par'
@@ -269,11 +276,14 @@ def main():
             matlab_dir,
             input_file,
             template_file,
-            calib_dir
+            calib_dir,
+            simulation_year,
         )
     )
 
-    # Add observations
+    """
+    Add observations
+    """
     observations = get_observations(observation_file)
     for obs, val in zip(observations['obs'].to_list(), observations['Value'].to_list()):
         p.add_obs(name=obs, value=val)
@@ -352,6 +362,15 @@ def main():
 
     end = time()
     print(f'Total running time: {(end - start) / 60} mins')
+
+    df = pd.DataFrame(index=list(range(len(s.indices))))
+    df['simulation'] = [f'par.{x}' for x in s.indices]
+    df['sse'] = s.sse()
+    df['rmse'] = s.sse()**0.5
+
+    df.to_csv(f'{calib_dir}/{results_dir}/calibration_residual_statistics.csv')
+
+    print('Doh!')
 
     # # Plot results
     # plt.plot(s.samples.values, s.simvalues, 'r')
