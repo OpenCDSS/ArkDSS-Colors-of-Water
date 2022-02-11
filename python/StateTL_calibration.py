@@ -37,6 +37,39 @@ pd.set_option('expand_frame_repr', False)
 plt.style.use('default')
 
 
+def get_simulation_year(ctrl_file, ctrl_key):
+
+    """
+    :param ctrl_file: string - pointing to the StateTL_control.txt
+    :return: int - simulation year
+    """
+
+    with open(ctrl_file, 'r') as f:
+        ctrl = f.readlines()
+    for line in ctrl:
+        if ctrl_key in line.split(';')[0]:
+            sim_year = int(line.split(';')[0].split('=')[1])
+            break
+
+    # ToDo: put in exception error if control file is changed and there is not datestart input key
+    # ToDo: generalize to accomodate "may be full year or year/mo/day; mo/day will be overriden by fullyear option = 1"
+
+    return sim_year
+
+
+def get_observations(obs_file):
+
+    """
+    :param obs_file: string: observation file for a single year
+    :return obs: OrderedDict: observation names and values
+    """
+
+    obs_df = pd.read_csv(obs_file)
+    obs_df['obs'] = obs_df['WDID'].astype(str) + '_' + obs_df['Date']
+
+    return obs_df[['obs', 'Value']]
+
+
 def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
     # Set data type for DataFrame
     dtype = {
@@ -171,8 +204,13 @@ def main():
     data_dir = base_dir / 'python' / calib_data_file
     ctrl_dir = base_dir / 'python' / calib_ctrl_file
 
+    matlab_ctrl_file = 'matlab/StateTL_control.txt'
+    # Read MATLAB control file to get simulation year for setting up observations for the correct year
+    simulation_year = get_simulation_year(matlab_ctrl_file, 'datestart')
+    observation_file = f'matlab/StateTL_out_Y{simulation_year}gagehr.csv'
+
     # Read calibration control file & set values
-    # Set config to use 
+    # Set config to use
     config = configparser.ConfigParser()
     # Keep parameters in original case
     config.optionxform = lambda option: option
@@ -236,7 +274,9 @@ def main():
     )
 
     # Add observations
-    # observations = get_observations()
+    observations = get_observations(observation_file)
+    for obs, val in zip(observations['obs'].to_list(), observations['Value'].to_list()):
+        p.add_obs(name=obs, value=val)
 
     if method == 'Parameter Sensitivity':
         print(f'Running {method}!')
