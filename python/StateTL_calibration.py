@@ -231,6 +231,7 @@ def main():
     simulation_year = settings['simulation_year']
     keep_previous = settings['keep_previous']
     method = settings['method']
+    cpus = int(settings['cpus'])
     # Create dictionary from method
     methods = ['Parameter Sensitivity', 'Latin Hypercube']
     if not config.has_section(method):
@@ -285,6 +286,7 @@ def main():
     Add observations
     """
     observations = get_observations(observation_file)
+    num_observations = observations.shape[0]
     for obs, val in zip(observations['obs'].to_list(), observations['Value'].to_list()):
         p.add_obs(name=obs, value=val)
 
@@ -353,7 +355,7 @@ def main():
         sys.exit(1)
 
     # Run model with parameter samples
-    s.run(cpus=os.cpu_count(),
+    s.run(cpus=cpus,
           workdir_base=workdir_base,
           outfile=outfile,
           logfile=logfile,
@@ -366,7 +368,7 @@ def main():
     df = pd.DataFrame(index=list(range(len(s.indices))))
     df['simulation'] = [f'par.{x}' for x in s.indices]
     df['sse'] = s.sse()
-    df['rmse'] = s.sse()**0.5
+    df['rmse'] = (s.sse()/num_observations)**0.5
 
     df.to_csv(f'{calib_dir}/{results_dir}/calibration_residual_statistics.csv')
 
