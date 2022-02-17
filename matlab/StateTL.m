@@ -9,18 +9,18 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % function statement for when deployed
 % if using as a function from matlab - be sure to type clear all first
-%function StateTL(varargin)  %end near line 5650
-%clear SR WC
+% function StateTL(varargin)  %end near line 5750
+% clear SR WC
 %%% StateTL('-f','caltest6','-c','2018','-s','-d','-p')
 
 % % comment next lines if using as function
  clear all
-% varargin=[];
+ varargin=[];
 % % varargin=[{'-f'} {'foldertest1'}];
 % % varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
 % % varargin=[{'-f'} {'caltestc3_1722020'} {'-c'} {'2020'} {'-s'} {'-d'} {'-p'} {'-m'}];
 % % varargin=[{'-f'} {['cal2test']} {'-c'} {'2018'} {'-p'} ];
- varargin=[{'-f'} {['cal10test']} {'-c'} {'2018'}];
+% varargin=[{'-f'} {['cal10test']} {'-c'} {'2018'}];
 % % varargin=[{'-f'} {'caltest6_wd17stil715'} {'-c'} {'2018,3,15,7,15,WD171,172,17'} {'-s'} {'-d'} {'-p'} {'-m'}];
 % % varargin=[{'-r'} {'2019'}];
 % % varargin=[{'-b'} {'2019'}];
@@ -86,7 +86,7 @@ useregrfillforgages=0;  %will fill gages with data from closest stations using r
     regfillwindow=28*24; %regression fill window hrs=(days*24)
 trendregwindow=14*24;  %hrs to estimate trend for end filling
 avgwindow=[7*24 30*24]; %2 values - 1) hrs to start to apply dry/avg/wet average within weighting, 2) hrs to start to apply straight up average     
-dayvshrthreshold=[0.01 0.25];  %2 percent difference thresholds to apply daily improved data to hourly telemetry data, <first - dont adjust, >=first-adjust hourly data so daily mean equals daily data, >=second-replace hourly data with daily data 
+dayvshrthreshold=[0.01 0.50];  %2 percent difference thresholds to apply daily improved data to hourly telemetry data, <first - dont adjust, >=first-adjust hourly data so daily mean equals daily data, >=second-replace hourly data with daily data 
 filllongtermwithzero=2;  %1 fills zeros in year with some diversion recs with zeros, 2 fills all other years too (except for beyond nov of previous yr)
 printcalibplots=1;         %for calib plots only, save to calib folder and close
 
@@ -1461,8 +1461,8 @@ load([ETfilename]);
 %load(['C:\Projects\Ark\ArkDSS\PET\dataprocessed\' ETfilename])
 
 csid=find(CAL.dates==datenum(evapstartyear,1,1));  %do this here or from calling?
-evap.evapstartyear=evapstartyear;
-evap.yearend=CAL.yearend;
+evap.date.evapstartyear=evapstartyear;
+evap.date.evapyearend=CAL.yearend;
 evap.dates=CAL.dates(csid:end,1);
 evap.julien=CAL.julien(csid:end,1);
 
@@ -1511,7 +1511,14 @@ end
 % using whole year in anticipation of possible calendar year orientation
 % if newnetwork then also readevap but not viceversa
 
-if readinputfile>0 || readevap==1 || newnetwork==1
+if isfield(SR.(ds),'date')
+    evapyearstart=SR.(ds).date.evapyearstart;
+else
+    evapyearstart=0;
+end
+
+
+if readinputfile>0 || readevap==1 || newnetwork==1 || (evapyearstart~=yearstart && runriverloop==1)
     if readevap~=1
         load([datafiledir 'StateTL_data_evap.mat']);
     end
@@ -1527,9 +1534,12 @@ if readinputfile>0 || readevap==1 || newnetwork==1
         end
     else
         yearids=[];
-        if yearstart<=evap.yearend
+        if yearstart<=evap.date.evapyearend && yearstart>=evap.date.evapstartyear
             yearid=find(evap.years==yearstart);
             yearids=evap.yearid(yearid,:);
+        else
+            logm=['Warning: yearstart is not within current evaporation year range of: ' num2str(evap.date.evapstartyear) ' to ' num2str(evap.date.evapyearend)  ' so using average evaporation'];
+            domessage(logm,logfilename,displaymessage,writemessage)
         end
         
         for wd=SR.(ds).WD
@@ -1548,6 +1558,7 @@ if readinputfile>0 || readevap==1 || newnetwork==1
         end
         
     end
+    SR.(ds).date.evapyearstart=yearstart;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % network locations - Attach or rettach  to SR structure
@@ -2918,6 +2929,7 @@ if pullreleaserecs==1
     clear WC
     WC.date.datestart=datestart;
     WC.date.dateend=dateend;
+    WC.date.yearstart=yearstart;
     for wd=WDlist
         wds=['WD' num2str(wd)];
         WC.date.(ds).(wds).modified=0;
@@ -2926,10 +2938,24 @@ else
     load([datafiledir 'StateTL_data_release.mat']);
 end
 
+if pullreleaserecs==0 && (WC.date.yearstart~=yearstart && runwcloop==1)
+    logm=['Have to repull release records for: ' num2str(yearstart) ' as current records from: ' num2str(WC.date.yearstart) ' also need llave: ' llavefile];
+    domessage(logm,logfilename,displaymessage,writemessage)
+    load(llavefile);
+    clear WC
+    WC.date.datestart=datestart;
+    WC.date.dateend=dateend;
+    WC.date.yearstart=yearstart;
+    for wd=WDlist
+        wds=['WD' num2str(wd)];
+        WC.date.(ds).(wds).modified=0;
+    end
+end
+
 % this is the read of release diversion records for defined releasestructures
 % eventually will probably also read diversion records at ditches at least to compare with telemetry or use if no telemetry
 
-if pullreleaserecs>0
+if pullreleaserecs>0 || (WC.date.yearstart~=yearstart && runwcloop==1)
      logm=['reading water class release data from HB using REST services option: ' num2str(pullreleaserecs) ' starting: ' datestr(now)];
      domessage(logm,logfilename,displaymessage,writemessage)
      if isempty(reststarttime)
@@ -4388,8 +4414,9 @@ end
 
 end %wd
 
-SR.(ds).Rivloc.flownative.us=SR.(ds).Rivloc.flowriv.us-SR.(ds).Rivloc.flowwc.us;
-SR.(ds).Rivloc.flownative.ds=SR.(ds).Rivloc.flowriv.ds-SR.(ds).Rivloc.flowwc.ds;
+%native will show zero if calc more release flows than river flows, doesnt yet consider exchange on release waterclasses
+SR.(ds).Rivloc.flownative.us=max(0,SR.(ds).Rivloc.flowriv.us-SR.(ds).Rivloc.flowwc.us);
+SR.(ds).Rivloc.flownative.ds=max(0,SR.(ds).Rivloc.flowriv.ds-SR.(ds).Rivloc.flowwc.ds);
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -4464,7 +4491,7 @@ for w=1:length(wwcnums)
             
             for sr=srb:-1:srt
                 celerity=SR.(ds).(wds).(rs).celerity(:,sr);                
-                if strcmp(srmethod,'j349') || strcmp(srmethod,'muskingum') || (strcmp(srmethod,'default') && strcmp(SR.(ds).(wds).(rs).defaultmethod{sr},'j349')) || (strcmp(srmethod,'default') && strcmp(SR.(ds).(wds).(rs).defaultmethod{sr},'muskingum'))
+                if (strcmp(srmethod,'default') && strcmp(SR.(ds).(wds).(rs).defaultmethod{sr},'bank')) || strcmp(srmethod,'bank') || strcmp(srmethod,'j349') || strcmp(srmethod,'muskingum') || (strcmp(srmethod,'default') && strcmp(SR.(ds).(wds).(rs).defaultmethod{sr},'j349')) || (strcmp(srmethod,'default') && strcmp(SR.(ds).(wds).(rs).defaultmethod{sr},'muskingum'))
                      [QEus,exchtimerem,celerityex,srtime]=reversecelerity(ds,wds,rs,sr,QEds,exchtimerem,rhours,rsteps,-999,-999);
                 else
                     QEus=QEds;
@@ -4506,7 +4533,7 @@ end %runwcloop
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%
 
-if runcaptureloop>0
+if runcaptureloop>0 && runwcloop>0
     logm=['Starting capture loop to characterize release capture amounts versus release/available amounts at: '  datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
 
@@ -4664,8 +4691,9 @@ for m=1:length(SR.(ds).WDID(:,1))  %WDID list (as opposed to SR.(ds).Rivloc.loc{
 end
 
 for j=1:length(SR.(ds).Rivloc.loc(:,1))
-    SR.(ds).Rivloc.flownativecapture.us(:,j)=SR.(ds).Rivloc.flowriv.us(:,j)-SR.(ds).Rivloc.flowwccapture.us(:,j);
-    SR.(ds).Rivloc.flownativecapture.ds(:,j)=SR.(ds).Rivloc.flowriv.ds(:,j)-SR.(ds).Rivloc.flowwccapture.ds(:,j);
+    %native will show zero if calc more release flows than river flows
+    SR.(ds).Rivloc.flownativecapture.us(:,j)=max(0,SR.(ds).Rivloc.flowriv.us(:,j)-SR.(ds).Rivloc.flowwccapture.us(:,j));
+    SR.(ds).Rivloc.flownativecapture.ds(:,j)=max(0,SR.(ds).Rivloc.flowriv.ds(:,j)-SR.(ds).Rivloc.flowwccapture.ds(:,j));
 end
 
     if savefinalmatfile==1 && runcalibloop==0
@@ -5076,6 +5104,9 @@ end
 %%
 
 if outputgain==1 && runriverloop>0
+    logm=['Starting output of gain/loss/error amounts by reach at: ' datestr(now)];
+    domessage(logm,logfilename,displaymessage,writemessage)
+
     if outputmat==1
         titlelocline=[{'WDID-top'},{'Abbrev-top'},{'Div'},{'WD'},{'Reach'},{'subreachnum'}];
     else
@@ -5342,232 +5373,326 @@ if runcalibloop>0 && outputcal==1
     end
 end
 
-end
-
-%%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % OUTPUT - full river / gage loop amounts
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
 
-if outputriv==1
-    logm=['Starting output of files oriented by subreach/node at: '  datestr(now)];
+if outputriv==1 && runriverloop>0
+    logm=['Starting output of full river amounts at: ' datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
 
-    titlelocline=[{'atWDID'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-USWDID/2-DSWDID'}];
-    if outputhr==1
-        titledates=cellstr(datestr(rdates(datestid:dateendid),'mm/dd/yy HH:'));
-        writecell([titlelocline,titledates'],[outputfilebase '_riverhr.csv']);
-        writecell([titlelocline,titledates'],[outputfilebase '_nativehr.csv']);
-        writecell([titlelocline,titledates'],[outputfilebase '_gagediffhr.csv']);
-        writecell([titlelocline,titledates'],[outputfilebase '_sraddhr.csv']);
-        writecell([titlelocline,titledates'],[outputfilebase '_totwcreducehr.csv']);
-        if runcaptureloop>0
-        writecell([titlelocline,titledates'],[outputfilebase '_nativecapturehr.csv']);
-        end
+    if outputmat==1
+        titlelocline=[{'atWDID'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'USWDID/DSWDID'}];
+    else
+        titlelocline=[{'Date'},{'USorDS-WDID'},{'Value'}];
     end
-    if outputday==1
-        [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:dateendid));
-        daymat=unique([yr,mh,dy],'rows','stable');
-        titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
-        writecell([titlelocline,titledatesday'],[outputfilebase '_riverday.csv']);
-        writecell([titlelocline,titledatesday'],[outputfilebase '_nativeday.csv']);
-        writecell([titlelocline,titledatesday'],[outputfilebase '_gagediffday.csv']);
-        writecell([titlelocline,titledatesday'],[outputfilebase '_sraddday.csv']);
-        writecell([titlelocline,titledatesday'],[outputfilebase '_totwcreduceday.csv']);
-        if runcaptureloop>0
-        writecell([titlelocline,titledatesday'],[outputfilebase '_nativecaptureday.csv']);
-        end
-    end
+
     for i=1:length(SR.(ds).Rivloc.loc(:,1))
-        loclineriver(2*i-1,:)=[SR.(ds).Rivloc.loc(i,5),SR.(ds).Rivloc.loc(i,1:4),{2}];  %includes both ds/us sides of wdids and reaches - us of reach is ds of uswdid
-        loclineriver(2*i,:)=  [SR.(ds).Rivloc.loc(i,6),SR.(ds).Rivloc.loc(i,1:4),{1}];
+        loclineriver(:,2*i-1)=[SR.(ds).Rivloc.loc(i,5),SR.(ds).Rivloc.loc(i,1:4),{'DS'}];  %includes both ds/us sides of wdids and reaches - us of reach is ds of uswdid
+        loclineriver(:,2*i)=  [SR.(ds).Rivloc.loc(i,6),SR.(ds).Rivloc.loc(i,1:4),{'US'}];
 %        outputlineriver(2*i-1,:)=SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).Qus(datest:end,SR.(ds).Rivloc.loc{i,4})';
 %        outputlineriver(2*i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).Qds(datest:end,SR.(ds).Rivloc.loc{i,4})';
-        outputlineriver(2*i-1,:)=SR.(ds).Rivloc.flowriv.us(datestid:dateendid,i)';
-        outputlinenative(2*i-1,:)=SR.(ds).Rivloc.flownative.us(datestid:dateendid,i)';
-        outputlineriver(2*i,:)=SR.(ds).Rivloc.flowriv.ds(datestid:dateendid,i)';
-        outputlinenative(2*i,:)=SR.(ds).Rivloc.flownative.ds(datestid:dateendid,i)';
-        outputlinesradd(2*i-1,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).sraddamtus(datestid:dateendid,SR.(ds).Rivloc.loc{i,4})';
-        outputlinesradd(2*i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).sraddamtds(datestid:dateendid,SR.(ds).Rivloc.loc{i,4})';
+        outputlineriver(:,2*i-1)=SR.(ds).Rivloc.flowriv.us(datestid:dateendid,i);
+        outputlineriver(:,2*i)=SR.(ds).Rivloc.flowriv.ds(datestid:dateendid,i);
+        outputlinesradd(:,2*i-1)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).sraddamtus(datestid:dateendid,SR.(ds).Rivloc.loc{i,4});
+        outputlinesradd(:,2*i)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).sraddamtds(datestid:dateendid,SR.(ds).Rivloc.loc{i,4});
+        
+        if runwcloop>0
+        outputlinenative(:,2*i-1)=SR.(ds).Rivloc.flownative.us(datestid:dateendid,i);
+        outputlinenative(:,2*i)=SR.(ds).Rivloc.flownative.ds(datestid:dateendid,i);
         if runcaptureloop>0
-        outputlinenativecapture(2*i-1,:)=SR.(ds).Rivloc.flownativecapture.us(datestid:dateendid,i)';
-        outputlinenativecapture(2*i,:)=SR.(ds).Rivloc.flownativecapture.ds(datestid:dateendid,i)';
+        outputlinenativecapture(:,2*i-1)=SR.(ds).Rivloc.flownativecapture.us(datestid:dateendid,i);
+        outputlinenativecapture(:,2*i)=SR.(ds).Rivloc.flownativecapture.ds(datestid:dateendid,i);
+        end
         end
 
-        outputlinetotwcreduce(2*i-1,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).wcreduceamt(datestid:dateendid,SR.(ds).Rivloc.loc{i,4})';
+        outputlinetotwcreduce(:,2*i-1)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).wcreduceamt(datestid:dateendid,SR.(ds).Rivloc.loc{i,4});
         if SR.(ds).Rivloc.loc{i,4}==SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).SR(end)
-            outputlinetotwcreduce(2*i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).wcreduceamtlast(datestid:dateendid,1)';
+            outputlinetotwcreduce(:,2*i)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).wcreduceamtlast(datestid:dateendid,1);
         else
-          outputlinetotwcreduce(2*i,:)=zeros(length(yr),1);
+          outputlinetotwcreduce(:,2*i)=zeros(runsteps,1);
         end
 
 %        loclinereach(i,:)=  [SR.(ds).Rivloc.loc(i,6),SR.(ds).Rivloc.loc(i,1:4),{1}];  %this will list the dswdid with a 1 to say upstream of wdid 
-        loclinereach(i,:)=  [SR.(ds).Rivloc.loc(i,5),SR.(ds).Rivloc.loc(i,1:4),{2}];  %this will list the uswdid with a 2 to say downstream of wdid 
-        outputlinegagediff(i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).gagediffportion(datestid:dateendid,SR.(ds).Rivloc.loc{i,4})';
+        loclinereach(:,i)=  [SR.(ds).Rivloc.loc(i,5),SR.(ds).Rivloc.loc(i,1:4),{'DS'}];  %this will list the uswdid with a 2 to say downstream of wdid 
+        outputlinegagediff(:,i)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).gagediffportion(datestid:dateendid,SR.(ds).Rivloc.loc{i,4});
 %        outputlinetotwcreduce(i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).wcreduceamt(datest:end,SR.(ds).Rivloc.loc{i,4})';
 %        outputlineSRadd(i,:)=  SR.(ds).(SR.(ds).Rivloc.loc{i,2}).(SR.(ds).Rivloc.loc{i,3}).QSRadd(datest:end,SR.(ds).Rivloc.loc{i,4})';
 
     end
+
+    %also have outputlinesradd outputlinetotwcreduce not currently include below
     if outputhr==1
-        logm=['writing hourly output files for river/native amounts (hourly is a bit slow), starting: ' datestr(now)];
-        domessage(logm,logfilename,displaymessage,writemessage)
-        writecell([loclineriver,num2cell(outputlineriver)],[outputfilebase '_riverhr.csv'],'WriteMode','append');
-        writecell([loclineriver,num2cell(outputlinenative)],[outputfilebase '_nativehr.csv'],'WriteMode','append');
-        writecell([loclinereach,num2cell(outputlinegagediff)],[outputfilebase '_gagediffhr.csv'],'WriteMode','append');
-        writecell([loclineriver,num2cell(outputlinesradd)],[outputfilebase '_sraddhr.csv'],'WriteMode','append');
-        writecell([loclineriver,num2cell(outputlinetotwcreduce)],[outputfilebase '_totwcreducehr.csv'],'WriteMode','append');
-        if runcaptureloop>0
-        writecell([loclineriver,num2cell(outputlinenativecapture)],[outputfilebase '_nativecapturehr.csv'],'WriteMode','append');
-        end
-    end
-    if outputday==1
-        logm=['writing daily output files for river/native amounts, starting: ' datestr(now)];
-        domessage(logm,logfilename,displaymessage,writemessage)
-        for i=1:length(daymat(:,1))
-            dayids=find(yr==daymat(i,1) & mh==daymat(i,2) & dy==daymat(i,3));
-            outputlinedayriver(:,i)=mean(outputlineriver(:,dayids),2);
-            outputlinedaynative(:,i)=mean(outputlinenative(:,dayids),2);
-            outputlinedaygagediff(:,i)=mean(outputlinegagediff(:,dayids),2);
-            outputlinedaysradd(:,i)=mean(outputlinesradd(:,dayids),2);
-            outputlinedaytotwcreduce(:,i)=mean(outputlinetotwcreduce(:,dayids),2);
+        if outputmat==1
+            outputcellriver=[[titlelocline';titledates(datestid:dateendid,1)],[loclineriver;num2cell(outputlineriver)]];
+            outputcellgagediff=[[titlelocline';titledates(datestid:dateendid,1)],[loclinereach;num2cell(outputlinegagediff)]];
+            if runwcloop>0
+            outputcellnative=[[titlelocline';titledates(datestid:dateendid,1)],[loclineriver;num2cell(outputlinenative)]];
             if runcaptureloop>0
-            outputlinedaynativecapture(:,i)=mean(outputlinenativecapture(:,dayids),2);
+            outputcellnativecapture=[[titlelocline';titledates(datestid:dateendid,1)],[loclineriver;num2cell(outputlinenativecapture)]];
+            end
+            end
+        else
+            outputcellriver=titlelocline;
+            outputcellgagediff=titlelocline;
+            outputcellnative=titlelocline;
+            outputcellnativecapture=titlelocline;
+            for i=1:length(outputlineriver(1,:))
+                loccol=repmat({[loclineriver{6,i} '-' loclineriver{1,i}]},runsteps,1);
+                outputcellriver=[outputcellriver;[titledates(datestid:dateendid,1) loccol num2cell(outputlineriver(:,i))]];
+                if runwcloop>0
+                outputcellnative=[outputcellnative;[titledates(datestid:dateendid,1) loccol num2cell(outputlinenative(:,i))]];
+                if runcaptureloop>0
+                outputcellnativecapture=[outputcellnativecapture;[titledates(datestid:dateendid,1) loccol num2cell(outputlinenativecapture(:,i))]];
+                end
+                end
+            end
+            for i=1:length(outputlinegagediff(1,:))
+                loccol=repmat({[loclinereach{6,i} '-' loclinereach{1,i}]},runsteps,1);
+                outputcellgagediff=[outputcellgagediff;[titledates(datestid:dateendid,1) loccol num2cell(outputlinegagediff(:,i))]];
             end
         end
-        writecell([loclineriver,num2cell(outputlinedayriver)],[outputfilebase '_riverday.csv'],'WriteMode','append');        
-        writecell([loclineriver,num2cell(outputlinedaynative)],[outputfilebase '_nativeday.csv'],'WriteMode','append');
-        writecell([loclinereach,num2cell(outputlinedaygagediff)],[outputfilebase '_gagediffday.csv'],'WriteMode','append');        
-        writecell([loclineriver,num2cell(outputlinedaysradd)],[outputfilebase '_sraddday.csv'],'WriteMode','append');        
-        writecell([loclineriver,num2cell(outputlinedaytotwcreduce)],[outputfilebase '_totwcreduceday.csv'],'WriteMode','append');        
+        writecell(outputcellriver,[outputfilebase '_riverhr.csv']);
+        writecell(outputcellgagediff,[outputfilebase '_gagediffhr.csv']);
+        if runwcloop>0
+        writecell(outputcellnative,[outputfilebase '_nativehr.csv']);
         if runcaptureloop>0
-        writecell([loclineriver,num2cell(outputlinedaynativecapture)],[outputfilebase '_nativecaptureday.csv'],'WriteMode','append');
+        writecell(outputcellnativecapture,[outputfilebase '_nativecapturehr.csv']);
+        end
         end
     end
+
+    if outputday==1
+        for i=1:length(datedays)
+            outputlinedayriver(i,:)=mean(outputlineriver(dayids{i},:));
+            outputlinedaygagediff(i,:)=mean(outputlinegagediff(dayids{i},:));
+            if runwcloop>0
+            outputlinedaynative(i,:)=mean(outputlinenative(dayids{i},:));
+            if runcaptureloop>0
+            outputlinedaynativecapture(i,:)=mean(outputlinenativecapture(dayids{i},:));
+            end
+            end
+        end
+        if outputmat==1
+            outputcellriver=[[titlelocline';titledatesday],[loclineriver;num2cell(outputlinedayriver)]];
+            outputcellgagediff=[[titlelocline';titledatesday],[loclinereach;num2cell(outputlinedaygagediff)]];
+            if runwcloop>0
+            outputcellnative=[[titlelocline';titledatesday],[loclineriver;num2cell(outputlinedaynative)]];
+            if runcaptureloop>0
+            outputcellnativecapture=[[titlelocline';titledatesday],[loclineriver;num2cell(outputlinedaynativecapture)]];
+            end
+            end
+        else
+            outputcellriver=titlelocline;
+            outputcellgagediff=titlelocline;
+            outputcellnative=titlelocline;
+            outputcellnativecapture=titlelocline;
+            for i=1:length(outputlinedayriver(1,:))
+                loccol=repmat({[loclineriver{6,i} '-' loclineriver{1,i}]},length(datedays),1);
+                outputcellriver=[outputcellriver;[titledatesday loccol num2cell(outputlinedayriver(:,i))]];
+                if runwcloop>0
+                outputcellnative=[outputcellnative;[titledatesday loccol num2cell(outputlinedaynative(:,i))]];
+                if runcaptureloop>0
+                outputcellnativecapture=[outputcellnativecapture;[titledatesday loccol num2cell(outputlinedaynativecapture(:,i))]];
+                end
+                end
+            end
+            for i=1:length(outputlinedaygagediff(1,:))
+                loccol=repmat({[loclinereach{6,i} '-' loclinereach{1,i}]},length(datedays),1);
+                outputcellgagediff=[outputcellgagediff;[titledatesday loccol num2cell(outputlinedaygagediff(:,i))]];
+            end
+        end
+        writecell(outputcellriver,[outputfilebase '_riverday.csv']);
+        writecell(outputcellgagediff,[outputfilebase '_gagediffday.csv']);
+        if runwcloop>0
+        writecell(outputcellnative,[outputfilebase '_nativeday.csv']);
+        if runcaptureloop>0
+        writecell(outputcellnativecapture,[outputfilebase '_nativecaptureday.csv']);
+        end
+        end
+    end
+
 end
 
-
+%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % OUTPUT - water class amounts
+% currently not outputting outputlinewcsradd and outputlinewcsradd
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if outputwc==1 & isfield(SR.(ds),'WCloc')
-    logm=['Starting output of files ordered by water classes at: ' datestr(now)];
+    outputcolzero=1;
+    logm=['Starting output of water class amounts at: ' datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
+
+    if outputmat==1
+        titlelocline=[{'WCnum'},{'WC code'},{'atWDID'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'USWDID/DSWDID'}];
+    else
+        titlelocline=[{'Date'},{'WCnum'},{'USorDS-WDID'},{'Value'}];
+    end
+
 
 wwcnums=SR.(ds).WCloc.wslist;
-%titlelocline=[{'WCnum'},{'WC code'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'srid'},{'1-US/2-DS'},{'WDID'}];
-titlelocline=[{'WCnum'},{'WC code'},{'atWDID'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'1-USWDID/2-DSWDID'}];
-
-if outputhr==1
-    logm=['writing hourly output file by water class amounts (hourly is a bit slow), starting: ' datestr(now)];
-    domessage(logm,logfilename,displaymessage,writemessage)
-    titledates=cellstr(datestr(rdates(datestid:dateendid),'mm/dd/yy HH:'));
-    writecell([titlelocline,titledates'],[outputfilebase '_wchr.csv']);
-    writecell([titlelocline,titledates'],[outputfilebase '_wcsraddhr.csv']);
-    writecell([titlelocline,titledates'],[outputfilebase '_wcreducehr.csv']);
-    if runcaptureloop>0
-    writecell([titlelocline,titledates'],[outputfilebase '_wccapturehr.csv']);
-    end
-end
-if outputday==1
-    logm=['writing daily output file by water class amounts, starting: ' datestr(now)];
-    domessage(logm,logfilename,displaymessage,writemessage)
-    [yr,mh,dy,hr,mi,sec] = datevec(rdates(datestid:dateendid));
-    daymat=unique([yr,mh,dy],'rows','stable');
-    titledatesday=cellstr(datestr([daymat zeros(size(daymat))],'mm/dd/yy'));
-    writecell([titlelocline,titledatesday'],[outputfilebase '_wcday.csv']);
-    writecell([titlelocline,titledatesday'],[outputfilebase '_wcreduceday.csv']);
-    writecell([titlelocline,titledatesday'],[outputfilebase '_wcsraddday.csv']);
-    if runcaptureloop>0
-    writecell([titlelocline,titledatesday'],[outputfilebase '_wccaptureday.csv']);
-    end
-end
-
-
+iadd=0;
 for w=1:length(wwcnums)
     ws=wwcnums{w};
-    clear loclinewc outputlinewc outputlinedaywc outputlinewcsradd outputlinedaywcsradd outputlinewcreduce outputlinedaywcreduce loclinewcreduce outputlinewccapture outputlinedaywccapture
-    outwcreduce=0;k=0;
+%    clear loclinewc outputlinewc outputlinedaywc outputlinewcsradd outputlinedaywcsradd outputlinewcreduce outputlinedaywcreduce loclinewcreduce outputlinewccapture outputlinedaywccapture
+%    outwcreduce=0;k=0;
     for i=1:length(SR.(ds).WCloc.(ws).loc(:,1))  %JVO said wanted both us and ds of WDID (??) - OK then
         if SR.(ds).WCloc.(ws).loc{i,6}==1 %release - list from us to ds
-           loclinewc(2*i-1,:)=[{ws},{SR.(ds).WCloc.(ws).wc},SR.(ds).WCloc.(ws).loc(i,7),SR.(ds).WCloc.(ws).loc(i,1:4),{2}];
-           outputlinewc(2*i-1,:)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).Qusrelease(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4})';
-           loclinewc(2*i,:)=[{ws},{SR.(ds).WCloc.(ws).wc},SR.(ds).WCloc.(ws).loc(i,8),SR.(ds).WCloc.(ws).loc(i,1:4),{1}];
-           outputlinewc(2*i,:)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).Qdsrelease(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4})';
-           outputlinewcsradd(2*i-1,:)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).QSRaddus(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4})';
-           outputlinewcsradd(2*i,:)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).QSRaddds(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4})';
-                      
-           if isfield(SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws),'wcreduceamt')
-               outwcreduce=1;k=k+1;
-                loclinewcreduce(k,:)=[{ws},{SR.(ds).WCloc.(ws).wc},SR.(ds).WCloc.(ws).loc(i,7),SR.(ds).WCloc.(ws).loc(i,1:4),{2}]; %lists usreach/ds wdid
-                outputlinewcreduce(k,:)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).wcreduceamt(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4})';
-                if R.(ds).WCloc.(ws).loc{i,4}==SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).SR(end)
-                    k=k+1;
-                    loclinewcreduce(k,:)=[{ws},{SR.(ds).WCloc.(ws).wc},SR.(ds).WCloc.(ws).loc(i,7),SR.(ds).WCloc.(ws).loc(i,1:4),{1}]; %lists dsreach/us wdid
-                    outputlinewcreduce(k,:)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).wcreduceamtlast(datestid:dateendid,1)';
-                end
-           end
+           loclinewc(:,2*i-1+iadd)=[{ws},{SR.(ds).WCloc.(ws).wc},SR.(ds).WCloc.(ws).loc(i,7),SR.(ds).WCloc.(ws).loc(i,1:4),{'DS'}];
+           loclinewc(:,2*i+iadd)=[{ws},{SR.(ds).WCloc.(ws).wc},SR.(ds).WCloc.(ws).loc(i,8),SR.(ds).WCloc.(ws).loc(i,1:4),{'US'}];
+           outputlinewc(:,2*i-1+iadd)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).Qusrelease(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4});
+           outputlinewc(:,2*i+iadd)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).Qdsrelease(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4});
+%            outputlinewcsradd(:,2*i-1+iadd)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).QSRaddus(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4});
+%            outputlinewcsradd(:,2*i+iadd)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).QSRaddds(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4});                    
+%            if isfield(SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws),'wcreduceamt')
+%                outwcreduce=1;k=k+1;
+%                 loclinewcreduce(:,k+iadd)=[{ws},{SR.(ds).WCloc.(ws).wc},SR.(ds).WCloc.(ws).loc(i,7),SR.(ds).WCloc.(ws).loc(i,1:4),{2}]; %lists usreach/ds wdid
+%                 outputlinewcreduce(:,k+iadd)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).wcreduceamt(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4});
+%                 if R.(ds).WCloc.(ws).loc{i,4}==SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).SR(end)
+%                     k=k+1;
+%                     loclinewcreduce(:,k+iadd)=[{ws},{SR.(ds).WCloc.(ws).wc},SR.(ds).WCloc.(ws).loc(i,7),SR.(ds).WCloc.(ws).loc(i,1:4),{1}]; %lists dsreach/us wdid
+%                     outputlinewcreduce(:,k+iadd)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).wcreduceamtlast(datestid:dateendid,1);
+%                 end
+%            end
            
         else  %exchange - list from ds to us - if ok from us to ds could delete these
-           loclinewc(2*i-1,:)=[{ws},{SR.(ds).WCloc.(ws).wc},SR.(ds).WCloc.(ws).loc(i,8),SR.(ds).WCloc.(ws).loc(i,1:4),{1}];
-           outputlinewc(2*i-1,:)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).Qdsrelease(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4})';
-           loclinewc(2*i,:)=[{ws},{SR.(ds).WCloc.(ws).wc},SR.(ds).WCloc.(ws).loc(i,7),SR.(ds).WCloc.(ws).loc(i,1:4),{2}];
-           outputlinewc(2*i,:)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).Qusrelease(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4})';
-           outputlinewcsradd(2*i-1,:)=zeros(1,runsteps);
-           outputlinewcsradd(2*i,:)=zeros(1,runsteps);   
+           loclinewc(:,2*i-1+iadd)=[{ws},{SR.(ds).WCloc.(ws).wc},SR.(ds).WCloc.(ws).loc(i,8),SR.(ds).WCloc.(ws).loc(i,1:4),{'US'}];
+           loclinewc(:,2*i+iadd)=[{ws},{SR.(ds).WCloc.(ws).wc},SR.(ds).WCloc.(ws).loc(i,7),SR.(ds).WCloc.(ws).loc(i,1:4),{'DS'}];
+           outputlinewc(:,2*i-1+iadd)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).Qdsrelease(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4});
+           outputlinewc(:,2*i+iadd)=SR.(ds).(SR.(ds).WCloc.(ws).loc{i,2}).(SR.(ds).WCloc.(ws).loc{i,3}).(ws).Qusrelease(datestid:dateendid,SR.(ds).WCloc.(ws).loc{i,4});
+%            outputlinewcsradd(:,2*i-1+iadd)=zeros(runsteps,1);
+%            outputlinewcsradd(:,2*i+iadd)=zeros(runsteps,1);   
         end
         
            %this is repeating wc output but changing to capture amount at destination.. need/want??
            %if remove above switch for exchanges would need to switch where captureamt placed for exchanges
            if runcaptureloop>0
            if i==length(SR.(ds).WCloc.(ws).loc(:,1))
-               outputlinewccapture(2*i-1,:)=outputlinewc(2*i-1,:);
-               outputlinewccapture(2*i,:)=SR.(ds).WCloc.(ws).captureamt(datestid:dateendid,:)';
+               outputlinewccapture(:,2*i-1+iadd)=outputlinewc(:,2*i-1+iadd);
+               outputlinewccapture(:,2*i+iadd)=SR.(ds).WCloc.(ws).captureamt(datestid:dateendid,:);
            else
-               outputlinewccapture(2*i-1,:)=outputlinewc(2*i-1,:);
-               outputlinewccapture(2*i,:)=outputlinewc(2*i,:);
+               outputlinewccapture(:,2*i-1+iadd)=outputlinewc(:,2*i-1+iadd);
+               outputlinewccapture(:,2*i+iadd)=outputlinewc(:,2*i+iadd);
            end
            end
         
-    end 
-    
+    end
+    iadd=i+iadd;
+end
+
+    logm=['Starting to write water class output files (this will take awhile) at: ' datestr(now)];
+    domessage(logm,logfilename,displaymessage,writemessage)
+
     if outputhr==1
-        writecell([loclinewc,num2cell(outputlinewc)],[outputfilebase '_wchr.csv'],'WriteMode','append');
-        writecell([loclinewc,num2cell(outputlinewcsradd)],[outputfilebase '_wcsraddhr.csv'],'WriteMode','append');
-        if runcaptureloop>0
-        writecell([loclinewc,num2cell(outputlinewccapture)],[outputfilebase '_wccapturehr.csv'],'WriteMode','append');
+        if outputmat==1
+            outputcellwc=[[titlelocline';titledates(datestid:dateendid,1)],[loclinewc;num2cell(outputlinewc)]];
+            if runcaptureloop>0
+            outputcellwccapture=[[titlelocline';titledates(datestid:dateendid,1)],[loclinewc;num2cell(outputlinewccapture)]];
+            end
+        else
+            outputcellwc=titlelocline;
+            outputcellwccapture=titlelocline;
+            for i=1:length(outputlinewc(1,:))
+                loccolwc=repmat({loclinewc{1,i}},runsteps,1);
+                loccolwc2=repmat({[loclinewc{8,i} '-' loclinewc{3,i}]},runsteps,1);
+                loccolwcc=loccolwc;
+                loccolwcc2=loccolwc2;
+                titledateswc=titledates(datestid:dateendid,1);
+                titledateswcc=titledates(datestid:dateendid,1);
+
+                outputlinewc2=outputlinewc(:,i);
+                if runcaptureloop>0
+                    outputlinewccapture2=outputlinewccapture(:,i);
+                end
+                if outputcolzero==1
+                    colids=find(outputlinewc(:,i)~=0);
+                    loccolwc=loccolwc(colids,1);
+                    loccolwc2=loccolwc2(colids,1);
+                    outputlinewc2=outputlinewc2(colids,1);
+                    titledateswc=titledateswc(colids,1);
+                    if runcaptureloop>0
+                    colids=find(outputlinewccapture(:,i)~=0);
+                    loccolwcc=loccolwcc(colids,1);
+                    loccolwcc2=loccolwcc2(colids,1);
+                    outputlinewccapture2=outputlinewccapture2(colids,1);
+                    titledateswcc=titledateswcc(colids,1);
+                    end
+                end
+
+                outputcellwc=[outputcellwc;[titledateswc loccolwc loccolwc2 num2cell(outputlinewc2)]];
+                if runcaptureloop>0
+                outputcellwccapture=[outputcellwccapture;[titledateswcc loccolwcc loccolwcc2 num2cell(outputlinewccapture2)]];
+                end
+            end
         end
-           if outwcreduce==1
-                writecell([loclinewcreduce,num2cell(outputlinewcreduce)],[outputfilebase '_wcreducehr.csv'],'WriteMode','append');
-           end
+        writecell(outputcellwc,[outputfilebase '_wchr.csv']);
+        if runcaptureloop>0
+        writecell(outputcellwccapture,[outputfilebase '_wccapturehr.csv']);
+        end
     end
 
     if outputday==1
-        for i=1:length(daymat(:,1))
-            dayids=find(yr==daymat(i,1) & mh==daymat(i,2) & dy==daymat(i,3));
-            outputlinedaywc(:,i)=mean(outputlinewc(:,dayids),2);
-            outputlinedaywcsradd(:,i)=mean(outputlinewcsradd(:,dayids),2);
+        for i=1:length(datedays)
+            outputlinedaywc(i,:)=mean(outputlinewc(dayids{i},:));
             if runcaptureloop>0
-            outputlinedaywccapture(:,i)=mean(outputlinewccapture(:,dayids),2);
+            outputlinedaywccapture(i,:)=mean(outputlinewccapture(dayids{i},:));
             end
-           if outwcreduce==1
-                outputlinedaywcreduce(:,i)=mean(outputlinewcreduce(:,dayids),2);
-           end
         end
-        writecell([loclinewc,num2cell(outputlinedaywc)],[outputfilebase '_wcday.csv'],'WriteMode','append');        
-        writecell([loclinewc,num2cell(outputlinedaywcsradd)],[outputfilebase '_wcsraddday.csv'],'WriteMode','append');
+        if outputmat==1
+            outputcellwc=[[titlelocline';titledatesday],[loclinewc;num2cell(outputlinedaywc)]];
+            if runcaptureloop>0
+            outputcellwccapture=[[titlelocline';titledatesday],[loclinewc;num2cell(outputlinedaywccapture)]];
+            end
+        else
+            outputcellwc=titlelocline;
+            outputcellwccapture=titlelocline;
+            for i=1:length(outputlinedaywc(1,:))
+                loccolwc=repmat({loclinewc{1,i}},length(datedays),1);
+                loccolwc2=repmat({[loclinewc{8,i} '-' loclinewc{3,i}]},length(datedays),1);
+                loccolwcc=loccolwc;
+                loccolwcc2=loccolwc2;
+                titledatesdaywc=titledatesday;
+                titledatesdaywcc=titledatesday;
+
+                outputlinedaywc2=outputlinedaywc(:,i);
+                if runcaptureloop>0
+                    outputlinedaywccapture2=outputlinedaywccapture(:,i);
+                end
+                if outputcolzero==1
+                    colids=find(outputlinedaywc(:,i)~=0);
+                    loccolwc=loccolwc(colids,1);
+                    loccolwc2=loccolwc2(colids,1);
+                    outputlinedaywc2=outputlinedaywc2(colids,1);
+                    titledatesdaywc=titledatesdaywc(colids,1);
+                    if runcaptureloop>0
+                    colids=find(outputlinedaywccapture(:,i)~=0);
+                    loccolwcc=loccolwcc(colids,1);
+                    loccolwcc2=loccolwcc2(colids,1);
+                    outputlinedaywccapture2=outputlinedaywccapture2(colids,1);
+                    titledatesdaywcc=titledatesdaywcc(colids,1);
+                    end
+                end
+                
+                outputcellwc=[outputcellwc;[titledatesdaywc loccolwc loccolwc2 num2cell(outputlinedaywc2)]];
+                if runcaptureloop>0
+                outputcellwccapture=[outputcellwccapture;[titledatesdaywcc loccolwcc loccolwcc2 num2cell(outputlinedaywccapture2)]];
+                end
+            end
+        end
+        writecell(outputcellwc,[outputfilebase '_wcday.csv']);
         if runcaptureloop>0
-        writecell([loclinewc,num2cell(outputlinedaywccapture)],[outputfilebase '_wccaptureday.csv'],'WriteMode','append');
-        end
-        if outwcreduce==1
-            writecell([loclinewcreduce,num2cell(outputlinedaywcreduce)],[outputfilebase '_wcreduceday.csv'],'WriteMode','append');             
+        writecell(outputcellwccapture,[outputfilebase '_wccaptureday.csv']);
         end
     end
-end
 
 end
 
+end
+%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % OUTPUT - output of river network file
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
