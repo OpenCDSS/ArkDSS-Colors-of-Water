@@ -20,7 +20,7 @@
 % % varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
 % % varargin=[{'-f'} {'caltestc3_1722020'} {'-c'} {'2020'} {'-s'} {'-d'} {'-p'} {'-m'}];
 % % varargin=[{'-f'} {['cal2test']} {'-c'} {'2018'} {'-p'} ];
-% varargin=[{'-f'} {['cal10test']} {'-c'} {'2018'}];
+%  varargin=[{'-f'} {['cal12test']} {'-c'} {'2018'} {'-p'}];
 % % varargin=[{'-f'} {'caltest6_wd17stil715'} {'-c'} {'2018,3,15,7,15,WD171,172,17'} {'-s'} {'-d'} {'-p'} {'-m'}];
 % % varargin=[{'-r'} {'2019'}];
 % % varargin=[{'-b'} {'2019'}];
@@ -5917,13 +5917,15 @@ if celeritymethod==1
     celerity=celeritya*Q.^celerityb;
 elseif celeritymethod==2
     celerity=celeritya*Q+celerityb;
+elseif celeritymethod>2  %currently have numbers in celeritymethod as max cap on celerity - using method 1
+    celerity=min(celeritya*Q.^celerityb,celeritymethod);
 else
     errordlg('Error - couldnt figure out method to use to calc celerity, currently 1=ca*Q^cb (ie PR-JMR), 2=ca*Q+cb (ie JMR-SL)')
 end    
 
 if dispersionmethod==1
     dispersion=dispersiona*Q.^dispersionb;
-elseif celeritymethod==2
+elseif dispersionmethod==2
     dispersion=10.^(dispersiona*(log10(Q).^2)+dispersionb*log10(Q));
 else
     errordlg('Error - couldnt figure out method to use to calc dispersion, currently 1=da*Q^db (ie PR-JMR), 2=10^(da*(logQ^2)+db*logQ) (ie JMR-SL)')
