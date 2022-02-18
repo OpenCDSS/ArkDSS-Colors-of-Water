@@ -3,6 +3,7 @@
 *
 !.gitignore
 !StateTL.m
+!StateTLgains.m
 !StateTL.exe
 !StateTL_j349.exe
 !StateTL_inputdata.xlsx

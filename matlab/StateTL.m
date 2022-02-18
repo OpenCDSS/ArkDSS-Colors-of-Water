@@ -9,25 +9,26 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % function statement for when deployed
 % if using as a function from matlab - be sure to type clear all first
-% function StateTL(varargin)  %end near line 5750
+% function StateTL(varargin)  %end near line 5830
 % clear SR WC
 %%% StateTL('-f','caltest6','-c','2018','-s','-d','-p')
 
 % % comment next lines if using as function
  clear all
  varargin=[];
-% % varargin=[{'-f'} {'foldertest1'}];
-% % varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
-% % varargin=[{'-f'} {'caltestc3_1722020'} {'-c'} {'2020'} {'-s'} {'-d'} {'-p'} {'-m'}];
-% % varargin=[{'-f'} {['cal2test']} {'-c'} {'2018'} {'-p'} ];
-%  varargin=[{'-f'} {['cal12test']} {'-c'} {'2018'} {'-p'}];
-% % varargin=[{'-f'} {'caltest6_wd17stil715'} {'-c'} {'2018,3,15,7,15,WD171,172,17'} {'-s'} {'-d'} {'-p'} {'-m'}];
-% % varargin=[{'-r'} {'2019'}];
-% % varargin=[{'-b'} {'2019'}];
-% % varargin=[{'-f'} {'obstest1'} {'-g'} {'2018,3,15,7,15,WD171,172,17'}];
-% % varargin=[{'-g'} {'2015'}];
-% % varargin=[{'-g'}];
-% % varargin=[{'-r'}];
+% % % varargin=[{'-f'} {'foldertest1'}];
+% % % varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
+% % % varargin=[{'-f'} {'caltestc3_1722020'} {'-c'} {'2020'} {'-s'} {'-d'} {'-p'} {'-m'}];
+% % % varargin=[{'-f'} {['cal2test']} {'-c'} {'2018'} {'-p'} ];
+varargin=[{'-f'} {['cal20test']} {'-c'} {'2018'}];
+% % % varargin=[{'-f'} {'caltest6_wd17stil715'} {'-c'} {'2018,3,15,7,15,WD171,172,17'} {'-s'} {'-d'} {'-p'} {'-m'}];
+% % % varargin=[{'-r'} {'2019'}];
+% % % varargin=[{'-b'} {'2019'}];
+% % % varargin=[{'-f'} {'obstest1'} {'-g'} {'2018,3,15,7,15,WD171,172,17'}];
+% % % varargin=[{'-g'} {'2015'}];
+% % % varargin=[{'-g'}];
+% % % varargin=[{'-r'}];
+% varargin=[{'-e'}];
 
 runstarttime=now;
 basedir=cd;basedir=[basedir '\'];
@@ -38,7 +39,7 @@ basedir=cd;basedir=[basedir '\'];
 %watch out - if change variable names in code also need to change them here!
 %currently - if leave out one of these from control file will assign it a zero value
 controlvars={'srmethod','j349fast','j349multurf','j349musk','inputfilename','rundays','fullyear','readinputfile','newnetwork','readevap','readstagedischarge','pullstationdata','multiyrstation','pulllongtermstationdata','pullreleaserecs','runriverloop','runwcloop','doexchanges','runcaptureloop','rungageloop','runcalibloop','stubcelerity','stubdispersion'};
-controlvars=[controlvars,{'copydatafiles','savefinalmatfile','logfilename','displaymessage','writemessage','outputfilebase','outputriv','outputwc','outputcal','outputcalregr','outputnet','outputgain','outputhr','outputday','outputmat','calibavggainloss','calibtype','gainsavgwindowdays','plotcalib'}];
+controlvars=[controlvars,{'copydatafiles','savefinalmatfile','logfilename','displaymessage','writemessage','outputfilebase','outputriv','outputwc','outputcal','outputcalregr','outputnet','outputgain','outputhr','outputday','outputmat','calibavggainloss','calibtype','calibconstantgains','gainsavgwindowdays','plotcalib'}];
 controlfilename='StateTL_control.txt';
 
 
@@ -89,6 +90,7 @@ avgwindow=[7*24 30*24]; %2 values - 1) hrs to start to apply dry/avg/wet average
 dayvshrthreshold=[0.01 0.50];  %2 percent difference thresholds to apply daily improved data to hourly telemetry data, <first - dont adjust, >=first-adjust hourly data so daily mean equals daily data, >=second-replace hourly data with daily data 
 filllongtermwithzero=2;  %1 fills zeros in year with some diversion recs with zeros, 2 fills all other years too (except for beyond nov of previous yr)
 printcalibplots=1;         %for calib plots only, save to calib folder and close
+rungains=0;
 
 structureurl='https://dwr.state.co.us/Rest/GET/api/v2/structures/';  %currently used to get structure coordinates just for evaporation
 telemetryhoururl='https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour/';  %for gages and ditch telemetry
@@ -270,7 +272,8 @@ else
                             copyfile([basedir 'StateTL_data_stagedis.mat'],[datadir 'StateTL_data_stagedis.mat'],'f');
                             copyfile([basedir 'StateTL_data_qnode.mat'],[datadir 'StateTL_data_qnode.mat'],'f');
                             copyfile([basedir 'StateTL_data_release.mat'],[datadir 'StateTL_data_release.mat'],'f');
-                            logmc=[logmc;'Copying datafiles done: ' datestr(now) ' file: StateTL_data_subreach.mat,StateTL_data_evap.mat,StateTL_data_stagedis.mat,StateTL_data_qnode.mat,StateTL_data_release.mat'];
+                            copyfile([basedir 'StateTLdata\StateTL_data_gains.mat'],[datadir 'StateTL_data_gains.mat'],'f');
+                            logmc=[logmc;'Copying datafiles done: ' datestr(now) ' file: StateTL_data_subreach.mat,StateTL_data_evap.mat,StateTL_data_stagedis.mat,StateTL_data_qnode.mat,StateTL_data_release.mat,StateTLdata\StateTL_data_gains.mat'];
                         else
                             datafiledir=basedir;
                         end
@@ -292,7 +295,7 @@ else
 
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             % option-c defines do calibration - can have optional additional arguments of year,sm,sd,em,ed,WDxx,xx2 / year / WDxx / year,WDxx /
-            case {'-c','-g'}
+            case {'-c','-g','-e'}
 
 
                 if bcmd==0  %if build command previously issued - let those options govern these
@@ -314,7 +317,7 @@ else
 
                 readinputfile=2;  %will read new inputfile but not save mat file
                 newnetwork=0;
-                runriverloop=2;
+%                runriverloop=2; 
                 runwcloop=0;
                 doexchanges=0;
                 runcaptureloop=0;
@@ -339,7 +342,7 @@ else
                 logmc=[logmc;'calibration command option: writemessage=1'];
                 logmc=[logmc;'calibration command option: outputriv=0'];
                 logmc=[logmc;'calibration command option: outputwc=0'];
-                else
+                elseif strcmpi(varargin{i},'-g')
                 cmdlineargs=[cmdlineargs {'g'}];
                     %for observation loop
                     rungageloop=1;
@@ -371,6 +374,32 @@ else
                     logmc=[logmc;'observation command option: outputwc=0'];
                     logmc=[logmc;'observation command option: outputcal=0'];
 
+                elseif strcmpi(varargin{i},'-e')
+                cmdlineargs=[cmdlineargs {'e'}];
+                    %for gain/loss/error loop
+                    rungains=1;
+                    logmc=[logmc;'gain/loss/error command option: rungains=1'];
+                    runriverloop=1;
+                    runwcloop=0;
+                    doexchanges=0;
+                    runcaptureloop=0;
+                    runcalibloop=0;
+                    displaymessage=0;
+                    writemessage=1;
+
+                    %ergg not great - but repeat options verbatim here for log file
+                    logmc=[logmc;'observation command option: readinputfile=0'];
+                    logmc=[logmc;'observation command option: newnetwork=0'];
+                    logmc=[logmc;'observation command option: runriverloop=0'];
+                    logmc=[logmc;'observation command option: runwcloop=0'];
+                    logmc=[logmc;'observation command option: doexchanges=0'];
+                    logmc=[logmc;'observation command option: runcaptureloop=0'];
+                    logmc=[logmc;'observation command option: runcalibloop=0'];
+                    logmc=[logmc;'observation command option: displaymessage=0'];
+                    logmc=[logmc;'observation command option: writemessage=1'];
+                    logmc=[logmc;'observation command option: outputriv=0'];
+                    logmc=[logmc;'observation command option: outputwc=0'];
+                    logmc=[logmc;'observation command option: outputcal=0'];
                 end
 
                 if length(varargin)>i
@@ -1518,7 +1547,7 @@ else
 end
 
 
-if readinputfile>0 || readevap==1 || newnetwork==1 || (evapyearstart~=yearstart && runriverloop==1)
+if readinputfile>0 || readevap==1 || newnetwork==1 || (evapyearstart~=yearstart && runriverloop==1) || (evapyearstart~=yearstart && runcalibloop==1)
     if readevap~=1
         load([datafiledir 'StateTL_data_evap.mat']);
     end
@@ -3162,7 +3191,10 @@ if runriverloop>0
 
 logm=['Starting river/gageflow loop at: '  datestr(now)];
 domessage(logm,logfilename,displaymessage,writemessage)
-    
+
+if rungains==1 && isfile([basedir 'StateTL_data_gainsyr.mat'])
+    load([basedir 'StateTL_data_gainsyr.mat']);
+end
     
 lastwdid=[];  %tracks last wdid/connection of processed wd reaches
 SR.(ds).Rivloc.loc=[]; %just tracks location listing of processed reaches
@@ -3571,6 +3603,12 @@ end
 
 end %ii iteration on gainchange
 
+if rungains==1
+    gainsyr.(['Y' num2str(yearstart)]).(ds).(wds).(rs).gagediffportion=SR.(ds).(wds).(rs).gagediffportion;
+    gainsyr.(['Y' num2str(yearstart)]).(ds).(wds).(rs).gagedifflast=SR.(ds).(wds).(rs).gagedifflast;
+end
+
+
 % end %change
     end %r
     lastwdid=[lastwdid;SR.(ds).(wds).(rs).dswdid{sr} {ds} {wds} {rs} {sr}];
@@ -3579,6 +3617,11 @@ end %wd
 if runriverloop==1  %not save if riverloop=2 (ie for calibration)
     save([basedir 'StateTL_bin_riv' srmethod '.mat'],'SR');
 end
+
+if rungains==1
+    save([basedir 'StateTL_data_gainsyr.mat'],'gainsyr');
+end
+
 elseif runwcloop>0 | runcalibloop>0
     load([basedir 'StateTL_bin_riv' srmethod '.mat']);  
 end %river/gage loop
@@ -4812,6 +4855,12 @@ if runcalibloop>0
         domessage(logm,logfilename,displaymessage,writemessage)
     end
 
+if calibconstantgains==1
+    load([datafiledir 'StateTL_data_gains.mat']);
+end
+
+lastwdid=[];
+
 x=(1:(calibendid-calibstid+1))';
 
 for wd=WDcaliblist
@@ -4832,20 +4881,32 @@ for wd=WDcaliblist
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %for calibration loop - take moving average or average or linear regression of gagediffportion and sraddamt and other gain/loss/error terms over defined period
-        gagediffportion=SR.(ds).(wds).(rs).gagediffportion;
 
         % particular perhaps odd condition that if is top and <1 mile to gage in next reach, then start calibration from next gage
         % this is in particular for pueblo res and JMR that records often missing something that is shown in actual gage but want to use records (rather than gage) to start aug stations etc
         % otherwise use average (ie moving average) or regression of gainloss term
-        if r==1 && Rb>1 && sum(SR.(ds).(wds).(rs).channellength)<= 1.0  
-            SR.(ds).(wds).(rs).gagediffportioncal=gagediffportion;
-        else
+%         gagediffportion=SR.(ds).(wds).(rs).gagediffportion;
+%         if r==1 && Rb>1 && sum(SR.(ds).(wds).(rs).channellength)<= 1.0  
+%             SR.(ds).(wds).(rs).gagediffportioncal=gagediffportion;
+%         else
+            if runriverloop==0 && calibconstantgains==1
+                y=gains.(ds).(wds).(rs).gagediffportion(1:rsteps,:);
+                [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,movingavgwindow);
+                gagediffportion=yfit;
+            elseif runriverloop>0 && calibconstantgains==0
+              gagediffportion=SR.(ds).(wds).(rs).gagediffportion;
 %             y=gagediffportion(calibstid:calibendid,:);
 %             [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,movingavgwindow);
 %             gagediffportion(calibstid:calibendid,:)=yfit;
-            gagediffportion(calibstid:calibendid,:)=SR.(ds).(wds).(rs).avggains(calibstid:calibendid,:);
+                gagediffportion(calibstid:calibendid,:)=SR.(ds).(wds).(rs).avggains(calibstid:calibendid,:);
+            elseif runriverloop>0 && calibconstantgains==1
+                gagediffportion=SR.(ds).(wds).(rs).gagediffportion;
+                y=gains.(ds).(wds).(rs).gagediffportion(calibstid:calibendid,:);
+                [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,movingavgwindow);
+                gagediffportion(calibstid:calibendid,:)=yfit;
+            end
             SR.(ds).(wds).(rs).gagediffportioncal=gagediffportion;
-        end
+%        end
 
         if inadv3a_increaseint == 1
             sraddamt=SR.(ds).(wds).(rs).sraddamt;
@@ -4866,10 +4927,21 @@ for wd=WDcaliblist
             SR.(ds).(wds).(rs).sraddamtuscal=sraddamtus;SR.(ds).(wds).(rs).sraddamtusm=m;SR.(ds).(wds).(rs).sraddamtusb=b;SR.(ds).(wds).(rs).sraddamtusR2=R2;
         end
         if adjustlastsrtogage==1
-            gagedifflast=SR.(ds).(wds).(rs).gagedifflast;
-            y=gagedifflast(calibstid:calibendid,1);
-            [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,movingavgwindow);
-            gagedifflast(calibstid:calibendid,1)=yfit;
+            if runriverloop==0 && calibconstantgains==1
+                y=gains.(ds).(wds).(rs).gagedifflast(1:rsteps,1);
+                [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,movingavgwindow);
+                gagedifflast=yfit;
+            elseif runriverloop>0 && calibconstantgains==0 
+                gagedifflast=SR.(ds).(wds).(rs).gagedifflast;
+                y=gagedifflast(calibstid:calibendid,1);
+                [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,movingavgwindow);
+                gagedifflast(calibstid:calibendid,1)=yfit;
+            elseif runriverloop>0 && calibconstantgains==1
+                gagedifflast=SR.(ds).(wds).(rs).gagedifflast;
+                y=gains.(ds).(wds).(rs).gagedifflast(calibstid:calibendid,1);
+                [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,movingavgwindow);
+                gagedifflast(calibstid:calibendid,:)=yfit;
+            end
             SR.(ds).(wds).(rs).gagedifflastcal=gagedifflast;SR.(ds).(wds).(rs).gagedifflastm=m;SR.(ds).(wds).(rs).gagedifflastb=b;SR.(ds).(wds).(rs).gagedifflastR2=R2;
         end
         
@@ -4964,7 +5036,11 @@ for sr=SR.(ds).(wds).(rs).SR
         loss2=min(1,(1-losspercent/100)*sum(Qus)/sum(Qds));
         Qds=Qds*loss2;
     end
-    avggains=SR.(ds).(wds).(rs).avggains(:,sr);
+    if runriverloop>0
+        avggains=SR.(ds).(wds).(rs).avggains(:,sr);
+    else
+        avggains=gagediffportion(:,sr);
+    end
     Qavg=(max(Qus,minc)+max(Qds+avggains,minc))/2;
     width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
     evap=SR.(ds).(wds).(rs).evapday(rjulien,sr)*SR.(ds).(wds).(rs).evapfactor(sr).*width.*SR.(ds).(wds).(rs).channellength(sr); %EvapFactor = 0 to not have evap
@@ -4997,6 +5073,7 @@ end %sr
 
 
     end %r
+    lastwdid=[lastwdid;SR.(ds).(wds).(rs).dswdid{sr} {ds} {wds} {rs} {sr}];
 end %wd
     %this extra save will take more time - if don't need comment out
     if savefinalmatfile==1
@@ -5745,6 +5822,7 @@ if sum(strcmp(cmdlineargs,'f')) && sum(strcmp(cmdlineargs,'c')) && copydatafiles
     delete([datafiledir 'StateTL_data_stagedis.mat']);
     delete([datafiledir 'StateTL_data_qnode.mat']);
     delete([datafiledir 'StateTL_data_release.mat']);
+    delete([datafiledir 'StateTL_data_gains.mat']);
 end
 
 
@@ -5771,7 +5849,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % deployed as function with following end statement
 
-% end %StateTL as deployed function
+%  end %StateTL as deployed function
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % runbank - function that may replace j349 functionality
