@@ -9,6 +9,7 @@ clear all
 
 runstarttime=now;
 basedir=cd;basedir=[basedir '\'];
+datafiledir=[basedir 'StateTLdata\'];
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -118,6 +119,11 @@ movingavgwindow=ceil(gainsavgwindowdays*24/rhours); %running average window size
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Initial log write/display given options from control file
+
+logpids=find(logfilename=='.');
+logfilename=[logfilename(1:logpids(end)-1) '_gains' logfilename(logpids(end):end)];
+
+
 if writemessage==1
     fidlog=fopen(logfilename,'w');
 end
@@ -143,7 +149,7 @@ for i=multiyrs
     logm=['StateTLgains issuing command line argument: ' cmdlinearg ' ' datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
 
-    [s,w] = dos(cmdlinearg,'-echo');
+    [s,w] = dos(cmdlinearg);
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -153,8 +159,8 @@ end
 logm=['StateTLgains calculating median of multiyrs calculated gains'];
 domessage(logm,logfilename,displaymessage,writemessage)
 
-load('StateTL_data_gainsyr.mat')
-load('StateTL_data_subreach.mat')
+load([datafiledir 'StateTL_data_gainsyr.mat']);
+load([datafiledir 'StateTL_data_subreach.mat']);
 
 for wd=WDlist
     wds=['WD' num2str(wd)];    
@@ -195,7 +201,7 @@ end
 logm=['StateTLgains saving gains file to: ' [basedir 'StateTLdata\StateTL_data_gains.mat']];
 domessage(logm,logfilename,displaymessage,writemessage)
 
-save([basedir 'StateTLdata\StateTL_data_gains.mat'],'gains')
+save([datafiledir 'StateTL_data_gains.mat'],'gains')
 
 
 logm=['Done Running StateTLgains endtime: ' datestr(now) ' elapsed (DD:HH:MM:SS): ' datestr(now-runstarttime,'DD:HH:MM:SS')];    %log message

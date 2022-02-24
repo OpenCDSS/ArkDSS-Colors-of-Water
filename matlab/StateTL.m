@@ -20,14 +20,14 @@
 % % % varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
 % % % varargin=[{'-f'} {'caltestc3_1722020'} {'-c'} {'2020'} {'-s'} {'-d'} {'-p'} {'-m'}];
 % % % varargin=[{'-f'} {['cal2test']} {'-c'} {'2018'} {'-p'} ];
-varargin=[{'-f'} {['cal20test']} {'-c'} {'2018'}];
-% % % varargin=[{'-f'} {'caltest6_wd17stil715'} {'-c'} {'2018,3,15,7,15,WD171,172,17'} {'-s'} {'-d'} {'-p'} {'-m'}];
-% % % varargin=[{'-r'} {'2019'}];
-% % % varargin=[{'-b'} {'2019'}];
-% % % varargin=[{'-f'} {'obstest1'} {'-g'} {'2018,3,15,7,15,WD171,172,17'}];
-% % % varargin=[{'-g'} {'2015'}];
-% % % varargin=[{'-g'}];
-% % % varargin=[{'-r'}];
+% varargin=[{'-f'} {['cal20test']} {'-c'} {'2018'}];
+% % varargin=[{'-f'} {'caltest6_wd17stil715'} {'-c'} {'2018,3,15,7,15,WD171,172,17'} {'-s'} {'-d'} {'-p'} {'-m'}];
+% % varargin=[{'-r'} {'2019'}];
+% % varargin=[{'-b'} {'2019'}];
+% % varargin=[{'-f'} {'obstest1'} {'-g'} {'2018,3,15,7,15,WD171,172,17'}];
+% % varargin=[{'-g'} {'2015'}];
+% % varargin=[{'-g'}];
+% % varargin=[{'-r'}];
 % varargin=[{'-e'}];
 
 runstarttime=now;
@@ -213,7 +213,7 @@ movingavgwindow=ceil(gainsavgwindowdays*24/rhours); %running average window size
 %%
 
 datadir=basedir;
-datafiledir=basedir;
+datafiledir=[basedir 'StateTLdata\'];
 cmdlineargs={};
 
 if isempty(varargin)
@@ -264,18 +264,16 @@ else
                         % if also copydatafiles=1 then copy datafiles from main matlab folder into command line specified folder
                         % (to avoid potential issues with multiple instances)
                         if copydatafiles==1
-                            datafiledir=datadir;
-                            logmc=[logmc;'Copying datafiles from: ' basedir ' to ' datadir ' starting:' datestr(now)];
-                            copyfile([basedir 'StateTL_data_subreach.mat'],[datadir 'StateTL_data_subreach.mat'],'f');
-                            copyfile([basedir 'StateTL_data_evap.mat'],[datadir 'StateTL_data_evap.mat'],'f');
-                            copyfile([basedir 'StateTL_data_networklocs.mat'],[datadir 'StateTL_data_networklocs.mat'],'f');
-                            copyfile([basedir 'StateTL_data_stagedis.mat'],[datadir 'StateTL_data_stagedis.mat'],'f');
-                            copyfile([basedir 'StateTL_data_qnode.mat'],[datadir 'StateTL_data_qnode.mat'],'f');
-                            copyfile([basedir 'StateTL_data_release.mat'],[datadir 'StateTL_data_release.mat'],'f');
-                            copyfile([basedir 'StateTLdata\StateTL_data_gains.mat'],[datadir 'StateTL_data_gains.mat'],'f');
+                            logmc=[logmc;'Copying datafiles from: ' datafiledir ' to ' datadir ' starting:' datestr(now)];
+                            copyfile([datafiledir 'StateTL_data_subreach.mat'],[datadir 'StateTL_data_subreach.mat'],'f');
+                            copyfile([datafiledir 'StateTL_data_evap.mat'],[datadir 'StateTL_data_evap.mat'],'f');
+                            copyfile([datafiledir 'StateTL_data_networklocs.mat'],[datadir 'StateTL_data_networklocs.mat'],'f');
+                            copyfile([datafiledir 'StateTL_data_stagedis.mat'],[datadir 'StateTL_data_stagedis.mat'],'f');
+                            copyfile([datafiledir 'StateTL_data_qnode.mat'],[datadir 'StateTL_data_qnode.mat'],'f');
+                            copyfile([datafiledir 'StateTL_data_release.mat'],[datadir 'StateTL_data_release.mat'],'f');
+                            copyfile([datafiledir 'StateTL_data_gains.mat'],[datadir 'StateTL_data_gains.mat'],'f');
                             logmc=[logmc;'Copying datafiles done: ' datestr(now) ' file: StateTL_data_subreach.mat,StateTL_data_evap.mat,StateTL_data_stagedis.mat,StateTL_data_qnode.mat,StateTL_data_release.mat,StateTLdata\StateTL_data_gains.mat'];
-                        else
-                            datafiledir=basedir;
+                            datafiledir=datadir;
                         end
 
                         % output and log to data folder
@@ -317,7 +315,12 @@ else
 
                 readinputfile=2;  %will read new inputfile but not save mat file
                 newnetwork=0;
-%                runriverloop=2; 
+%                runriverloop=2;
+                if runriverloop==1       %if controlfile says to do riverloop
+                    runriverloop=2;
+                elseif runriverloop==0   %runriverloop=3 just establishes gageloc/riverloc network needed for calib loop
+                    runriverloop=3;
+                end
                 runwcloop=0;
                 doexchanges=0;
                 runcaptureloop=0;
@@ -332,7 +335,7 @@ else
                 %ergg not great - but repeat options verbatim here for log file
                 logmc=[logmc;'calibration command option: readinputfile=2'];
                 logmc=[logmc;'calibration command option: newnetwork=0'];
-                logmc=[logmc;'calibration command option: runriverloop=2'];
+                logmc=[logmc;'calibration command option: runriverloop=' num2str(runriverloop)];
                 logmc=[logmc;'calibration command option: runwcloop=0'];
                 logmc=[logmc;'calibration command option: doexchanges=0'];
                 logmc=[logmc;'calibration command option: runcaptureloop=0'];
@@ -1547,7 +1550,7 @@ else
 end
 
 
-if readinputfile>0 || readevap==1 || newnetwork==1 || (evapyearstart~=yearstart && runriverloop==1) || (evapyearstart~=yearstart && runcalibloop==1)
+if readinputfile>0 || readevap==1 || newnetwork==1 || (evapyearstart~=yearstart && runriverloop>0) || (evapyearstart~=yearstart && runcalibloop==1)
     if readevap~=1
         load([datafiledir 'StateTL_data_evap.mat']);
     end
@@ -3144,6 +3147,16 @@ end
 
 
 %%%%%%%%%%%%%%%%%%
+% if rebuilding, rebuild StateTLgains
+% probably not need this if not doing calibration
+% StateTL gains, as compiled exe in matlab folder, will actually recall new instances of StateTL
+
+if sum(strcmp(cmdlineargs,'r'))
+   [s,w] = dos('StateTLgains');
+end
+
+
+%%%%%%%%%%%%%%%%%%
 % PROCESSING LOOPS
 %%%%%%%%%%%%%%%%%%
 
@@ -3189,11 +3202,16 @@ end
     
 if runriverloop>0
 
+    %runriverloop=3 just establishes gageloc/riverloc network
+    if runriverloop==3
+    iternum=0;
+    end
+
 logm=['Starting river/gageflow loop at: '  datestr(now)];
 domessage(logm,logfilename,displaymessage,writemessage)
 
-if rungains==1 && isfile([basedir 'StateTL_data_gainsyr.mat'])
-    load([basedir 'StateTL_data_gainsyr.mat']);
+if rungains==1 && isfile([datafiledir 'StateTL_data_gainsyr.mat'])
+    load([datafiledir 'StateTL_data_gainsyr.mat']);
 end
     
 lastwdid=[];  %tracks last wdid/connection of processed wd reaches
@@ -3619,10 +3637,12 @@ if runriverloop==1  %not save if riverloop=2 (ie for calibration)
 end
 
 if rungains==1
-    save([basedir 'StateTL_data_gainsyr.mat'],'gainsyr');
+    save([datafiledir 'StateTL_data_gainsyr.mat'],'gainsyr');
 end
 
-elseif runwcloop>0 | runcalibloop>0
+%elseif runwcloop>0 | runcalibloop>0
+elseif runwcloop>0
+
     load([basedir 'StateTL_bin_riv' srmethod '.mat']);  
 end %river/gage loop
 
@@ -4845,7 +4865,7 @@ if runcalibloop>0
     logm=['Starting simulation loop for use in calibration at: '  datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
 
-    if ~(strcmp(calibavggainloss,'mean') | strcmp(calibavggainloss,'linreg') | strcmp(calibavggainloss,'movingavg') | strcmp(calibavggainloss,'movingmedian'))
+    if ~(strcmp(calibavggainloss,'mean') | strcmp(calibavggainloss,'linreg') | strcmp(calibavggainloss,'movingavg') | strcmp(calibavggainloss,'movingmedian') | strcmp(calibavggainloss,'none'))
         logm=['for calibration loop, could not figure out how to average gagediff etc given listed option:' calibavggainloss ' (looking for movingavg movingmedian mean or linreg)'];
         domessage(logm,logfilename,displaymessage,writemessage)
         error(logm)
@@ -4889,7 +4909,7 @@ for wd=WDcaliblist
 %         if r==1 && Rb>1 && sum(SR.(ds).(wds).(rs).channellength)<= 1.0  
 %             SR.(ds).(wds).(rs).gagediffportioncal=gagediffportion;
 %         else
-            if runriverloop==0 && calibconstantgains==1
+            if runriverloop==3 && calibconstantgains==1
                 y=gains.(ds).(wds).(rs).gagediffportion(1:rsteps,:);
                 [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,movingavgwindow);
                 gagediffportion=yfit;
@@ -4927,7 +4947,7 @@ for wd=WDcaliblist
             SR.(ds).(wds).(rs).sraddamtuscal=sraddamtus;SR.(ds).(wds).(rs).sraddamtusm=m;SR.(ds).(wds).(rs).sraddamtusb=b;SR.(ds).(wds).(rs).sraddamtusR2=R2;
         end
         if adjustlastsrtogage==1
-            if runriverloop==0 && calibconstantgains==1
+            if runriverloop==3 && calibconstantgains==1
                 y=gains.(ds).(wds).(rs).gagedifflast(1:rsteps,1);
                 [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,movingavgwindow);
                 gagedifflast=yfit;
@@ -5036,10 +5056,10 @@ for sr=SR.(ds).(wds).(rs).SR
         loss2=min(1,(1-losspercent/100)*sum(Qus)/sum(Qds));
         Qds=Qds*loss2;
     end
-    if runriverloop>0
-        avggains=SR.(ds).(wds).(rs).avggains(:,sr);
-    else
+    if runriverloop==3
         avggains=gagediffportion(:,sr);
+    else
+        avggains=SR.(ds).(wds).(rs).avggains(:,sr);
     end
     Qavg=(max(Qus,minc)+max(Qds+avggains,minc))/2;
     width=10.^((log10(Qavg)*SR.(ds).(wds).(rs).widtha(sr))+SR.(ds).(wds).(rs).widthb(sr));
@@ -5442,9 +5462,9 @@ if runcalibloop>0 && outputcal==1
             end
             iadd=i;
         end
-
+        titleloclineregr=[{'WDID'},{'Abbrev'},{'Div'},{'WD'},{'Reach'},{'ReachNum'}];
         titleregrline=[{'m-hour'},{'R2-hour'},{'SEE-hour'},{'m-day'},{'R2-day'},{'SEE-day'}];
-        writecell([titlelocline,titleregrline],[outputfilebase '_calstats.csv']);
+        writecell([titleloclineregr,titleregrline],[outputfilebase '_calstats.csv']);
         writecell([loclinegageregr,num2cell(outputlinegageregr),num2cell(outputlinegageregrday)],[outputfilebase '_calstats.csv'],'WriteMode','append');
         end
     end
@@ -5456,7 +5476,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%
 
-if outputriv==1 && runriverloop>0
+if outputriv==1 && runriverloop>0 && runriverloop<3
     logm=['Starting output of full river amounts at: ' datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
 
@@ -5824,6 +5844,8 @@ if sum(strcmp(cmdlineargs,'f')) && sum(strcmp(cmdlineargs,'c')) && copydatafiles
     delete([datafiledir 'StateTL_data_release.mat']);
     delete([datafiledir 'StateTL_data_gains.mat']);
 end
+
+
 
 
 %%
@@ -6521,7 +6543,10 @@ end
 %
 function [yfit,m,b,R2,SEE]=regr(x,y,meth,windowsize)
 
-if strcmp(meth,'linreg')
+if strcmp(meth,'none')
+  yfit=y;  
+  b=mean(y);m=zeros(1,length(b));R2=zeros(1,length(b));SEE=zeros(1,length(b));
+elseif strcmp(meth,'linreg')
    X=[ones(length(x),1) x];M=X\y;m=M(2,:);b=M(1,:);yfit=m.*x+b;R2=1-sum((y-yfit).^2)./sum((y-mean(y)).^2);SEE=(sum((x-y).^(2))./(length(x)-1)).^(0.5);
 elseif strcmp(meth,'leastsquares') %x and y need to be in columns not rows
     if sum(sum(x))==0 || sum(sum(y))==0
