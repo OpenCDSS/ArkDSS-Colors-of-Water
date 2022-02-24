@@ -73,6 +73,7 @@ Primary processes and components that have so-far been built include:
 * filling routine to fill missing telemetry data or extend data into future (Issue #9)
 * enable command line arguments to control data folder, calibration, and other options (Issue #14) 
 * use daily diversion records when no telemetry or to QC telemetry values (Issue #18)
+* options to use fixed gain/loss/error values during simulation runs (Issue #29)
 
 ## Usage Notes
 An initial set of command line arguments have been enabled to control the StateTL model engine that will override equivalent lines in the control file.  Command line option arguments include `-f -c -b -r -s -d -nd -w -nw` to trigger folder, calibration, build base files, save, display, and write options.  For the first four of these commands, additional arguments can be defined that must follow the given '-' command.  Example usage includes:
@@ -119,7 +120,7 @@ or more simply:
 
 `StateTL -f \calibration\Par.1 -c 2018` - calibrate year 2018 for all water districts in WDcaliblist
 
-
+`StateTL -e` - used primarily by StateTLgains script to calculate hourly gain/loss/error term for every year in multiyrlist
 
 ## Compiling
 For initial deployment testing, DWR is compiling StateTL to an executable currently using Matlab version 2021b.  To run the executable directly, the free Matlab MCR version 2021b must be installed from the following location.  In the future, the executable may be compiled in a newer version (ie 2022a) but this progression may be stopped after final deployment.

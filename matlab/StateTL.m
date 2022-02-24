@@ -5218,7 +5218,9 @@ if outputgain==1 && runriverloop>0
             rs=['R' num2str(r)];
             gagelocid=SR.(ds).(wds).(rs).gagelocid;
             loclinegain(:,k)=[SR.(ds).Gageloc.loc(gagelocid,5:6),SR.(ds).Gageloc.loc(gagelocid,1:4)]';
-            outputlinegain(:,k)=SR.(ds).(wds).(rs).gagediff+SR.(ds).(wds).(rs).gagedifflast;
+            if runriverloop<3
+                outputlinegain(:,k)=SR.(ds).(wds).(rs).gagediff+SR.(ds).(wds).(rs).gagedifflast;
+            end
             if runcalibloop>0 && outputcal==1
                 outputlinegaincal(:,k)=sum(SR.(ds).(wds).(rs).gagediffportioncal,2)+SR.(ds).(wds).(rs).gagedifflastcal;
             end
@@ -5226,17 +5228,19 @@ if outputgain==1 && runriverloop>0
     end
 
     if outputhr==1
-        if outputmat==1
-            outputcell=[[titlelocline';titledates],[loclinegain;num2cell(outputlinegain)]];
-        else
-            outputcell=titlelocline;
-            for i=1:length(outputlinegain(1,:))
-                loccol=repmat({[loclinegain{4,i} '-' loclinegain{5,i}]},rsteps,1);
-                outputcell=[outputcell;[titledates loccol num2cell(outputlinegain(:,i))]];
-            end
+        if runriverloop<3
+            if outputmat==1
+                outputcell=[[titlelocline';titledates],[loclinegain;num2cell(outputlinegain)]];
+            else
+                outputcell=titlelocline;
+                for i=1:length(outputlinegain(1,:))
+                    loccol=repmat({[loclinegain{4,i} '-' loclinegain{5,i}]},rsteps,1);
+                    outputcell=[outputcell;[titledates loccol num2cell(outputlinegain(:,i))]];
+                end
 
+            end
+            writecell(outputcell,[outputfilebase '_gainhr.csv']);
         end
-        writecell(outputcell,[outputfilebase '_gainhr.csv']);
         if runcalibloop>0 && outputcal==1
             if outputmat==1
                 outputcell=[[titlelocline';titledates],[loclinegain;num2cell(outputlinegaincal)]];
@@ -5252,19 +5256,21 @@ if outputgain==1 && runriverloop>0
         end
     end
     if outputday==1
-        for i=1:length(datedays)
-            outputlinedaygain(i,:)=mean(outputlinegain(dayids{i},:));
-        end
-        if outputmat==1
-            outputcell=[[titlelocline';titledatesday],[loclinegain;num2cell(outputlinedaygain)]];
-        else
-            outputcell=titlelocline;
-            for i=1:length(outputlinedaygain(1,:))
-                loccol=repmat({[loclinegain{4,i} '-' loclinegain{5,i}]},length(datedays),1);
-                outputcell=[outputcell;[titledatesday loccol num2cell(outputlinedaygain(:,i))]];
+        if runriverloop<3
+            for i=1:length(datedays)
+                outputlinedaygain(i,:)=mean(outputlinegain(dayids{i},:));
             end
+            if outputmat==1
+                outputcell=[[titlelocline';titledatesday],[loclinegain;num2cell(outputlinedaygain)]];
+            else
+                outputcell=titlelocline;
+                for i=1:length(outputlinedaygain(1,:))
+                    loccol=repmat({[loclinegain{4,i} '-' loclinegain{5,i}]},length(datedays),1);
+                    outputcell=[outputcell;[titledatesday loccol num2cell(outputlinedaygain(:,i))]];
+                end
+            end
+            writecell(outputcell,[outputfilebase '_gainday.csv']);
         end
-        writecell(outputcell,[outputfilebase '_gainday.csv']);
         if runcalibloop>0 && outputcal==1
             for i=1:length(datedays)
                 outputlinedaygain(i,:)=mean(outputlinegaincal(dayids{i},:));
