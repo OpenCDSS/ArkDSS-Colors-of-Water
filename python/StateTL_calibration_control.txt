@@ -1,6 +1,6 @@
 # This is a preliminary working file and will change as we add more functionality
 [Settings]
-calib_dir = tests
+calib_dir = test_updated_gains
 results_dir = results
 results_file = results.dat
 log_file = logfile.data
@@ -11,13 +11,13 @@ cpus = 20
 
 [Parameter Sensitivity]
 # <symbol> = <number of variations>
-T01 = 1
-T02 = 1
-SC01 = 1
-AW01 = 1
-AW02 = 1
-T03 = 1
-T04 = 1
+T01 = 2
+T02 = 2
+SC01 = 2
+AW01 = 2
+AW02 = 2
+T03 = 2
+T04 = 2
 
 [Latin Hypercube Sampling]
 sample_size = 20
