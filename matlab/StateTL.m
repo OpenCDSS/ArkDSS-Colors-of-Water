@@ -9,7 +9,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % function statement for when deployed
 % if using as a function from matlab - be sure to type clear all first
-% function StateTL(varargin)  %end near line 5830
+% function StateTL(varargin)  %end near line 5880
 % clear SR WC
 %%% StateTL('-f','caltest6','-c','2018','-s','-d','-p')
 
@@ -75,6 +75,7 @@ inadv3b_increaseint=0;    %currently using over 3a; similar step as 3a / only us
 minc=1;              %minimum flow applied to celerity, dispersion, and evaporation calculations (dont want to have a zero celerity for reverse operations etc) / this is also seperately in j349/musk functions
 minj349=1;           %minimum flow for j349 application - TLAP uses 1.0
 gainchangelimit=0.1;
+avggainloss='movingmedian';  %setting explicitly here; so can be different than calibavggainloss; may want in control file
 
 evapnew=1;           %1=use new evap method (statewide et dataset) or else old single curve
     evapstartyear=2000;
@@ -3449,7 +3450,7 @@ for sr=SR.(ds).(wds).(rs).SR
 
     if ii>1
 %        gainmeth='movingavg';
-        gainmeth=calibavggainloss;
+        gainmeth=avggainloss;
         x=(1:rsteps)';
         y=SR.(ds).(wds).(rs).gagediffportion(:,sr)+SR.(ds).(wds).(rs).sraddamt(:,sr);
         [avggains,m,b,R2,SEE]=regr(x,y,gainmeth,movingavgwindow);
@@ -4865,7 +4866,7 @@ if runcalibloop>0
     logm=['Starting simulation loop for use in calibration at: '  datestr(now)];
     domessage(logm,logfilename,displaymessage,writemessage)
 
-    if ~(strcmp(calibavggainloss,'mean') | strcmp(calibavggainloss,'linreg') | strcmp(calibavggainloss,'movingavg') | strcmp(calibavggainloss,'movingmedian') | strcmp(calibavggainloss,'none'))
+    if ~(strcmp(calibavggainloss,'movingmedian') | strcmp(calibavggainloss,'zero') | strcmp(calibavggainloss,'mean') | strcmp(calibavggainloss,'linreg') | strcmp(calibavggainloss,'movingavg') | strcmp(calibavggainloss,'none'))
         logm=['for calibration loop, could not figure out how to average gagediff etc given listed option:' calibavggainloss ' (looking for movingavg movingmedian mean or linreg)'];
         domessage(logm,logfilename,displaymessage,writemessage)
         error(logm)
@@ -5877,7 +5878,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % deployed as function with following end statement
 
-%  end %StateTL as deployed function
+% end %StateTL as deployed function
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % runbank - function that may replace j349 functionality
@@ -6551,7 +6552,10 @@ function [yfit,m,b,R2,SEE]=regr(x,y,meth,windowsize)
 
 if strcmp(meth,'none')
   yfit=y;  
-  b=mean(y);m=zeros(1,length(b));R2=zeros(1,length(b));SEE=zeros(1,length(b));
+  b=mean(y);m=0;R2=0;SEE=0;
+elseif strcmp(meth,'zero')
+  yfit=zeros(size(y));  
+  b=0;m=0;R2=0;SEE=0;
 elseif strcmp(meth,'linreg')
    X=[ones(length(x),1) x];M=X\y;m=M(2,:);b=M(1,:);yfit=m.*x+b;R2=1-sum((y-yfit).^2)./sum((y-mean(y)).^2);SEE=(sum((x-y).^(2))./(length(x)-1)).^(0.5);
 elseif strcmp(meth,'leastsquares') %x and y need to be in columns not rows
