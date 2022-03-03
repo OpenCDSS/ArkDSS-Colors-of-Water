@@ -58,6 +58,20 @@ def get_simulation_year(ctrl_file, ctrl_key):
     return sim_year
 
 
+def str_to_bool(s):
+    """
+
+    :param s: string either 'True' or 'False'
+    :return: bool True or False to work as a function argument
+    """
+    if s == 'True':
+        return True
+    elif s == 'False':
+        return False
+    else:
+        raise ValueError('All entries for vary in the input file must be True or False.')
+
+
 def get_observations(obs_file):
 
     """
@@ -66,7 +80,9 @@ def get_observations(obs_file):
     """
 
     obs_df = pd.read_csv(obs_file)
-    obs_df['obs'] = obs_df['WDID'].astype(str) + '_' + obs_df['Date']
+    date_string = ['_'.join(item.split()) for item in obs_df['Date'].to_list()]
+
+    obs_df['obs'] = obs_df['WDID'].astype(str) + '_' + date_string
 
     return obs_df[['obs', 'Value']]
 
@@ -295,6 +311,10 @@ def main():
         # Create list of number of variations per parameter, by position
         nvals_list = []
         for i, item in enumerate(parameter_list):
+            """
+            ToDo: the following breaks if parameter is not defined in control and vary=False. 
+                  Also the input file is not skipping # lines when read.
+            """
             try:
                 nvals_list.append(int(method_dict[item]))
             except Exception:
@@ -315,7 +335,7 @@ def main():
                 value=items['value'],
                 min=items['minimum'],
                 max=items['maximum'],
-                vary=items['vary']
+                vary=str_to_bool(items['vary'])
             )
 
         # Create sample set from p.add_par
@@ -333,11 +353,13 @@ def main():
         # Create parameters
         for key in parameters.keys():
             items = parameters[key]
-            p.add_par(items['symbol'],
-                      value=items['value'],
-                      min=items['minimum'],
-                      max=items['maximum'],
-                      vary=items['vary'])
+            p.add_par(
+                items['symbol'],
+                value=items['value'],
+                min=items['minimum'],
+                max=items['maximum'],
+                vary=str_to_bool(items['vary'])
+            )
         # Ensure sample size is great than the number of parameters
         if int(method_dict['sample_size']) <= len(parameters.keys()):
             print('ERROR: The sample_size for Latin Hypercube sampling must be greater', end=' ')
