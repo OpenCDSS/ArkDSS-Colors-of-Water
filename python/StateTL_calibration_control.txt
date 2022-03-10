@@ -1,23 +1,27 @@
 # This is a preliminary working file and will change as we add more functionality
 [Settings]
-calib_dir = test_updated_gains_riverloop
+calib_dir = tmp
 results_dir = results
 results_file = results.dat
 log_file = logfile.data
 simulation_year = 2019
 keep_previous = delete
-method = Latin Hypercube Sampling
+method = Parameter Sensitivity
 cpus = 20
 
 [Parameter Sensitivity]
 # <symbol> = <number of variations>
-T01 = 2
-T02 = 1
-SC01 = 1
-AW01 = 1
-AW02 = 1
+T02 = 2
 T03 = 1
 T04 = 1
+T05 = 1
+T06 = 1
+T07 = 1
+T08 = 1
+T10 = 1
+T11 = 1
+T12 = 1
+T13 = 1
 
 [Latin Hypercube Sampling]
 sample_size = 60

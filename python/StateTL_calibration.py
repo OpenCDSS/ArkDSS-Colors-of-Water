@@ -105,7 +105,8 @@ def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
         data_dir,
         sep='\s*[,]\s*',
         engine='python',
-        dtype=dtype
+        dtype=dtype,
+        comment='#'
     )
     # Remove empty lines (NaNs) from DataFrame
     df.dropna(how='all', inplace=True)
@@ -177,31 +178,105 @@ def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_di
     simulation_values = get_observations('StateTL_out_calhr.csv')
     sim_values_dict = dict(zip(simulation_values['obs'].to_list(), simulation_values['Value'].to_list()))
 
-    """
-    This will change since Kelley is now providing us observations decoupled from model outputs.
-    """
-    # try:
-    #     # Read output file of data
-    #     results_df = pd.read_csv('StateTL_out_calday.csv')
-    #     # Make list of unique WDIDs
-    #     WDID_list = results_df.iloc[:, 0].unique().tolist()
-    #     # Convert WDID integers to strings
-    #     WDID_columns = [str(i) for i in WDID_list]
-    #     # Create DataFrame to store RMSE values by WDID
-    #     RMSE_df = pd.DataFrame(index=WDID_columns)
-    #     for WDID in WDID_list:
-    #         # Extract Gauge & Sim data for current WDID
-    #         gauge_data = results_df[(results_df['WDID'] == WDID) & (results_df['1-Gage/2-Sim'] == 1)].to_numpy().flatten()[7:]
-    #         sim_data = results_df[(results_df['WDID'] == WDID) & (results_df['1-Gage/2-Sim'] == 2)].to_numpy().flatten()[7:]
-    #         # Place RMSE for WDID in DataFrame
-    #         RMSE_df.at[str(WDID), f'RMSE{par_dir.name}'] = np.sqrt(np.mean((sim_data - gauge_data)**2))
-    # except Exception as err:
-    #     print(f'StateTL_out_calday.csv was not created in {par_dir.name}\n{err}\n')
-    #     RMSE_df = 1e999
-
-    # RMSE_df = 1e999
-
     return sim_values_dict
+
+
+def calculate_global_residual_stats(obs, sim_names, sim_vals):
+    """
+
+    :param sim_names: list of simulation directory names.
+    :param obs: DataFrame of observations
+    :param sim_vals: numpy ndarray of simulations responses
+    :return residual_stats: dataframe of resdual stats per reach
+    """
+
+    # Split observation id to get gage id
+    gage_id = [item.split('_')[0] for item in obs['obs'].to_list()]
+
+    # Calculate errors
+    obs_values = obs['Value'].to_numpy()
+    obs_values = obs_values[:, np.newaxis]
+    errors = sim_vals.T - obs_values
+    # Calculate percent errors while accounting for divide by zero. (may need where=~np.isclose(b,np.zeros_like(b))
+    percent_errors = np.divide(
+        errors,
+        obs_values,
+        out=np.zeros(errors.shape, dtype=float),
+        where=obs_values != 0.0
+    )
+
+    errors_df = pd.DataFrame(data=errors, columns=sim_names)
+    # errors_df.insert(0, 'gage_id', gage_id)
+    percent_errors_df = pd.DataFrame(data=percent_errors, columns=sim_names)
+    # percent_errors_df.insert(0, 'gage_id', gage_id)
+
+    # Mean Absolute Error
+    mae = errors_df.apply(lambda x: x.abs().mean())
+    mae.index.name = None
+    mae = mae.rename(index={k: f'{k}_mae' for k in mae.index})
+    rmse = errors_df.apply(lambda x: ((x**2).mean())**0.5)
+    rmse.index.name = None
+    rmse = rmse.rename(index={k: f'{k}_rmse' for k in rmse.index})
+    rmspe = percent_errors_df.apply(lambda x: ((x**2).mean())**0.5)
+    rmspe.index.name = None
+    rmspe = rmspe.rename(index={k: f'{k}_rmspe' for k in rmspe.index})
+
+    stats_df = mae.T.copy()
+    stats_df = stats_df.append(rmse.T)
+    stats_df = stats_df.append(rmspe.T)
+    stats_df = stats_df.sort_index()
+
+    return stats_df
+
+
+def calculate_gage_residual_stats(obs, sim_names, sim_vals):
+    """
+
+    :param sim_names: list of simulation directory names.
+    :param obs: DataFrame of observations
+    :param sim_vals: numpy ndarray of simulations responses
+    :return residual_stats: dataframe of resdual stats per reach
+    """
+
+    # Split observation id to get gage id
+    gage_id = [item.split('_')[0] for item in obs['obs'].to_list()]
+    # Add it to the obs for filtering by gage
+    # obs.insert(0, 'gage_id', gage_id)
+
+    # Calculate errors
+    obs_values = obs['Value'].to_numpy()
+    obs_values = obs_values[:, np.newaxis]
+    errors = sim_vals.T - obs_values
+    # Calculate percent errors while accounting for divide by zero. (may need where=~np.isclose(b,np.zeros_like(b))
+    percent_errors = np.divide(
+        errors,
+        obs_values,
+        out=np.zeros(errors.shape, dtype=float),
+        where=obs_values != 0.0
+    )
+
+    errors_df = pd.DataFrame(data=errors, columns=sim_names)
+    errors_df.insert(0, 'gage_id', gage_id)
+    percent_errors_df = pd.DataFrame(data=percent_errors, columns=sim_names)
+    percent_errors_df.insert(0, 'gage_id', gage_id)
+
+    # Mean Absolute Error
+    mae = errors_df.groupby('gage_id').apply(lambda x: x.abs().mean())
+    mae.index.name = None
+    mae = mae.rename(columns={k: f'{k}_mae' for k in mae.keys()})
+    rmse = errors_df.groupby('gage_id').apply(lambda x: ((x**2).mean())**0.5)
+    rmse.index.name = None
+    rmse = rmse.rename(columns={k: f'{k}_rmse' for k in rmse.keys()})
+    rmspe = percent_errors_df.groupby('gage_id').apply(lambda x: ((x**2).mean())**0.5)
+    rmspe.index.name = None
+    rmspe = rmspe.rename(columns={k: f'{k}_rmspe' for k in rmspe.keys()})
+
+    stats_df = mae.T.copy()
+    stats_df = stats_df.append(rmse.T)
+    stats_df = stats_df.append(rmspe.T)
+    stats_df = stats_df.sort_index()
+
+    return stats_df
 
 
 def main():
@@ -260,21 +335,31 @@ def main():
 
     # Define model locations
     workdir_base = f'{calib_dir}/par'
-    folders_to_delete = base_dir / calib_dir / '*'
+    # folders_to_delete = base_dir / calib_dir / '*'
     results_loc = base_dir / calib_dir / results_dir
     outfile = f'{calib_dir}/{results_dir}/{results_file}'
     logfile = f'{calib_dir}/{results_dir}/{log_file}'
 
-    # Gather names of all folders in calib_dir directory
+    # delete calib_dir directory if reusing and 'delete' was specified in the control file
     if keep_previous == 'delete':
-        folders = glob(str(folders_to_delete))
-        # Delete existing folders in calib_dir
-        for folder in folders:
-            shutil.rmtree(folder)
+        if os.path.exists(calib_dir):
+            shutil.rmtree(calib_dir)
+        # folders = glob(str(folders_to_delete))
+        # # Delete existing folders in calib_dir
+        # for folder in folders:
+        #     shutil.rmtree(folder)
+
+    # Create calib_dir if it doesn't exist already
+    if not os.path.exists(calib_dir):
+        os.makedirs(calib_dir)
 
     # Create results directory if it doesn't exist already
     if not os.path.exists(results_loc):
         os.makedirs(results_loc)
+
+    # Write calib_data_file and calib_ctrl_file to calib_dir
+    shutil.copy(data_dir, f'{calib_dir}/{calib_data_file}')
+    shutil.copy(ctrl_dir, f'{calib_dir}/{calib_ctrl_file}')
 
     # Create template file and return parameter dictionary
     # and number of parameters to vary
@@ -340,7 +425,13 @@ def main():
 
         # Create sample set from p.add_par
         s = p.parstudy(nvals=nvals_list)
+
+        # Get number of sims and simulation directory names
+        num_sims = s.samples.values.shape[0]
+        sim_names = [f'{workdir_base.split("/")[1]}.{n + 1}' for n in range(num_sims)]
+
         # print(f'nvals_list: {nvals_list}')
+        print(f'There are {s.samples.values.shape[1]} samples in the sample set.')
         print(f'Here are the sample values:\n{s.samples.values}')
 
     # Check method type
@@ -387,12 +478,20 @@ def main():
     end = time()
     print(f'Total running time: {(end - start) / 60} mins')
 
-    df = pd.DataFrame(index=list(range(len(s.indices))))
-    df['simulation'] = [f'par.{x}' for x in s.indices]
-    df['sse'] = s.sse()
-    df['rmse'] = (s.sse()/num_observations)**0.5
+    # df = pd.DataFrame(index=list(range(len(s.indices))))
+    # df['simulation'] = [f'par.{x}' for x in s.indices]
+    # # df['sse'] = s.sse()
+    # df['rmse'] = (s.sse()/num_observations)**0.5
 
-    df.to_csv(f'{calib_dir}/{results_dir}/calibration_residual_statistics.csv')
+    stats_global = calculate_global_residual_stats(observations, sim_names, s.responses.values)
+
+    stats_global.to_csv(f'{calib_dir}/{results_dir}/global_residual_statistics.csv')
+
+    # Create list of sim_names
+    print('Compiling residual statistics by gage...')
+    stats_by_gage = calculate_gage_residual_stats(observations, sim_names, s.responses.values)
+
+    stats_by_gage.to_csv(f'{calib_dir}/{results_dir}/gage_residual_statistics.csv')
 
     print('Doh!')
 
