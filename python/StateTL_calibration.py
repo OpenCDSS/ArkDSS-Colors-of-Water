@@ -156,7 +156,7 @@ def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_di
     to_file = par_dir / input_file
 
     # Create model input file from template file
-    pest_io.tpl_write(params, fr'../../matlab/{template_file}', to_file)
+    pest_io.tpl_write(params, f'{matlab_dir}/{template_file}', to_file)
 
     # cd into matlab directory to run model
     os.chdir(matlab_dir)
@@ -224,7 +224,7 @@ def calculate_global_residual_stats(obs, sim_names, sim_vals):
     stats_df = mae.T.copy()
     stats_df = stats_df.append(rmse.T)
     stats_df = stats_df.append(rmspe.T)
-    stats_df = stats_df.sort_index()
+    # stats_df = stats_df.sort_index()
 
     return stats_df
 
@@ -274,7 +274,7 @@ def calculate_gage_residual_stats(obs, sim_names, sim_vals):
     stats_df = mae.T.copy()
     stats_df = stats_df.append(rmse.T)
     stats_df = stats_df.append(rmspe.T)
-    stats_df = stats_df.sort_index()
+    # stats_df = stats_df.sort_index()
 
     return stats_df
 

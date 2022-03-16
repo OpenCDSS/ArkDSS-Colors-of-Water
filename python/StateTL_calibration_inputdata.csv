@@ -1,11 +1,11 @@
 ﻿Div,WD,Reach,parameter,symbol,value,minimum,maximum,vary
-2,17,2,Transmissivity,T02,10000,5000,20000,True
-2,17,3,Transmissivity,T03,10000,5000,20000,True
-2,17,4,Transmissivity,T04,10000,5000,20000,True
-2,17,5,Transmissivity,T05,10000,5000,20000,True
-2,17,6,Transmissivity,T06,10000,5000,20000,True
-2,17,7,Transmissivity,T07,10000,5000,20000,True
-2,17,8,Transmissivity,T08,10000,5000,20000,True
+2,17,2,Transmissivity,T02,10000,1000,20000,True
+#2,17,3,Transmissivity,T03,10000,5000,20000,True
+#2,17,4,Transmissivity,T04,10000,5000,20000,True
+#2,17,5,Transmissivity,T05,10000,5000,20000,True
+#2,17,6,Transmissivity,T06,10000,5000,20000,True
+#2,17,7,Transmissivity,T07,10000,5000,20000,True
+#2,17,8,Transmissivity,T08,10000,5000,20000,True
 #2,17,-1,Storage coefficient,SC01,0.15,0.1,0.2,True
 #2,17,-1,Aquifer width,AW01,750,250,1500,True
 #2,17,6,Aquifer width,AW02,750,250,1500,True
@@ -31,7 +31,7 @@
 #2,17,5,URFThreshold,urf5,500,100,1000,True
 #2,17,6,URFThreshold,urf6,500,100,1000,True
 #2,17,7,URFThreshold,urf7,500,100,1000,True
-2,67,2,Transmissivity,T10,9000,5000,15000,True
-2,67,3,Transmissivity,T11,17500,11000,24000,True
-2,67,4,Transmissivity,T12,17500,11000,24000,True
-2,67,5,Transmissivity,T13,17500,11000,24000,True
+#2,67,2,Transmissivity,T10,9000,5000,15000,True
+#2,67,3,Transmissivity,T11,17500,11000,24000,True
+#2,67,4,Transmissivity,T12,17500,11000,24000,True
+#2,67,5,Transmissivity,T13,17500,11000,24000,True
