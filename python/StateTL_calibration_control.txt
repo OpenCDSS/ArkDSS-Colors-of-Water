@@ -1,6 +1,6 @@
 # This is a preliminary working file and will change as we add more functionality
 [Settings]
-calib_dir = simulations\oat_sensitivity\wd17_reach02_tras
+calib_dir = tmp
 results_dir = results
 results_file = results.dat
 log_file = logfile.data
@@ -11,7 +11,7 @@ cpus = 20
 
 [Parameter Sensitivity]
 # <symbol> = <number of variations>
-T02 = 20
+T02 = 2
 
 [Latin Hypercube Sampling]
 sample_size = 60

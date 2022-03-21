@@ -255,6 +255,11 @@ def calculate_gage_residual_stats(obs, sim_names, sim_vals):
         where=obs_values != 0.0
     )
 
+    # Convert to dataFrames to groupby gage fro aggregation
+    obs_df = pd.DataFrame(data=obs_values, columns=['obs'])
+    obs_df.insert(0, 'gage_id', gage_id)
+    sims_df = pd.DataFrame(data=sim_vals.T, columns=sim_names)
+    sims_df.insert(0, 'gage_id', gage_id)
     errors_df = pd.DataFrame(data=errors, columns=sim_names)
     errors_df.insert(0, 'gage_id', gage_id)
     percent_errors_df = pd.DataFrame(data=percent_errors, columns=sim_names)
@@ -264,17 +269,40 @@ def calculate_gage_residual_stats(obs, sim_names, sim_vals):
     mae = errors_df.groupby('gage_id').apply(lambda x: x.abs().mean())
     mae.index.name = None
     mae = mae.rename(columns={k: f'{k}_mae' for k in mae.keys()})
+    # mae.insert(0, 'metric', 'mae')
+    # Root Mean Squared Error
     rmse = errors_df.groupby('gage_id').apply(lambda x: ((x**2).mean())**0.5)
     rmse.index.name = None
     rmse = rmse.rename(columns={k: f'{k}_rmse' for k in rmse.keys()})
+    # rmse.insert(0, 'metric', 'rmse')
+    # Root Mean Squared Percent Error
+    # rmspe = sqrt( ( sum((sim - obs)/obs) )^2 )
     rmspe = percent_errors_df.groupby('gage_id').apply(lambda x: ((x**2).mean())**0.5)
     rmspe.index.name = None
     rmspe = rmspe.rename(columns={k: f'{k}_rmspe' for k in rmspe.keys()})
+    # rmspe.insert(0, 'metric', 'rmspe')
+    # Root Mean Square Volume Error (volume equal area under curve which is just sum of the hydrograph)
+    # absvpe = abs( (sum(sim) - sum(obs))/sum(obs) )
+    sum_obs_gage_df = obs_df.groupby('gage_id').sum()
+    sum_sims_gage_df = sims_df.groupby('gage_id').sum()
+    per_diff_gage_df = (sum_sims_gage_df - sum_obs_gage_df.to_numpy())/sum_obs_gage_df.to_numpy()
+    absvpe = per_diff_gage_df.apply(lambda x: np.abs(x))
+    absvpe = absvpe.rename(columns={k: f'{k}_absvpe' for k in absvpe.keys()})
+    # absvpe.insert(0, 'metric', 'absvpe')
 
     stats_df = mae.T.copy()
     stats_df = stats_df.append(rmse.T)
     stats_df = stats_df.append(rmspe.T)
-    # stats_df = stats_df.sort_index()
+    stats_df = stats_df.append(absvpe.T)
+    # stats_df = stats_df.sort_index() # not the sort I want
+
+    # split index and place in data frame and add as columns
+    index_lists = stats_df.index.str.split('_', expand=True)
+    index_lists = list(zip(*index_lists))
+    stats_df.insert(0, 'metric', list(index_lists[1]))
+    stats_df.insert(0, 'sim', list(index_lists[0]))
+    # reset index
+    stats_df = stats_df.reset_index(drop=True)
 
     return stats_df
 
@@ -483,9 +511,9 @@ def main():
     # # df['sse'] = s.sse()
     # df['rmse'] = (s.sse()/num_observations)**0.5
 
-    stats_global = calculate_global_residual_stats(observations, sim_names, s.responses.values)
-
-    stats_global.to_csv(f'{calib_dir}/{results_dir}/global_residual_statistics.csv')
+    # stats_global = calculate_global_residual_stats(observations, sim_names, s.responses.values)
+    #
+    # stats_global.to_csv(f'{calib_dir}/{results_dir}/global_residual_statistics.csv')
 
     # Create list of sim_names
     print('Compiling residual statistics by gage...')
