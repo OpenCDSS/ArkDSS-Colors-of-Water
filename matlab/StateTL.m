@@ -16,19 +16,19 @@
 % % comment next lines if using as function
  clear all
  varargin=[];
-% % % varargin=[{'-f'} {'foldertest1'}];
-% % % varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
-% % % varargin=[{'-f'} {'caltestc3_1722020'} {'-c'} {'2020'} {'-s'} {'-d'} {'-p'} {'-m'}];
-% % % varargin=[{'-f'} {['cal2test']} {'-c'} {'2018'} {'-p'} ];
-% varargin=[{'-f'} {['cal20test']} {'-c'} {'2018'}];
-% % varargin=[{'-f'} {'caltest6_wd17stil715'} {'-c'} {'2018,3,15,7,15,WD171,172,17'} {'-s'} {'-d'} {'-p'} {'-m'}];
-% % varargin=[{'-r'} {'2019'}];
-% % varargin=[{'-b'} {'2019'}];
-% % varargin=[{'-f'} {'obstest1'} {'-g'} {'2018,3,15,7,15,WD171,172,17'}];
-% % varargin=[{'-g'} {'2015'}];
-% % varargin=[{'-g'}];
-% % varargin=[{'-r'}];
-% varargin=[{'-e'}];
+% % % % varargin=[{'-f'} {'foldertest1'}];
+% % % % varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
+% % % % varargin=[{'-f'} {'caltestc3_1722020'} {'-c'} {'2020'} {'-s'} {'-d'} {'-p'} {'-m'}];
+% % % % varargin=[{'-f'} {['cal2test']} {'-c'} {'2018'} {'-p'} ];
+% % varargin=[{'-f'} {['cal20test']} {'-c'} {'2018'}];
+% % % varargin=[{'-f'} {'caltest6_wd17stil715'} {'-c'} {'2018,3,15,7,15,WD171,172,17'} {'-s'} {'-d'} {'-p'} {'-m'}];
+% % % varargin=[{'-r'} {'2019'}];
+% % % varargin=[{'-b'} {'2019'}];
+% % % varargin=[{'-f'} {'obstest1'} {'-g'} {'2018,3,15,7,15,WD171,172,17'}];
+% % % varargin=[{'-g'} {'2015'}];
+% % % varargin=[{'-g'}];
+% % % varargin=[{'-r'}];
+% % varargin=[{'-e'}];
 
 runstarttime=now;
 basedir=cd;basedir=[basedir '\'];
@@ -273,7 +273,8 @@ else
                             copyfile([datafiledir 'StateTL_data_qnode.mat'],[datadir 'StateTL_data_qnode.mat'],'f');
                             copyfile([datafiledir 'StateTL_data_release.mat'],[datadir 'StateTL_data_release.mat'],'f');
                             copyfile([datafiledir 'StateTL_data_gains.mat'],[datadir 'StateTL_data_gains.mat'],'f');
-                            logmc=[logmc;'Copying datafiles done: ' datestr(now) ' file: StateTL_data_subreach.mat,StateTL_data_evap.mat,StateTL_data_stagedis.mat,StateTL_data_qnode.mat,StateTL_data_release.mat,StateTLdata\StateTL_data_gains.mat'];
+                            copyfile([datafiledir 'StateTL_data_gainsyr.mat'],[datadir 'StateTL_data_gainsyr.mat'],'f');
+                            logmc=[logmc;'Copying datafiles done: ' datestr(now) ' file: StateTL_data_subreach.mat,StateTL_data_evap.mat,StateTL_data_stagedis.mat,StateTL_data_qnode.mat,StateTL_data_release.mat,StateTL_data_gains.mat,StateTL_data_gainsyr.mat'];
                             datafiledir=datadir;
                         end
 
@@ -317,9 +318,9 @@ else
                 readinputfile=2;  %will read new inputfile but not save mat file
                 newnetwork=0;
 %                runriverloop=2;
-                if runriverloop==1       %if controlfile says to do riverloop
+                if calibconstantgains==0       %if zero generally needs to do riverloop to get gains
                     runriverloop=2;
-                elseif runriverloop==0   %runriverloop=3 just establishes gageloc/riverloc network needed for calib loop
+                else                           %runriverloop=3 just establishes gageloc/riverloc network needed for calib loop but using constant gains
                     runriverloop=3;
                 end
                 runwcloop=0;
@@ -4878,6 +4879,8 @@ if runcalibloop>0
 
 if calibconstantgains==1
     load([datafiledir 'StateTL_data_gains.mat']);
+elseif calibconstantgains==2
+    load([datafiledir 'StateTL_data_gainsyr.mat']);
 end
 
 lastwdid=[];
@@ -4914,6 +4917,11 @@ for wd=WDcaliblist
                 y=gains.(ds).(wds).(rs).gagediffportion(1:rsteps,:);
                 [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,movingavgwindow);
                 gagediffportion=yfit;
+            elseif runriverloop==3 && calibconstantgains==2
+                gagediffportion=gainsyr.(['Y' num2str(yearstart)]).(ds).(wds).(rs).gagediffportion;
+                y=gagediffportion(calibstid:calibendid,:);
+                [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,movingavgwindow);
+                gagediffportion(calibstid:calibendid,:)=yfit;
             elseif runriverloop>0 && calibconstantgains==0
               gagediffportion=SR.(ds).(wds).(rs).gagediffportion;
 %             y=gagediffportion(calibstid:calibendid,:);
@@ -4952,6 +4960,11 @@ for wd=WDcaliblist
                 y=gains.(ds).(wds).(rs).gagedifflast(1:rsteps,1);
                 [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,movingavgwindow);
                 gagedifflast=yfit;
+            elseif runriverloop==3 && calibconstantgains==2
+                gagedifflast=gainsyr.(['Y' num2str(yearstart)]).(ds).(wds).(rs).gagedifflast;
+                y=gagedifflast(calibstid:calibendid,:);
+                [yfit,m,b,R2,SEE]=regr(x,y,calibavggainloss,movingavgwindow);
+                gagedifflast(calibstid:calibendid,:)=yfit;
             elseif runriverloop>0 && calibconstantgains==0 
                 gagedifflast=SR.(ds).(wds).(rs).gagedifflast;
                 y=gagedifflast(calibstid:calibendid,1);
@@ -5850,6 +5863,7 @@ if sum(strcmp(cmdlineargs,'f')) && sum(strcmp(cmdlineargs,'c')) && copydatafiles
     delete([datafiledir 'StateTL_data_qnode.mat']);
     delete([datafiledir 'StateTL_data_release.mat']);
     delete([datafiledir 'StateTL_data_gains.mat']);
+    delete([datafiledir 'StateTL_data_gainsyr.mat']);
 end
 
 
@@ -5878,7 +5892,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % deployed as function with following end statement
 
-% end %StateTL as deployed function
+%  end %StateTL as deployed function
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % runbank - function that may replace j349 functionality
