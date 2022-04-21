@@ -1,10 +1,11 @@
 # This is a preliminary working file and will change as we add more functionality
 [Settings]
+simulation_year = 2019
+observation_file = matlab\StateTL_out_Y2019gagehr.csv
 calib_dir = tmp
 results_dir = results
 results_file = results.dat
 log_file = logfile.data
-simulation_year = 2019
 keep_previous = delete
 method = Parameter Sensitivity
 cpus = 20
