@@ -343,11 +343,12 @@ def main():
     # Create dictionary from 'Settings' group
     settings = dict(config.items('Settings'))
     # Parse values
+    simulation_year = settings['simulation_year']
+    observation_file = settings['observation_file']
     calib_dir = settings['calib_dir']
     results_dir = settings['results_dir']
     results_file = settings['results_file']
     log_file = settings['log_file']
-    simulation_year = settings['simulation_year']
     keep_previous = settings['keep_previous']
     method = settings['method']
     cpus = int(settings['cpus'])
@@ -358,8 +359,6 @@ def main():
         print('Check your control file.')
         sys.exit(1)
     method_dict = dict(config.items(method))
-
-    observation_file = f'matlab/StateTL_out_Y{simulation_year}gagehr.csv'
 
     # Define model locations
     workdir_base = f'{calib_dir}/par'
