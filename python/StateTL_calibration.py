@@ -29,6 +29,7 @@ from glob import glob
 from pathlib import Path
 from matk import matk, pest_io
 import matplotlib.pyplot as plt
+from datetime import datetime
 # from multiprocessing import freeze_support
 
 # Set some pandas options
@@ -72,16 +73,21 @@ def str_to_bool(s):
         raise ValueError('All entries for vary in the input file must be True or False.')
 
 
-def get_observations(obs_file):
+def get_observations(obs_file, start_date, end_date):
 
     """
-    :param obs_file: string: observation file for a single year
-    :return obs: OrderedDict: observation names and values
+    :param obs_file: string containing observation file for a single year
+    :param start_date: datetime object (e.g. '2019-03-15 00:00:00')
+    :param end_date: datetime object (e.g., '2019-03-15 23:00:00')
+    :return: obs: dataframe of observation names and values
     """
 
     obs_df = pd.read_csv(obs_file)
+    obs_df.index = pd.to_datetime(obs_df['Date'], format='%m/%d/%y %H:')
+    obs_df = obs_df.loc[(obs_df.index >= start_date) & (obs_df.index <= end_date)]
     date_string = ['_'.join(item.split()) for item in obs_df['Date'].to_list()]
 
+    # Add unique observation id to the dataframe
     obs_df['obs'] = obs_df['WDID'].astype(str) + '_' + date_string
 
     return obs_df[['obs', 'Value']]
@@ -150,7 +156,25 @@ def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
     return parameters, parameter_list
 
 
-def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_dir, sim_year):
+def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_dir, sim_year, start_month, start_day,
+               end_month, end_day, wdids):
+
+    """
+    :param params:
+    :param base_dir:
+    :param matlab_dir:
+    :param input_file:
+    :param template_file:
+    :param calib_dir:
+    :param sim_year:
+    :param start_month:
+    :param start_day:
+    :param end_month:
+    :param end_day:
+    :param wdids:
+    :return:
+    """
+
     # Set the par & to_file directory path
     par_dir = Path.cwd()
     to_file = par_dir / input_file
@@ -161,7 +185,8 @@ def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_di
     # cd into matlab directory to run model
     os.chdir(matlab_dir)
     # Create command line string to run model
-    run_line = f'StateTL.exe -f \\{calib_dir}\\{par_dir.name} -c {sim_year}'
+    run_line = (f'StateTL.exe -f \\{calib_dir}\\{par_dir.name} -c {sim_year},{start_month},{start_day},'
+                f'{end_month},{end_day},WD{wdids}')
     # print(f'Line passing to matlab exe:\n{run_line}')
     # Run model
     print(f'running StateTL from folder: {par_dir.name}')
@@ -343,7 +368,12 @@ def main():
     # Create dictionary from 'Settings' group
     settings = dict(config.items('Settings'))
     # Parse values
-    simulation_year = settings['simulation_year']
+    wd_calibration_ids = settings['wd_calibration_ids'].replace(' ', '')
+    simulation_year = int(settings['simulation_year'])
+    start_day = int(settings['start_day'])
+    start_month = int(settings['start_month'])
+    end_day = int(settings['end_day'])
+    end_month = int(settings['end_month'])
     observation_file = settings['observation_file']
     calib_dir = settings['calib_dir']
     results_dir = settings['results_dir']
@@ -359,6 +389,10 @@ def main():
         print('Check your control file.')
         sys.exit(1)
     method_dict = dict(config.items(method))
+
+    # Define start_date and end_date to get subset of observation date
+    start_date = datetime(simulation_year, start_month, start_day, 0, 0, 0)
+    end_date = datetime(simulation_year, end_month, end_day, 23, 0, 0)
 
     # Define model locations
     workdir_base = f'{calib_dir}/par'
@@ -407,13 +441,18 @@ def main():
             template_file,
             calib_dir,
             simulation_year,
+            start_month,
+            start_day,
+            end_month,
+            end_day,
+            wd_calibration_ids,
         )
     )
 
     """
     Add observations
     """
-    observations = get_observations(observation_file)
+    observations = get_observations(observation_file, start_date, end_date)
     num_observations = observations.shape[0]
     for obs, val in zip(observations['obs'].to_list(), observations['Value'].to_list()):
         p.add_obs(name=obs, value=val)
