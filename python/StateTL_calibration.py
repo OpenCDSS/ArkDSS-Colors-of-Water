@@ -93,6 +93,23 @@ def get_observations(obs_file, start_date, end_date):
     return obs_df[['obs', 'Value']]
 
 
+def get_simulation_values(sim_file):
+
+    """
+    :param sim_file: string containing simulation file for a single year
+    :return: obs: dataframe of observation names and values
+    """
+
+    df = pd.read_csv(sim_file)
+    df.index = pd.to_datetime(df['Date'], format='%m/%d/%y %H:')
+    date_string = ['_'.join(item.split()) for item in df['Date'].to_list()]
+
+    # Add unique observation id to the dataframe
+    df['obs'] = df['WDID'].astype(str) + '_' + date_string
+
+    return df[['obs', 'Value']]
+
+
 def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
     # Set data type for DataFrame
     dtype = {
@@ -185,8 +202,8 @@ def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_di
     # cd into matlab directory to run model
     os.chdir(matlab_dir)
     # Create command line string to run model
-    run_line = (f'StateTL.exe -f \\{calib_dir}\\{par_dir.name} -c {sim_year},{start_month},{start_day},'
-                f'{end_month},{end_day},WD{wdids}')
+    run_line = (f'StateTL.exe -f \\{calib_dir}\\{par_dir.name} -c {sim_year}')  # ,{start_month},{start_day},'
+                # f'{end_month},{end_day},WD{wdids}')
     # print(f'Line passing to matlab exe:\n{run_line}')
     # Run model
     print(f'running StateTL from folder: {par_dir.name}')
@@ -200,7 +217,7 @@ def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_di
     # Change cwd back to current par folder
     os.chdir(par_dir)
 
-    simulation_values = get_observations('StateTL_out_calhr.csv')
+    simulation_values = get_simulation_values('StateTL_out_calhr.csv')
     sim_values_dict = dict(zip(simulation_values['obs'].to_list(), simulation_values['Value'].to_list()))
 
     return sim_values_dict
@@ -280,7 +297,7 @@ def calculate_gage_residual_stats(obs, sim_names, sim_vals):
         where=obs_values != 0.0
     )
 
-    # Convert to dataFrames to groupby gage fro aggregation
+    # Convert to dataFrames to groupby gage for aggregation
     obs_df = pd.DataFrame(data=obs_values, columns=['obs'])
     obs_df.insert(0, 'gage_id', gage_id)
     sims_df = pd.DataFrame(data=sim_vals.T, columns=sim_names)
@@ -497,7 +514,7 @@ def main():
         sim_names = [f'{workdir_base.split("/")[1]}.{n + 1}' for n in range(num_sims)]
 
         # print(f'nvals_list: {nvals_list}')
-        print(f'There are {s.samples.values.shape[1]} samples in the sample set.')
+        print(f'There are {s.samples.values.shape[0]} samples in the sample set.')
         print(f'Here are the sample values:\n{s.samples.values}')
 
     # Check method type

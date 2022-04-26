@@ -2,12 +2,12 @@
 [Settings]
 wd_calibration_ids = 17, 67
 simulation_year = 2019
-start_month = 3
+start_month = 5
 start_day = 15
-end_month = 11
+end_month = 7
 end_day = 15
 observation_file = matlab\StateTL_out_Y2019gagehr.csv
-calib_dir = tmp
+calib_dir = simulations\tmp
 results_dir = results
 results_file = results.dat
 log_file = logfile.data
