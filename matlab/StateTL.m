@@ -9,26 +9,28 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % function statement for when deployed
 % if using as a function from matlab - be sure to type clear all first
-% function StateTL(varargin)  %end near line 5880
-% clear SR WC
+function StateTL(varargin)  %end near line 5920
+clear SR WC
 %%% StateTL('-f','caltest6','-c','2018','-s','-d','-p')
 
 % % comment next lines if using as function
- clear all
- varargin=[];
-% % % % varargin=[{'-f'} {'foldertest1'}];
-% % % % varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
-% % % % varargin=[{'-f'} {'caltestc3_1722020'} {'-c'} {'2020'} {'-s'} {'-d'} {'-p'} {'-m'}];
-% % % % varargin=[{'-f'} {['cal2test']} {'-c'} {'2018'} {'-p'} ];
-% % varargin=[{'-f'} {['cal20test']} {'-c'} {'2018'}];
-% % % varargin=[{'-f'} {'caltest6_wd17stil715'} {'-c'} {'2018,3,15,7,15,WD171,172,17'} {'-s'} {'-d'} {'-p'} {'-m'}];
-% % % varargin=[{'-r'} {'2019'}];
-% % % varargin=[{'-b'} {'2019'}];
-% % % varargin=[{'-f'} {'obstest1'} {'-g'} {'2018,3,15,7,15,WD171,172,17'}];
-% % % varargin=[{'-g'} {'2015'}];
-% % % varargin=[{'-g'}];
-% % % varargin=[{'-r'}];
-% % varargin=[{'-e'}];
+%  clear all
+%  varargin=[];
+% % % % % varargin=[{'-f'} {'foldertest1'}];
+% % % % % varargin=[{'-f'} {'\calibration\caltest8'} {'-c'} {'2018'} {'-s'} {'-d'} {'-nw'}];
+% % % % % varargin=[{'-f'} {'caltestc3_1722020'} {'-c'} {'2020'} {'-s'} {'-d'} {'-p'} {'-m'}];
+% % % % % varargin=[{'-f'} {['cal2test']} {'-c'} {'2018'} {'-p'} ];
+% % % varargin=[{'-f'} {['cal20test']} {'-c'} {'2018'}];
+% % % % varargin=[{'-f'} {'caltest6_wd17stil715'} {'-c'} {'2018,3,15,7,15,WD171,172,17'} {'-s'} {'-d'} {'-p'} {'-m'}];
+% % % % varargin=[{'-r'} {'2019'}];
+% % % % varargin=[{'-b'} {'2019'}];
+% % % % varargin=[{'-f'} {'obstest1'} {'-g'} {'2018,3,15,7,15,WD171,172,17'}];
+% % varargin=[{'-g'}];
+% % % % varargin=[{'-g'}];
+% % % % varargin=[{'-r'}];
+% % % varargin=[{'-e'}];
+% % varargin=[{'-f'} {'caltestp3'} {'-c'} {'2018,4,2,4,19,WD17'} {'-p'}];
+% % varargin=[{'-f'} {'caltestp4'} {'-c'} {'2018,WD17'} {'-p'}];
 
 runstarttime=now;
 basedir=cd;basedir=[basedir '\'];
@@ -342,7 +344,7 @@ else
                 logmc=[logmc;'calibration command option: doexchanges=0'];
                 logmc=[logmc;'calibration command option: runcaptureloop=0'];
                 logmc=[logmc;'calibration command option: runcalibloop=1'];
-                logmc=[logmc;'calibration command option: rungageloop=1'];
+                logmc=[logmc;'calibration command option: rungageloop=0'];
                 logmc=[logmc;'calibration command option: displaymessage=0'];
                 logmc=[logmc;'calibration command option: writemessage=1'];
                 logmc=[logmc;'calibration command option: outputriv=0'];
@@ -811,6 +813,7 @@ for i=infoheaderrow+1:inforawrow
         c.un=num2str(inforaw{i,infocol.name});
         c.dw=num2str(inforaw{i+1,infocol.wdid});  %WATCH!! - dswdid currently must be in order with downstream wdid listed below upstream wdid
         c.dn=num2str(inforaw{i+1,infocol.name});  %WATCH!! - dsname currently must be in order with downstream wdid listed below upstream wdid
+        c.wsd=num2str(inforaw{i+1,infocol.gnisid});  %WATCH!! - dsname currently must be in order with downstream wdid listed below upstream wdid
         c.ds=num2str(inforaw{i,infocol.station});
         c.dp=num2str(inforaw{i,infocol.parameter});
         c.br=num2str(inforaw{i,infocol.branch});
@@ -866,6 +869,13 @@ for i=infoheaderrow+1:inforawrow
             gzeroadd=8-gnisidlen;
             for j=1:gzeroadd
                 c.ws=['0' c.ws];
+            end
+        end
+        gnisidlen=length(c.wsd);
+        if gnisidlen<8
+            gzeroadd=8-gnisidlen;
+            for j=1:gzeroadd
+                c.wsd=['0' c.wsd];
             end
         end
 
@@ -956,6 +966,7 @@ for i=infoheaderrow+1:inforawrow
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).widthb(v.sr)=v.wb;
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).evapfactor(v.sr)=v.ef;
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).gnisid{1,v.sr}=c.ws;
+        SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).dsgnisid{1,v.sr}=c.wsd;
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).confid(v.sr)=v.uc;
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).dsconfid(v.sr)=v.dc;
         SR.(['D' c.di]).(['WD' c.wd]).(['R' c.re]).defaultmethod{1,v.sr}=c.dm;
@@ -1178,7 +1189,7 @@ for wd=SR.(ds).WD
                     SRloc.(['W' dswdid]).lat=lat;
                     SRloc.(['W' dswdid]).lon=lon;
                     SRloc.(['W' dswdid]).WD={wds};
-                    SRloc.(['W' dswdid]).(wds).gnisid=SR.(ds).(wds).(rs).gnisid{sr};                    
+                    SRloc.(['W' dswdid]).(wds).gnisid=SR.(ds).(wds).(rs).dsgnisid{sr};                    
                     else
                         logm=['WARNING: in GIS didnt find confid:' num2str(dsconfid) ' for wdid:' dswdid ' ' SR.(ds).(wds).(rs).dsname{sr}];
                         domessage(logm,logfilename,displaymessage,writemessage)
@@ -1191,11 +1202,11 @@ for wd=SR.(ds).WD
                     SRloc.(['W' dswdid]).lat=-999;
                     SRloc.(['W' dswdid]).lon=-999;
                     SRloc.(['W' dswdid]).WD={wds};
-                    SRloc.(['W' dswdid]).(wds).gnisid=SR.(ds).(wds).(rs).gnisid{sr};                    
+                    SRloc.(['W' dswdid]).(wds).gnisid=SR.(ds).(wds).(rs).dsgnisid{sr};                    
                 end
             elseif ~isfield(SRloc.(['W' dswdid]),wds)
                 SRloc.(['W' dswdid]).WD=[SRloc.(['W' dswdid]).WD {wds}];
-                SRloc.(['W' dswdid]).(wds).gnisid=SR.(ds).(wds).(rs).gnisid{sr};
+                SRloc.(['W' dswdid]).(wds).gnisid=SR.(ds).(wds).(rs).dsgnisid{sr};
             end
        end
     end
@@ -1880,6 +1891,22 @@ if pullstationdata==1
             rjulien=rdatesday-(datenum(ryear,1,1)-1);
             dateend=datestart+(rdays-spinupdays)-1;
             datedays=[datestart:dateend];
+            
+            clear dayids
+            for i=1:length(datedays)
+               dayids{i}=find(rdatesday==datedays(i));
+            end
+
+            %this doesnt have provisions if no calib start data listed, and note that this will need to be redone if change calib dates in control file
+            calibstartdate=datenum(myr,calibstart(1),calibstart(2));
+            calibenddate=datenum(myr,calibend(1),calibend(2));
+            calibstid=find(rdatesday==calibstartdate);
+            calibendid=find(rdatesday==calibenddate);
+            calibstidday=find(datedays==calibstartdate);
+            calibendidday=find(datedays==calibenddate);
+            calibstid=calibstid(1);
+            calibendid=calibendid(end);
+
             myrstr=['Y' num2str(myr)];
             Station.(myrstr).date.datestart=datestart;
             Station.(myrstr).date.dateend=dateend;
@@ -1892,6 +1919,12 @@ if pullstationdata==1
             Station.(myrstr).date.rdatesday=rdatesday;
             Station.(myrstr).date.rjulien=rjulien;
             Station.(myrstr).date.datedays=datedays;
+            Station.(myrstr).date.calibstid=calibstid;
+            Station.(myrstr).date.calibendid=calibendid;
+            Station.(myrstr).date.calibstidday=calibstidday;
+            Station.(myrstr).date.calibendidday=calibendidday;
+            Station.(myrstr).date.dayids=dayids;
+
             for wd=WDlist
                 wds=['WD' num2str(wd)];
                 Station.(myrstr).date.(ds).(wds).modified=0;
@@ -4851,7 +4884,7 @@ for i=1:length(jids)
     if sum(strcmp(cmdlineargs,'m'))>0  %get multiyear gage data
         for myr=multiyrs
             myrstr=['Y' num2str(myr)];
-            outputlinegagemulti.(myrstr)(:,i)=SR.(ds).Gageloc.(myrstr).flowgage(calibstid:calibendid,j);
+            outputlinegagemulti.(myrstr)(:,i)=SR.(ds).Gageloc.(myrstr).flowgage(Station.(myrstr).date.calibstid:Station.(myrstr).date.calibendid,j);
         end
     end
 end
@@ -5170,12 +5203,12 @@ domessage(logm,logfilename,displaymessage,writemessage)
             myrstr=['Y' num2str(myr)];
             titledatesm=cellstr(datestr(Station.(myrstr).date.rdates,'mm/dd/yy HH:'));
         if outputmat==1
-            outputcell=[[titlelocline';titledatesm(calibstid:calibendid,1)],[loclinegage;num2cell(outputlinegagemulti.(myrstr))]];
+            outputcell=[[titlelocline';titledatesm(Station.(myrstr).date.calibstid:Station.(myrstr).date.calibendid,1)],[loclinegage;num2cell(outputlinegagemulti.(myrstr))]];
         else
             outputcell=titlelocline;
             for i=1:length(outputlinegage(1,:))
-                loccol=repmat(loclinegage(1,i),calibendid-calibstid+1,1);
-                outputcell=[outputcell;[titledatesm(calibstid:calibendid,1) loccol num2cell(outputlinegagemulti.(myrstr)(:,i))]];
+                loccol=repmat(loclinegage(1,i),Station.(myrstr).date.calibendid-Station.(myrstr).date.calibstid+1,1);
+                outputcell=[outputcell;[titledatesm(Station.(myrstr).date.calibstid:Station.(myrstr).date.calibendid,1) loccol num2cell(outputlinegagemulti.(myrstr)(:,i))]];
             end
 
         end
@@ -5188,17 +5221,17 @@ domessage(logm,logfilename,displaymessage,writemessage)
             myrstr=['Y' num2str(myr)];
             titledatesdaym=cellstr(datestr(Station.(myrstr).date.datedays,'mm/dd/yy'));
             k=0;
-            for i=calibstidday:calibendidday
+            for i=Station.(myrstr).date.calibstidday:Station.(myrstr).date.calibendidday
                 k=k+1;
-                outputlinedaygage(k,:)=mean(outputlinegagemulti.(myrstr)(dayids{i}-calibstid+1,:));
+                outputlinedaygage(k,:)=mean(outputlinegagemulti.(myrstr)(Station.(myrstr).date.dayids{i}-Station.(myrstr).date.calibstid+1,:));
             end
             if outputmat==1
-                outputcell=[[titlelocline';titledatesdaym(calibstidday:calibendidday,1)],[loclinegage;num2cell(outputlinedaygage)]];
+                outputcell=[[titlelocline';titledatesdaym(Station.(myrstr).date.calibstidday:Station.(myrstr).date.calibendidday,1)],[loclinegage;num2cell(outputlinedaygage)]];
             else
                 outputcell=titlelocline;
                 for i=1:length(outputlinedaygage(1,:))
-                    loccol=repmat(loclinegage(1,i),calibendidday-calibstidday+1,1);
-                    outputcell=[outputcell;[titledatesdaym(calibstidday:calibendidday,1) loccol num2cell(outputlinedaygage(:,i))]];
+                    loccol=repmat(loclinegage(1,i),Station.(myrstr).date.calibendidday-Station.(myrstr).date.calibstidday+1,1);
+                    outputcell=[outputcell;[titledatesdaym(Station.(myrstr).date.calibstidday:Station.(myrstr).date.calibendidday,1) loccol num2cell(outputlinedaygage(:,i))]];
                 end
 
             end
@@ -5820,7 +5853,7 @@ if outputnet==1
 
     rivcell=SR.(ds).SRfull; %if want to use SR sorted/reduced to WDlist then remove full
     titleline=[{'US-WDID'},{'DS-WDID'},{'Div'},{'WD'},{'Reach'},{'SubReach'},{'Divstr'},{'WDstr'},{'Reachstr'},{'Type'},...
-        {'USWDIDname'},{'DSWDIDname'},{'channellength'},{'alluviumlength'},{'reachportion'},...
+        {'USWDIDname'},{'DSWDIDname'},{'US-station'},{'US-parameter'},{'channellength'},{'alluviumlength'},{'reachportion'},...
         {'US-utmx'},{'US-utmy'},{'US-lat'},{'US-lon'},{'DS-utmx'},{'DS-utmy'},{'DS-lat'},{'DS-lon'},{'mid-utmx'},{'mid-utmy'},{'mid-lat'},{'mid-lon'}];
 
     for i=1:length(rivcell(:,1))
@@ -5831,6 +5864,13 @@ if outputnet==1
         k=11;
         rivcell(i,k)=SR.(ds).(wds).(rs).name(sr);k=k+1;
         rivcell(i,k)=SR.(ds).(wds).(rs).dsname(sr);k=k+1;
+        if strcmp(SR.(ds).(wds).(rs).station{sr},'NaN')
+            rivcell{i,k}='';k=k+1;
+            rivcell{i,k}='';k=k+1;
+        else
+            rivcell(i,k)=SR.(ds).(wds).(rs).station(sr);k=k+1;
+            rivcell(i,k)=SR.(ds).(wds).(rs).parameter(sr);k=k+1;
+        end
         rivcell{i,k}=SR.(ds).(wds).(rs).channellength(sr);k=k+1;
         rivcell{i,k}=SR.(ds).(wds).(rs).alluviumlength(sr);k=k+1;
         rivcell{i,k}=SR.(ds).(wds).(rs).reachportion(sr);k=k+1;
@@ -5892,7 +5932,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % deployed as function with following end statement
 
-%  end %StateTL as deployed function
+end %StateTL as deployed function
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % runbank - function that may replace j349 functionality

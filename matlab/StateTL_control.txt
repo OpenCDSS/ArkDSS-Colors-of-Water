@@ -32,7 +32,7 @@ runriverloop=0;				    	%0,1,2 - 1 runs gageflow loop for full river amounts (ie
 runwcloop=0;					%0,1,2 - 1 runs water class release loop - have to have run river loop before (saved .mat file) or during, 2 won't save mat file, 0 uses mat file
 doexchanges=0;					%1 run upstream exchanges - this only operates within wcloop
 runcaptureloop=0;				%1 runs loop to characterize release capture amounts into headgates vs available amount, 0 wont run it
-runobsloop=0;                        %1 outputs the observed gage flows in WDs in WDcaliblist; to set observation targes for use in calibration 
+rungageloop=0;                        %1 outputs the observed gage flows in WDs in WDcaliblist; to set observation targets for use in calibration 
 runcalibloop=0;					%1 runs loop to simulate river flows from gage amount at top of wd down without restarting each gage location with gage amount, 0 wont run it
 
 stubcelerity=2;                      %for stubs (ie extra lengths to point on river) single/constant celerity (ft/s)
@@ -52,7 +52,7 @@ outputwc=0;  					%output waterclass amounts by node/subreach
 outputnet=0;                         %output river network spatial data
 outputcal=0;  					%output calibration amounts by gage location
 outputcalregr=0;                     %output calibration stats file if doing calibration loop
-outputgain=1;                        %output gain/loss/error term by reach (gage location)
+outputgain=0;                        %output gain/loss/error term by reach (gage location)
 outputhr=1;  					%output on hour timestep
 outputday=1;  					%output on day timestep
 outputmat=0;                         %0 output is rows of date,id,value (larger size), 1 output is matrix with id in header, first column is date, and subsequent columns are values for each location/id
