@@ -73,18 +73,20 @@ def str_to_bool(s):
         raise ValueError('All entries for vary in the input file must be True or False.')
 
 
-def get_observations(obs_file, start_date, end_date):
+def get_observations(obs_file, start_date, end_date, wdids):
 
     """
     :param obs_file: string containing observation file for a single year
     :param start_date: datetime object (e.g. '2019-03-15 00:00:00')
     :param end_date: datetime object (e.g., '2019-03-15 23:00:00')
+    :param wdids: list of ints
     :return: obs: dataframe of observation names and values
     """
 
     obs_df = pd.read_csv(obs_file)
     obs_df.index = pd.to_datetime(obs_df['Date'], format='%m/%d/%y %H:')
     obs_df = obs_df.loc[(obs_df.index >= start_date) & (obs_df.index <= end_date)]
+    obs_df = obs_df[obs_df['WDID'].isin(wdids)]
     date_string = ['_'.join(item.split()) for item in obs_df['Date'].to_list()]
 
     # Add unique observation id to the dataframe
@@ -202,8 +204,8 @@ def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_di
     # cd into matlab directory to run model
     os.chdir(matlab_dir)
     # Create command line string to run model
-    run_line = (f'StateTL.exe -f \\{calib_dir}\\{par_dir.name} -c {sim_year}')  # ,{start_month},{start_day},'
-                # f'{end_month},{end_day},WD{wdids}')
+    run_line = (f'StateTL.exe -f \\{calib_dir}\\{par_dir.name} -c {sim_year},{start_month},{start_day},'
+                f'{end_month},{end_day},WD{wdids}')
     # print(f'Line passing to matlab exe:\n{run_line}')
     # Run model
     print(f'running StateTL from folder: {par_dir.name}')
@@ -386,6 +388,7 @@ def main():
     settings = dict(config.items('Settings'))
     # Parse values
     wd_calibration_ids = settings['wd_calibration_ids'].replace(' ', '')
+    wdids = settings['wdids'].replace(' ', '').split(',')
     simulation_year = int(settings['simulation_year'])
     start_day = int(settings['start_day'])
     start_month = int(settings['start_month'])
@@ -410,6 +413,8 @@ def main():
     # Define start_date and end_date to get subset of observation date
     start_date = datetime(simulation_year, start_month, start_day, 0, 0, 0)
     end_date = datetime(simulation_year, end_month, end_day, 23, 0, 0)
+    # convert wdids to list of ints
+    wdids = [int(item) for item in wdids]
 
     # Define model locations
     workdir_base = f'{calib_dir}/par'
@@ -469,7 +474,7 @@ def main():
     """
     Add observations
     """
-    observations = get_observations(observation_file, start_date, end_date)
+    observations = get_observations(observation_file, start_date, end_date, wdids)
     num_observations = observations.shape[0]
     for obs, val in zip(observations['obs'].to_list(), observations['Value'].to_list()):
         p.add_obs(name=obs, value=val)
