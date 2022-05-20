@@ -102,6 +102,8 @@ gage `-g` command to output gage/observations for use in calibration
 
 '`StateTL -g` `StateTL g 2018` `StateTL -g 2018,03,15,11,15`
 
+hydrobase `-h` command runs necessary river, wc, exchange, and capture loops and saves output to file for import into hydrobase
+
 save `-s` command saves final mat files from calibration or control loops (currently used for plotting)
 
 plot `-p` command plots several calibration related plots (only when runcalibloop=1)
