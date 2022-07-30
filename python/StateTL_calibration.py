@@ -176,7 +176,7 @@ def create_template_file(matlab_dir, input_csv, output_tpl, data_dir):
 
 
 def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_dir, sim_year, start_month, start_day,
-               end_month, end_day, wdids):
+               end_month, end_day, wd_calibration_ids):
 
     """
     :param params:
@@ -190,7 +190,7 @@ def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_di
     :param start_day:
     :param end_month:
     :param end_day:
-    :param wdids:
+    :param wd_calibration_ids:
     :return:
     """
 
@@ -205,7 +205,7 @@ def run_extern(params, base_dir, matlab_dir, input_file, template_file, calib_di
     os.chdir(matlab_dir)
     # Create command line string to run model
     run_line = (f'StateTL.exe -f \\{calib_dir}\\{par_dir.name} -c {sim_year},{start_month},{start_day},'
-                f'{end_month},{end_day},WD{wdids}')
+                f'{end_month},{end_day},WD{wd_calibration_ids}')
     # print(f'Line passing to matlab exe:\n{run_line}')
     # Run model
     print(f'running StateTL from folder: {par_dir.name}')
@@ -452,6 +452,16 @@ def main():
         template_file,
         data_dir
     )
+    # Check that the parameter WD's in StateTL_calibation_inputdata.csv match the wd_calibration_ids in
+    # StateTL_calibration_control.txt, otherwise quit and inform the user. If the tool is run this way the calibration
+    # statistics will not change since the calibration tool will not pull the observation data for the gages that
+    # correspond to the paramters that are chaning.
+    input_wd_list = [v['WD'] for v in parameters.values()]
+    if int(wd_calibration_ids) not in input_wd_list:
+        print('ERROR: The WD\'s in StateTL_calibration_inputdata.csv do not match the wd_calibration_ids', end=' ')
+        print('in the StateTL_calibration_control.txt.')
+        sys.exit(1)
+
     print(f'There are {len(parameter_list)} parameters in your calibration.')
     # Create MATK object
     p = matk(

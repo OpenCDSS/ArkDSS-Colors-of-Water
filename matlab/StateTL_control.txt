@@ -47,6 +47,7 @@ displaymessage=1;  				%1=display messages to matlab workspace screen
 writemessage=1; 				%1=write messages to logfile
 
 outputfilebase='StateTL_out';  	     %output filename base - will add srmethod + gage/wc/etc + hour/day + .csv
+outputtoHB=0;                        %output file for hydrobase, should be running river, wc, exchange, and capture loops
 outputriv=0;  					%output river amounts by node/subreach
 outputwc=0;  					%output waterclass amounts by node/subreach
 outputnet=0;                         %output river network spatial data

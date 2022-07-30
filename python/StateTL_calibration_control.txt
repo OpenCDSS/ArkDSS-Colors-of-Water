@@ -1,6 +1,6 @@
 # This is a preliminary working file and will change as we add more functionality
 [Settings]
-wd_calibration_ids = 17, 67
+wd_calibration_ids = 17
 wdids = 1409503,1409502,1709503,1709507,1709504
 simulation_year = 2019
 start_month = 5
